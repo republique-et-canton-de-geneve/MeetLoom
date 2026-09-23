@@ -24,6 +24,8 @@ The maintained nominal E2E suite and any dependency auto-merge policy come **aft
 
 At the requested stopping point, code commit `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8` passed all [CI checks](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) and [Security checks](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655), including the separate CodeQL findings check. The application code is committed and pushed; the subsequent update only records this evidence and the continuation instructions.
 
+A subsequent Claude Code continuation verified that checkpoint locally and added three small corrections on branch `claude/epic-pascal-3gk99i`, proposed to `codex/meetloom-v1` through its own pull request: application closure now releases rate-limiter stores, the dashboard workspace selector aligns with the sidebar, and `<html lang>` follows a restored English preference. Locally, 228 tests passed on SQLite and on PostgreSQL, with type checks, build, formatting, and audit. Hosted checks run once these commits reach `codex/meetloom-v1`. See the [agent handoff](handoff.md).
+
 ## Environment limits
 
 - The organization's Qwen endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.
