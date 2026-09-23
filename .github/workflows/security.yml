@@ -47,6 +47,8 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          # SARIF otherwise clears the severity filter in trivy-action.
+          limit-severities-for-sarif: true
           ignore-unfixed: true
           exit-code: "1"
       - name: Publish container findings in GitHub Security

@@ -9,8 +9,11 @@ FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATA_DIR=/app/data SQLITE_PATH=/app/data/meetloom.sqlite
 WORKDIR /app
 COPY package*.json .npmrc ./
+# npm is needed to install dependencies, but the runtime starts with node directly.
 RUN npm ci --omit=dev --ignore-scripts --no-audit \
     && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx \
     && mkdir -p /app/data \
     && chgrp -R 0 /app/data \
     && chmod -R g=u /app/data
