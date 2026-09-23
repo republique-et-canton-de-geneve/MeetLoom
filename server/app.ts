@@ -31,6 +31,7 @@ import {
   rateLimit,
   token,
   verifyPassword,
+  withRateLimitStores,
 } from "./security.js";
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
@@ -159,6 +160,19 @@ function editable(value: unknown) {
 }
 
 export async function createApp(config: AppConfig = {}) {
+  const { result: runtime, shutdown } = await withRateLimitStores(() =>
+    assembleApp(config),
+  );
+  return {
+    ...runtime,
+    close: async () => {
+      shutdown();
+      await runtime.close();
+    },
+  };
+}
+
+async function assembleApp(config: AppConfig) {
   const db = config.database ?? (await openDatabase(config));
   await initializeLifecycle(db);
   const app = express();
