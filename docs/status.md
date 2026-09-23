@@ -8,9 +8,9 @@ The three agreed exclusions remain the Parking lot, block/session library, and a
 
 ## Validation sequence
 
-Local checks passed: 219 tests on SQLite and 219 on PostgreSQL, TypeScript checks, a production build, and a dependency audit reporting zero vulnerabilities. The implementation is available in [pull request #1](https://github.com/jpfroud/MeetLoom/pull/1).
+Local checks passed: 219 tests on SQLite and 219 on PostgreSQL, TypeScript checks, a production build, and a dependency audit reporting zero vulnerabilities. The canonical repository is now [republique-et-canton-de-geneve/MeetLoom](https://github.com/republique-et-canton-de-geneve/MeetLoom), with the implementation on its [codex/meetloom-v1 branch](https://github.com/republique-et-canton-de-geneve/MeetLoom/tree/codex/meetloom-v1).
 
-GitHub Actions could not start the jobs on September 23, 2026. Its annotation states: “The job was not started because your account is locked due to a billing issue.” This affects the CI and Security workflows before any steps execute. Local results must not be presented as successful GitHub runs; billing settings have not been changed.
+On the previous personal repository, GitHub Actions could not start the jobs on September 23, 2026 because of an account billing issue. This was a repository/account environment result before any steps executed, not a failing application test. The organization repository has its own workflow runs and settings; that earlier billing result does not establish their status. Repository secrets, variables, and branch protections are not copied by a Git push.
 
 The maintained nominal E2E suite and any dependency auto-merge policy come **after user acceptance**. The subsequent delivery sequence is a GitHub release, Docker Hub publication, then operator-led OpenShift development and production deployments. None of those deployment steps has been performed.
 

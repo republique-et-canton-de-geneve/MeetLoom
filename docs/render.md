@@ -1,6 +1,6 @@
 # Render demonstration
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/jpfroud/MeetLoom)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/republique-et-canton-de-geneve/MeetLoom)
 
 The button opens the [render.yaml](../render.yaml) Blueprint in your Render account. Review resources and confirm their creation in Render: the button deploys nothing without that action. After forking, replace the repository in the button URL with your own.
 

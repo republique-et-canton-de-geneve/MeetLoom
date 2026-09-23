@@ -4,9 +4,9 @@ Plan and facilitate sessions with a shared agenda and notes that stay private. A
 
 **Version 0.1 is undergoing functional review.** Implemented features are listed below; the [parity matrix](docs/product-parity.md) and [manual QA evidence](docs/manual-qa.md) track their verification. User acceptance comes before maintained end-to-end tests, the first release, and deployment.
 
-[![CI](https://github.com/jpfroud/MeetLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/jpfroud/MeetLoom/actions/workflows/ci.yml)
-[![Security](https://github.com/jpfroud/MeetLoom/actions/workflows/security.yml/badge.svg)](https://github.com/jpfroud/MeetLoom/actions/workflows/security.yml)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/jpfroud/MeetLoom)
+[![CI](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/ci.yml)
+[![Security](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/security.yml/badge.svg)](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/security.yml)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/republique-et-canton-de-geneve/MeetLoom)
 
 The Render button sets up a demo on the free plan **with ephemeral data**: data may disappear when the service restarts or spins down. See the [Render guide](docs/render.md) to create the first account and choose durable storage. Use your own hosting for internal agendas.
 

@@ -63,5 +63,5 @@ Executed in Chrome on September 23, 2026, using fictional data in the local test
 - The same 219 tests passed on PostgreSQL. The dependency audit reported zero vulnerabilities.
 - Private projections, roles, concurrent writes, imports, exports, optional services, and lifecycle rules have unit/API coverage. This evidence does not mean every comparative checklist scenario in `product-parity.md` was run manually in both products.
 - Linux runtime checks passed with an arbitrary unprivileged UID and a read-only root filesystem. A local build of the exact Dockerfile was blocked by the Docker engine's registry networking; GitHub's image build is tracked separately.
-- GitHub CI and Security jobs did not start: the account was locked due to a billing issue, as shown in the run annotations. No hosted build, CodeQL, or Trivy success is claimed.
+- On the original personal repository, GitHub CI and Security jobs did not start: the account was locked due to a billing issue, as shown in the run annotations. No hosted build, CodeQL, or Trivy success is claimed for those runs. The subsequent move to the organization repository has separate workflow results.
 - Real Qwen, OIDC, SMTP, native Office rendering, audible playback, and the PowerPoint overlay need checks in the intended environment. No release or OpenShift deployment was performed.
