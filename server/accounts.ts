@@ -55,6 +55,16 @@ export async function installAccountsApi(
     rateLimits?: boolean;
   },
 ) {
+  // Mount after authentication: changing email and deleting the account share
+  // one password-verification budget, even across different client IPs.
+  const credentialLimiter: RequestHandler =
+    rateLimits === false
+      ? (_request, _response, next) => next()
+      : rateLimit(
+          20,
+          15 * 60 * 1000,
+          (_request, response) => `account:${who(response).id}`,
+        );
   await db.transaction(async (sql) => {
     await sql.run(
       "CREATE TABLE IF NOT EXISTS account_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,payload TEXT NOT NULL)",
@@ -72,90 +82,95 @@ export async function installAccountsApi(
       profile: await accountProfile(db, who(res).id),
     }),
   );
-  app.put("/api/account", authenticated, async (req, res) => {
-    const input = z
-      .object({
-        name: z.string().trim().min(1).max(120),
-        email,
-        locale: z.enum(["fr", "en"]),
-        currentPassword: z.string().max(256).optional(),
-        avatar: z
-          .string()
-          .max(120000)
-          .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/)
-          .optional(),
-        preferences: accountPreferencesSchema,
-      })
-      .strict()
-      .parse(req.body);
-    const [user] = await db.all<{ password: string; email: string }>(
-      "SELECT password,email FROM users WHERE id=$1",
-      [who(res).id],
-    );
-    if (
-      input.email !== user.email &&
-      !(await verifyPassword(input.currentPassword ?? "", user.password))
-    )
-      return fail(
-        401,
-        "INVALID_CREDENTIALS",
-        "Confirm the current password to change your email.",
+  app.put(
+    "/api/account",
+    authenticated,
+    credentialLimiter,
+    async (req, res) => {
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(120),
+          email,
+          locale: z.enum(["fr", "en"]),
+          currentPassword: z.string().max(256).optional(),
+          avatar: z
+            .string()
+            .max(120000)
+            .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/)
+            .optional(),
+          preferences: accountPreferencesSchema,
+        })
+        .strict()
+        .parse(req.body);
+      const [user] = await db.all<{ password: string; email: string }>(
+        "SELECT password,email FROM users WHERE id=$1",
+        [who(res).id],
       );
-    if (
-      input.email !== user.email &&
-      (await db.all("SELECT id FROM users WHERE email=$1", [input.email]))
-        .length
-    )
-      return fail(
-        409,
-        "ACCOUNT_EXISTS",
-        "An account already exists for this email.",
-      );
-    const profile: AccountProfile = {
-      ...(input.avatar ? { avatar: input.avatar } : {}),
-      preferences: input.preferences,
-    };
-    await db.transaction(async (sql) => {
       if (
-        !(await sql.run(
-          "UPDATE users SET name=$1,email=$2,locale=$3 WHERE id=$4 AND password=$5 AND email=$6 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
-          [
-            input.name,
-            input.email,
-            input.locale,
-            who(res).id,
-            user.password,
-            user.email,
-          ],
-        ))
+        input.email !== user.email &&
+        !(await verifyPassword(input.currentPassword ?? "", user.password))
+      )
+        return fail(
+          401,
+          "INVALID_CREDENTIALS",
+          "Confirm the current password to change your email.",
+        );
+      if (
+        input.email !== user.email &&
+        (await db.all("SELECT id FROM users WHERE email=$1", [input.email]))
+          .length
       )
         return fail(
           409,
-          "ACCOUNT_CHANGED",
-          "Your account changed. Reload before saving.",
+          "ACCOUNT_EXISTS",
+          "An account already exists for this email.",
         );
-      // Recovery links issued to an earlier email address no longer establish
-      // ownership after the account's address changes.
-      if (input.email !== user.email)
-        await sql.run("DELETE FROM account_resets WHERE user_id=$1", [
-          who(res).id,
-        ]);
-      await sql.run(
-        "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
-        [who(res).id, JSON.stringify(profile)],
-      );
-    });
-    res.json({
-      user: {
-        ...who(res),
-        name: input.name,
-        email: input.email,
-        locale: input.locale,
-        avatar: input.avatar,
-      },
-      profile,
-    });
-  });
+      const profile: AccountProfile = {
+        ...(input.avatar ? { avatar: input.avatar } : {}),
+        preferences: input.preferences,
+      };
+      await db.transaction(async (sql) => {
+        if (
+          !(await sql.run(
+            "UPDATE users SET name=$1,email=$2,locale=$3 WHERE id=$4 AND password=$5 AND email=$6 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
+            [
+              input.name,
+              input.email,
+              input.locale,
+              who(res).id,
+              user.password,
+              user.email,
+            ],
+          ))
+        )
+          return fail(
+            409,
+            "ACCOUNT_CHANGED",
+            "Your account changed. Reload before saving.",
+          );
+        // Recovery links issued to an earlier email address no longer establish
+        // ownership after the account's address changes.
+        if (input.email !== user.email)
+          await sql.run("DELETE FROM account_resets WHERE user_id=$1", [
+            who(res).id,
+          ]);
+        await sql.run(
+          "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
+          [who(res).id, JSON.stringify(profile)],
+        );
+      });
+      res.json({
+        user: {
+          ...who(res),
+          name: input.name,
+          email: input.email,
+          locale: input.locale,
+          avatar: input.avatar,
+        },
+        profile,
+      });
+    },
+  );
   app.get("/api/admin/accounts", admin, async (_req, res) => {
     const users = await db.all<{
       id: string;
@@ -355,133 +370,142 @@ export async function installAccountsApi(
       res.json({ ok: true });
     },
   );
-  app.post("/api/account/delete", authenticated, async (req, res) => {
-    const input = z
-        .object({
-          currentPassword: z.string().max(256),
-          transferTo: id.optional(),
-          transferEmail: email.optional(),
-        })
-        .strict()
-        .parse(req.body),
-      userId = who(res).id;
-    const [user] = await db.all<{ password: string }>(
-      "SELECT password FROM users WHERE id=$1",
-      [userId],
-    );
-    if (!(await verifyPassword(input.currentPassword, user.password)))
-      return fail(
-        401,
-        "INVALID_CREDENTIALS",
-        "The current password is incorrect.",
-      );
-    const replacementPassword = await hashPassword(token());
-    await db.transaction(async (sql) => {
-      // Serialize administrator deletions so at least one usable administrator remains.
-      await sql.run("UPDATE bootstrap SET id=id WHERE id=1");
-      await sql.run("UPDATE users SET id=id WHERE id=$1", [userId]);
-      const [current] = await sql.all<{ password: string; is_admin: number }>(
-        "SELECT password,is_admin FROM users WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
+  app.post(
+    "/api/account/delete",
+    authenticated,
+    credentialLimiter,
+    async (req, res) => {
+      const input = z
+          .object({
+            currentPassword: z.string().max(256),
+            transferTo: id.optional(),
+            transferEmail: email.optional(),
+          })
+          .strict()
+          .parse(req.body),
+        userId = who(res).id;
+      const [user] = await db.all<{ password: string }>(
+        "SELECT password FROM users WHERE id=$1",
         [userId],
       );
-      if (!current || current.password !== user.password)
+      if (!(await verifyPassword(input.currentPassword, user.password)))
         return fail(
-          409,
-          "ACCOUNT_CHANGED",
-          "Your credentials changed. Sign in again before deleting the account.",
+          401,
+          "INVALID_CREDENTIALS",
+          "The current password is incorrect.",
         );
-      if (
-        current.is_admin &&
-        (
-          await sql.all(
-            "SELECT u.id FROM users u WHERE u.is_admin=1 AND u.id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=u.id)",
-            [userId],
-          )
-        ).length === 0
-      )
-        return fail(
-          400,
-          "LAST_ADMIN",
-          "Appoint another active administrator before deleting your account.",
+      const replacementPassword = await hashPassword(token());
+      await db.transaction(async (sql) => {
+        // Serialize administrator deletions so at least one usable administrator remains.
+        await sql.run("UPDATE bootstrap SET id=id WHERE id=1");
+        await sql.run("UPDATE users SET id=id WHERE id=$1", [userId]);
+        const [current] = await sql.all<{ password: string; is_admin: number }>(
+          "SELECT password,is_admin FROM users WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
+          [userId],
         );
-      const owned = await sql.all<{
-        id: string;
-        payload: string;
-        version: number;
-      }>("SELECT id,payload,version FROM sessions WHERE owner_id=$1", [userId]);
-      if (input.transferEmail) {
-        const [recipient] = await sql.all<{ id: string }>(
-          "SELECT id FROM users WHERE email=$1",
-          [input.transferEmail],
-        );
-        input.transferTo = recipient?.id;
-      }
-      if (
-        owned.length &&
-        (!input.transferTo ||
-          input.transferTo === userId ||
-          !(
-            await sql.all(
-              "SELECT id FROM users WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
-              [input.transferTo],
-            )
-          ).length)
-      )
-        return fail(
-          400,
-          "TRANSFER_REQUIRED",
-          "Transfer your sessions to an active account first.",
-        );
-      for (const row of owned) {
-        const session = JSON.parse(row.payload) as Session;
-        session.ownerId = input.transferTo!;
-        session.version++;
-        session.updatedAt = new Date().toISOString();
-        if (
-          !(await sql.run(
-            "UPDATE sessions SET owner_id=$1,payload=$2,version=$3,updated_at=$4 WHERE id=$5 AND version=$6",
-            [
-              session.ownerId,
-              JSON.stringify(session),
-              session.version,
-              session.updatedAt,
-              row.id,
-              row.version,
-            ],
-          ))
-        )
+        if (!current || current.password !== user.password)
           return fail(
             409,
-            "VERSION_CONFLICT",
-            "An agenda changed during transfer. Retry.",
+            "ACCOUNT_CHANGED",
+            "Your credentials changed. Sign in again before deleting the account.",
           );
-        await sql.run(
-          "DELETE FROM members WHERE session_id=$1 AND user_id=$2",
-          [row.id, input.transferTo],
-        );
-      }
-      await removeAccountMembership(sql, userId, input.transferTo);
-      await sql.run("DELETE FROM members WHERE user_id=$1", [userId]);
-      await sql.run("DELETE FROM auth_sessions WHERE user_id=$1", [userId]);
-      await sql.run("DELETE FROM account_profiles WHERE user_id=$1", [userId]);
-      await sql.run("DELETE FROM account_resets WHERE user_id=$1", [userId]);
-      await sql.run("DELETE FROM folder_scopes WHERE id=$1", [
-        `user:${userId}`,
-      ]);
-      await sql.run(
-        "UPDATE users SET name=$1,email=$2,password=$3,is_admin=0 WHERE id=$4",
-        [
-          "Deleted user",
-          `deleted-${randomUUID()}@invalid.local`,
-          replacementPassword,
+        if (
+          current.is_admin &&
+          (
+            await sql.all(
+              "SELECT u.id FROM users u WHERE u.is_admin=1 AND u.id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=u.id)",
+              [userId],
+            )
+          ).length === 0
+        )
+          return fail(
+            400,
+            "LAST_ADMIN",
+            "Appoint another active administrator before deleting your account.",
+          );
+        const owned = await sql.all<{
+          id: string;
+          payload: string;
+          version: number;
+        }>("SELECT id,payload,version FROM sessions WHERE owner_id=$1", [
           userId,
-        ],
-      );
-      await sql.run(
-        "INSERT INTO account_disabled(user_id,disabled_at) VALUES($1,$2) ON CONFLICT(user_id) DO NOTHING",
-        [userId, new Date().toISOString()],
-      );
-    });
-    res.json({ ok: true });
-  });
+        ]);
+        if (input.transferEmail) {
+          const [recipient] = await sql.all<{ id: string }>(
+            "SELECT id FROM users WHERE email=$1",
+            [input.transferEmail],
+          );
+          input.transferTo = recipient?.id;
+        }
+        if (
+          owned.length &&
+          (!input.transferTo ||
+            input.transferTo === userId ||
+            !(
+              await sql.all(
+                "SELECT id FROM users WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id)",
+                [input.transferTo],
+              )
+            ).length)
+        )
+          return fail(
+            400,
+            "TRANSFER_REQUIRED",
+            "Transfer your sessions to an active account first.",
+          );
+        for (const row of owned) {
+          const session = JSON.parse(row.payload) as Session;
+          session.ownerId = input.transferTo!;
+          session.version++;
+          session.updatedAt = new Date().toISOString();
+          if (
+            !(await sql.run(
+              "UPDATE sessions SET owner_id=$1,payload=$2,version=$3,updated_at=$4 WHERE id=$5 AND version=$6",
+              [
+                session.ownerId,
+                JSON.stringify(session),
+                session.version,
+                session.updatedAt,
+                row.id,
+                row.version,
+              ],
+            ))
+          )
+            return fail(
+              409,
+              "VERSION_CONFLICT",
+              "An agenda changed during transfer. Retry.",
+            );
+          await sql.run(
+            "DELETE FROM members WHERE session_id=$1 AND user_id=$2",
+            [row.id, input.transferTo],
+          );
+        }
+        await removeAccountMembership(sql, userId, input.transferTo);
+        await sql.run("DELETE FROM members WHERE user_id=$1", [userId]);
+        await sql.run("DELETE FROM auth_sessions WHERE user_id=$1", [userId]);
+        await sql.run("DELETE FROM account_profiles WHERE user_id=$1", [
+          userId,
+        ]);
+        await sql.run("DELETE FROM account_resets WHERE user_id=$1", [userId]);
+        await sql.run("DELETE FROM folder_scopes WHERE id=$1", [
+          `user:${userId}`,
+        ]);
+        await sql.run(
+          "UPDATE users SET name=$1,email=$2,password=$3,is_admin=0 WHERE id=$4",
+          [
+            "Deleted user",
+            `deleted-${randomUUID()}@invalid.local`,
+            replacementPassword,
+            userId,
+          ],
+        );
+        await sql.run(
+          "INSERT INTO account_disabled(user_id,disabled_at) VALUES($1,$2) ON CONFLICT(user_id) DO NOTHING",
+          [userId, new Date().toISOString()],
+        );
+      });
+      res.json({ ok: true });
+    },
+  );
 }

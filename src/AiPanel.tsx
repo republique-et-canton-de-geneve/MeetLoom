@@ -5,7 +5,6 @@ import {
   Plus,
   Send,
   Settings2,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";

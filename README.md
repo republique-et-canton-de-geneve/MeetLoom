@@ -12,6 +12,8 @@ The Render button sets up a demo on the free plan **with ephemeral data**: data 
 
 ## Run locally
 
+Continuing development with another coding agent? Start with the [agent handoff](docs/handoff.md) and [working agreements](AGENTS.md).
+
 Requirements: **Node.js 24 LTS** and npm. SQLite is built into Node, so no database server is needed for a local trial.
 
 ```bash

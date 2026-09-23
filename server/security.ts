@@ -4,7 +4,8 @@ import {
   timingSafeEqual,
   createHash,
 } from "node:crypto";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
+import { rateLimit as expressRateLimit } from "express-rate-limit";
 
 // OWASP's 16 MiB profile uses p=5. Encode the work factors so future upgrades
 // can migrate hashes at sign-in without resetting existing users' passwords.
@@ -67,32 +68,19 @@ export const fail = (status: number, code: string, message: string): never => {
 export function rateLimit(
   max: number,
   interval: number,
-  key: (request: Request) => string = (request) => request.ip ?? "unknown",
+  key?: (request: Request, response: Response) => string,
 ) {
-  const attempts = new Map<string, { count: number; until: number }>();
-  let sweepAt = 0;
-  return (request: Request, response: Response, next: NextFunction) => {
-    const now = Date.now();
-    if (now >= sweepAt) {
-      for (const [id, value] of attempts)
-        if (value.until < now) attempts.delete(id);
-      sweepAt = now + interval;
-    }
-    const id = key(request);
-    const entry = attempts.get(id);
-    const current =
-      entry && entry.until > now ? entry : { count: 0, until: now + interval };
-    current.count += 1;
-    attempts.set(id, current);
-    if (current.count > max) {
-      response.setHeader(
-        "Retry-After",
-        Math.ceil((current.until - now) / 1000),
-      );
-      response.status(429).json({
-        error: "Too many requests. Try again shortly.",
-        code: "RATE_LIMITED",
-      });
-    } else next();
-  };
+  // Each middleware has its own in-memory budget. Default IP keys also group
+  // IPv6 subnets, preventing address rotation from bypassing the limit.
+  return expressRateLimit({
+    limit: max,
+    windowMs: interval,
+    ...(key ? { keyGenerator: key } : {}),
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+      error: "Too many requests. Try again shortly.",
+      code: "RATE_LIMITED",
+    },
+  });
 }

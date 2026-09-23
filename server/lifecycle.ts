@@ -11,7 +11,6 @@ import {
   accessibleSessionRows,
   mappedSession,
   storedSession,
-  workspaceAccess,
 } from "./workspaces.js";
 import { sessionCollaborators } from "./collaborators.js";
 import { totalDuration } from "../shared/domain.js";

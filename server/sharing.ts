@@ -428,9 +428,7 @@ export async function registerSharing(
   });
   app.post(
     "/api/public/:token/comments",
-    ...(rateLimits === false
-      ? []
-      : [rateLimit(20, 60000, (req: Request) => `${req.ip}:visitor-comments`)]),
+    ...(rateLimits === false ? [] : [rateLimit(20, 60000)]),
     async (req: Request, res: Response) => {
       const comment = await db.transaction(async (sql) => {
         const initial = await resolve(req.params.token, sql);

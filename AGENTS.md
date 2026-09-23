@@ -2,8 +2,15 @@
 
 Free, self-hosted software for planning and facilitating meetings and workshops.
 
+## Resuming work
+
+When the user says **"continue"** (or asks to resume), read `docs/handoff.md` and `docs/status.md` before acting. The handoff is the durable project context: user requirements, decisions, completed checkpoint, validation evidence, environment limits, and ordered remaining work. Also inspect the current branch, working tree, and PR checks; preserve changes made since the handoff was written. A generic continuation is not authorization to skip the user-acceptance, E2E, release, and deployment gates recorded there. Do not ask the user to repeat information already documented.
+
+Before every pause or handoff, update `docs/handoff.md` with what is complete, what remains, relevant commits/checks, and a concrete next action. Record verification honestly; distinguish implemented, tested, and user-accepted behavior. Keep credentials and local private data out of this record. `CLAUDE.md` points to these same instructions, so maintain one shared source of truth.
+
 ## Working agreements
 
+- Start with `docs/handoff.md` when resuming. Update it at every stopping point with the completed checkpoint, validation evidence, known limits, and ordered remaining work so another agent can continue without conversation history.
 - Keep repository documentation, contributor instructions, and engineering guides in **English**, following RetroGemini's convention. The application supports both French and English. Preserve exact UI labels when recording evidence from a test performed in French.
 - Read `ARCHITECTURE.md`, `docs/implementation-plan.md`, `docs/product-parity.md`, and `docs/engineering-reference.md`. Test evidence belongs in `docs/manual-qa.md`; do not mark a capability verified without corresponding evidence.
 - Gstack is the requested tooling: native Codex installation under `~/.codex/skills/gstack-*`, with its ignored local source in `.tools/gstack`. Apply its product, engineering, and code reviews where relevant.

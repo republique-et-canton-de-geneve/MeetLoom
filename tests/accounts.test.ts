@@ -3,6 +3,92 @@ import assert from "node:assert/strict";
 import { harness, password } from "./support.js";
 import { DEFAULT_ACCOUNT_PREFERENCES } from "../shared/accounts.js";
 
+test("email changes and account deletion share a credential budget per authenticated account", async (t) => {
+  const h = await harness(t, { rateLimits: true, trustProxy: 1 });
+  const owner = await h.setup();
+  const colleague = await h.account("colleague@example.test");
+  const input = {
+    name: owner.name,
+    email: "changed@example.test",
+    locale: "en",
+    currentPassword: "incorrect-current-password",
+    preferences: DEFAULT_ACCOUNT_PREFERENCES,
+  };
+  assert.equal(
+    (await h.client().request("/account", "PUT", input)).status,
+    401,
+  );
+  for (let attempt = 0; attempt < 10; attempt++) {
+    // Switching trusted client addresses cannot reset an account's budget.
+    const address = { "X-Forwarded-For": `192.0.2.${attempt + 1}` };
+    assert.equal(
+      (await h.owner.request("/account", "PUT", input, address)).status,
+      401,
+    );
+    assert.equal(
+      (
+        await h.owner.request(
+          "/account/delete",
+          "POST",
+          {
+            currentPassword: input.currentPassword,
+          },
+          address,
+        )
+      ).status,
+      401,
+    );
+  }
+  for (const [path, method, body] of [
+    ["/account", "PUT", { ...input, currentPassword: password }],
+    ["/account/delete", "POST", { currentPassword: password }],
+  ] as const) {
+    const limited = await h.owner.request(path, method, body);
+    assert.equal(limited.status, 429);
+    assert.equal(limited.body.code, "RATE_LIMITED");
+    assert.ok(Number(limited.headers.get("retry-after")) > 0);
+  }
+  const unchanged = await h.owner.request("/account");
+  assert.equal(unchanged.status, 200);
+  assert.equal(unchanged.body.user.email, owner.email);
+  assert.equal((await h.owner.request("/sessions")).status, 200);
+  // Both clients use the same loopback address. The other account keeps its budget.
+  const independent = await colleague.client.request("/account", "PUT", {
+    ...input,
+    email: colleague.user.email,
+    name: "Colleague updated",
+  });
+  assert.equal(independent.status, 200, JSON.stringify(independent.body));
+  assert.equal(
+    (
+      await colleague.client.request("/account/delete", "POST", {
+        currentPassword: input.currentPassword,
+      })
+    ).status,
+    401,
+  );
+});
+
+test("account credential limiting remains disabled when rateLimits is false", async (t) => {
+  const h = await harness(t, { rateLimits: false });
+  const owner = await h.setup();
+  for (let attempt = 0; attempt < 21; attempt++) {
+    // Invalid bodies are counted before validation when the limiter is enabled.
+    assert.equal((await h.owner.request("/account", "PUT", {})).status, 400);
+    assert.equal(
+      (await h.owner.request("/account/delete", "POST", {})).status,
+      400,
+    );
+  }
+  const saved = await h.owner.request("/account", "PUT", {
+    name: "Still editable",
+    email: owner.email,
+    locale: "en",
+    preferences: DEFAULT_ACCOUNT_PREFERENCES,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+});
+
 test("profile changes require password for email, reject unsafe avatar and keep preferences private", async (t) => {
   const h = await harness(t),
     owner = await h.setup();

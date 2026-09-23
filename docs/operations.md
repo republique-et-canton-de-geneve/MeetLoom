@@ -66,6 +66,22 @@ Then verify that an application pod can reach the database and a pod without the
 
 Treat visitor sharing as read access for anyone holding the link. Revoke links that are no longer needed. Column privacy is enforced through server projections; an export or public presentation view must never retrieve hidden organizer fields.
 
+## Rate limits and proxy configuration
+
+Rate limits use in-process memory, with independent budgets per middleware:
+
+| Scope                                                      | Budget                                                 | Key                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------- |
+| `/api`, excluding health/readiness probes                  | 600 requests per minute                                | Client IP                                      |
+| Setup, sign-in, password change, and invitation acceptance | 20 requests per 15 minutes, shared across these routes | Client IP                                      |
+| Profile updates and account deletion                       | 20 requests per 15 minutes, shared across both routes  | Authenticated account, regardless of client IP |
+
+Additional endpoint limits apply to recovery, AI, forms, and MCP. Exceeding a budget returns HTTP 429 with `RATE_LIMITED`; honor `Retry-After` before retrying. IP-based keys group IPv6 addresses by `/56` subnet by default. Users behind the same public IP share IP-based budgets.
+
+Set `TRUST_PROXY` to the actual trusted proxy hop count: the default is `0`, while the supplied OpenShift manifests use `1`. The trusted edge must replace client-supplied forwarding headers, and clients must not bypass that proxy path. An incorrect count or spoofable `X-Forwarded-For` can undermine IP-based limits.
+
+Restarting the application resets counters. These limits therefore assume one application process/pod; horizontal scaling requires a shared rate-limit store and verification of the proxy chain before adding replicas.
+
 ## Retention, closure, and optional services
 
 Archiving organizes the dashboard without removing existing access. Closing makes the agenda read-only and closes public contributions; deleting immediately removes visitor and collaborator access while retaining a recoverable session for 30 days. Deleted agenda items remain recoverable for 72 hours. Expired sessions are purged in bounded batches when the trash is viewed or used; this is not a precisely scheduled background purge. Copies in backups follow their own retention policy. See the [workspace, history, and lifecycle guide](workspaces-and-lifecycle.md).

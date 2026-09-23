@@ -8,7 +8,6 @@ import type { Session, Role, User, Share } from "../shared/model.js";
 import { DEFAULT_SOUND, INITIAL_RUN } from "../shared/model.js";
 import {
   createSession,
-  publicProjection,
   transitionRun,
   allBlocks,
   cloneBlockTree,
@@ -1080,7 +1079,7 @@ export async function createApp(config: AppConfig = {}) {
     config.rateLimits === false
       ? (_request: Request, _response: Response, next: express.NextFunction) =>
           next()
-      : rateLimit(10, 60000, (request) => `${request.ip}:ai`);
+      : rateLimit(10, 60000);
   app.post(
     "/api/ai/generate",
     authenticated,
