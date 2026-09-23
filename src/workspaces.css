@@ -1,7 +1,7 @@
 .workspace-selector {
   display: grid;
   gap: 8px;
-  margin: 20px 0;
+  margin: 20px 18px;
 }
 .workspace-selector label {
   font-size: 11px;
@@ -210,6 +210,12 @@
   width: 28px;
   height: 28px;
   object-fit: contain;
+}
+@media (max-width: 900px) {
+  .workspace-selector {
+    margin-left: 10px;
+    margin-right: 10px;
+  }
 }
 @media (max-width: 650px) {
   .dashboard-shell .workspace-selector {
