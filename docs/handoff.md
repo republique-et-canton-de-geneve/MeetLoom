@@ -4,7 +4,9 @@ Last updated: September 23, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
-The user requested a complete intermediate checkpoint and will continue later. Finish the current security correction and repository migration; do not start another feature, release, or deployment during this checkpoint.
+The user requested a complete intermediate checkpoint and will continue later. The repository migration and security correction are complete and pushed. No code modification remains in progress. Resume with user acceptance and the ordered work below; do not start another feature, release, or deployment merely to finish this checkpoint.
+
+**Validated code commit:** `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8`. All hosted checks passed: [CI 35885304817](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) (SQLite/PostgreSQL, types, build, formatting, audit, manifests) and [Security 35885304655](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655) (exact image build, arbitrary-UID/read-only-root smoke test, Trivy, CodeQL). The separate CodeQL findings check `107264308348` also passed. This record is a documentation-only follow-up to that tested commit; no application code changed afterward. Any checks started by the documentation push can be inspected on PR #1 when resuming.
 
 The implementation is in [MeetLoom PR #1](https://github.com/republique-et-canton-de-geneve/MeetLoom/pull/1), on `codex/meetloom-v1`. The PR remains a draft for manual acceptance. The default branch still contains the original repository initialization until the PR is merged. Check out the implementation branch to run the app; README badges and the Render button on the default branch cannot represent this unmerged version yet.
 

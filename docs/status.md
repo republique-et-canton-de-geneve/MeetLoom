@@ -22,6 +22,8 @@ The user approved the RetroGemini-style advanced CodeQL workflow. Default setup 
 
 The maintained nominal E2E suite and any dependency auto-merge policy come **after user acceptance**. The subsequent delivery sequence is a GitHub release, Docker Hub publication, then operator-led OpenShift development and production deployments. None of those deployment steps has been performed.
 
+At the requested stopping point, code commit `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8` passed all [CI checks](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) and [Security checks](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655), including the separate CodeQL findings check. The application code is committed and pushed; the subsequent update only records this evidence and the continuation instructions.
+
 ## Environment limits
 
 - The organization's Qwen endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.
