@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import express, { type Express } from "express";
-import { rateLimit } from "../server/security.js";
+import express, { type Express, type RequestHandler } from "express";
+import { MemoryStore } from "express-rate-limit";
+import { rateLimit, withRateLimitStores } from "../server/security.js";
+import { createApp } from "../server/app.js";
+import { origin } from "./support.js";
 
 async function serve(t: TestContext, configure: (app: Express) => void) {
   const app = express();
@@ -119,4 +122,56 @@ test("a limited client can make requests again after the short window expires", 
   await delay(650);
   assert.equal((await request()).status, 200);
   assert.equal((await request()).status, 429);
+});
+
+test("closing one application releases only the limiter budgets it assembled", async (t) => {
+  const assemble = () =>
+    withRateLimitStores(async () => {
+      // Yield between limiters so concurrent assemblies interleave.
+      await delay(1);
+      return rateLimit(1, 10000);
+    });
+  const [first, second] = await Promise.all([assemble(), assemble()]);
+  const outside = rateLimit(1, 10000);
+  t.after(() => second.shutdown());
+  const route = (limiter: RequestHandler) => (app: Express) =>
+    app.get("/limited", limiter, (_req, res) => res.json({ accepted: true }));
+  const requestFirst = await serve(t, route(first.result));
+  const requestSecond = await serve(t, route(second.result));
+  const requestOutside = await serve(t, route(outside));
+  for (const request of [requestFirst, requestSecond, requestOutside]) {
+    assert.equal((await request()).status, 200);
+    assert.equal((await request()).status, 429);
+  }
+  first.shutdown();
+  assert.equal((await requestFirst()).status, 200);
+  assert.equal((await requestSecond()).status, 429);
+  assert.equal((await requestOutside()).status, 429);
+});
+
+test("a failed assembly releases the limiters it had already created", async (t) => {
+  const shutdown = t.mock.method(MemoryStore.prototype, "shutdown");
+  await assert.rejects(
+    withRateLimitStores(async () => {
+      rateLimit(1, 10000);
+      rateLimit(1, 10000);
+      throw new Error("assembly failed");
+    }),
+    /assembly failed/,
+  );
+  assert.equal(shutdown.mock.callCount(), 2);
+});
+
+test("closing the application shuts down every limiter store it created", async (t) => {
+  const init = t.mock.method(MemoryStore.prototype, "init");
+  const shutdown = t.mock.method(MemoryStore.prototype, "shutdown");
+  const runtime = await createApp({
+    sqlitePath: ":memory:",
+    origin,
+    rateLimits: true,
+  });
+  assert.ok(init.mock.callCount() > 0);
+  assert.equal(shutdown.mock.callCount(), 0);
+  await runtime.close();
+  assert.equal(shutdown.mock.callCount(), init.mock.callCount());
 });

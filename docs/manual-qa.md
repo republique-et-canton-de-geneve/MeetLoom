@@ -50,6 +50,15 @@ Executed in Chrome on September 23, 2026, using fictional data in the local test
 - Tested the English editor at a 390 × 844 viewport: the page remained within the viewport while the agenda grid had its own horizontal scroll. Switched to French and checked that the Columns panel was readable at that width. Removed the viewport override afterward.
 - Restarted both local previews with the final build and without the mock AI provider. Checked the first-account screen on port 3000 in French, switched to English, and returned to French. No account or sample password is preinstalled in this first-installation database.
 
+## Continuation smoke test (Claude Code, headless Chromium)
+
+Executed on September 23, 2026 against a production build (`npm run build`, `node dist/server/index.js`) using a new SQLite database in a scratch directory and a fictional account. This is a smoke test of the continuation's changes, not a repetition of the scenarios above.
+
+- Created the first account in French, reached the dashboard, and opened the “Une nouvelle séance” dialog. No page or console errors were reported.
+- Found the workspace selector and “Créer un espace” flush against the sidebar's left edge (x = 0) while the workspace card was indented by 18 px. After the CSS correction, the selector and card both start at x = 18 at 1280 and 1000 px, at x = 10 at 800 px, and the mobile layout at 400 px is unchanged; no viewport produced horizontal page scrolling. Checked in French and English.
+- Stored English as the interface language and reloaded: the UI was English but `<html lang>` remained `fr`. After the correction, the same reload reports `lang="en"`.
+- The dashboard caption “ESPACE DE TRAVAIL” appears twice in the sidebar. This wording question is left for the user's acceptance review.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -70,3 +79,4 @@ Executed in Chrome on September 23, 2026, using fictional data in the local test
 - Real Qwen, OIDC, SMTP, native Office rendering, audible playback, and the PowerPoint overlay need checks in the intended environment. No release or OpenShift deployment was performed.
 - Security checkpoint: local `npm run check` passed with 225 tests, both TypeScript projects, and the production build. Six additional HTTP/API tests exercise rate-limit responses and expiry, IPv6 aggregation, account isolation across IP changes, shared profile/deletion budgets, and the explicit test-only bypass. The dependency audit reported zero vulnerabilities. No new browser UI behavior was introduced by this correction; the manual browser evidence above remains separate from these automated checks.
 - Hosted verification of code commit `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8`: [CI 35885304817](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) passed every job, including PostgreSQL. [Security 35885304655](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655) passed the exact Docker build, arbitrary-UID/read-only-root runtime check, Trivy, and CodeQL. The separate CodeQL findings check `107264308348` also passed. The pause requested by the user follows this completed checkpoint; the final documentation-only follow-up records these results.
+- Continuation checkpoint (branch `claude/epic-pascal-3gk99i`): local `npm run check` passed with 228 tests, both TypeScript projects, and the production build. The same 228 tests passed on a disposable PostgreSQL 16 database. Formatting checks passed and the production dependency audit reported zero vulnerabilities. Three new tests cover rate-limiter store shutdown when an application closes or fails to assemble. Hosted CI does not run on a pull request targeting `codex/meetloom-v1`; hosted results for these commits are expected once they reach that branch.

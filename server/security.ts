@@ -4,8 +4,9 @@ import {
   timingSafeEqual,
   createHash,
 } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Request, Response } from "express";
-import { rateLimit as expressRateLimit } from "express-rate-limit";
+import { MemoryStore, rateLimit as expressRateLimit } from "express-rate-limit";
 
 // OWASP's 16 MiB profile uses p=5. Encode the work factors so future upgrades
 // can migrate hashes at sign-in without resetting existing users' passwords.
@@ -65,6 +66,23 @@ export class HttpError extends Error {
 export const fail = (status: number, code: string, message: string): never => {
   throw new HttpError(status, code, message);
 };
+// Limiters created while an application is assembled register their stores
+// with that application, so closing it releases their budgets and timers.
+const limiterStores = new AsyncLocalStorage<MemoryStore[]>();
+export async function withRateLimitStores<T>(
+  assemble: () => Promise<T>,
+): Promise<{ result: T; shutdown: () => void }> {
+  const stores: MemoryStore[] = [];
+  const shutdown = () => {
+    for (const store of stores.splice(0)) store.shutdown();
+  };
+  try {
+    return { result: await limiterStores.run(stores, assemble), shutdown };
+  } catch (error) {
+    shutdown();
+    throw error;
+  }
+}
 export function rateLimit(
   max: number,
   interval: number,
@@ -72,9 +90,12 @@ export function rateLimit(
 ) {
   // Each middleware has its own in-memory budget. Default IP keys also group
   // IPv6 subnets, preventing address rotation from bypassing the limit.
+  const store = new MemoryStore();
+  limiterStores.getStore()?.push(store);
   return expressRateLimit({
     limit: max,
     windowMs: interval,
+    store,
     ...(key ? { keyGenerator: key } : {}),
     standardHeaders: "draft-8",
     legacyHeaders: false,
