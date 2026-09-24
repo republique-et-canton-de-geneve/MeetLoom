@@ -99,6 +99,15 @@ Executed on September 24, 2026 against a production build with the same scratch 
 - Locking a block one minute before the previous block ends shows “1 min de chevauchement entre bloc 1 et bloc 2”; locking it at its own time, then unlocking it, shows no banner.
 - Started “Depuis l’heure prévue” with the day at 23:30: the timer bar turned blue with “DÉBUT DANS” in amber and the countdown before the start.
 
+## Acceptance round 5 fixes (Claude Code, headless Chromium)
+
+Executed on September 24, 2026 against a production build with the same scratch database.
+
+- In “Mon compte & équipe” → “Paramètres de l’installation”, enabled account creation for `example.test` and saved; the services list read “SMTP · non configuré”, “OIDC · non configuré”, “IA · non configuré”.
+- From the sign-in page, “Créer un compte” showed “Créez votre compte avec une adresse @example.test.”; an `@autre.test` address was refused with the domain message, then `nouvelle@example.test` created the account and opened the dashboard (“Bonjour Nouvelle”). Sign-up was disabled again afterwards.
+- Clicking the parallel block in the minimap scrolled its header into view and focused its title.
+- A visitor link on a running session shows the always-on-top button beside the live timer; clicking it raised no error.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -124,3 +133,4 @@ Executed on September 24, 2026 against a production build with the same scratch 
 - Acceptance round 2 (`codex/meetloom-v1`): local `npm run check` passed with 272 tests, both TypeScript projects and the production build; the same 272 tests passed on PostgreSQL 16; formatting checks passed.
 - Acceptance round 3: local `npm run check` passed with 273 tests, both TypeScript projects and the build; the same 273 tests passed on PostgreSQL 16; formatting checks passed.
 - Acceptance round 4: local `npm run check` passed with 275 tests, both TypeScript projects and the build; the same 275 tests passed on PostgreSQL 16; formatting checks passed.
+- Acceptance round 5: see the handoff for the automated results of this round.

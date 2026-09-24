@@ -4,6 +4,16 @@ Last updated: September 24, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**Acceptance round 5 (September 24, 2026).** Fixed on `codex/meetloom-v1`:
+
+- **Parallel rooms and actual time (design decision to confirm with the user):** the timer measures a parallel block as one step because all rooms run at once. “Use actual durations” gives the actual time (whole minutes) to the longest room(s), scaling their activities proportionally with largest-remainder rounding so they add up exactly; shorter rooms keep their plan unless the actual time is shorter, which caps them. Groups inside a room are scaled through their activities; a nested parallel keeps its plan. “Restore plan” also restores room activities, because a run now captures their planned durations at start. Rooms are not limited to one activity. `spreadParallelActual` in `shared/domain.ts`; tests in `tests/timer-parallel.test.ts`.
+- **Self-service sign-up:** administrators enable it in “Paramètres de l’installation” (off by default), optionally restricted to email domains. `POST /api/auth/signup` creates a non-administrator account and signs it in; `/api/auth/status` exposes `signupEnabled`/`signupDomains`; `GET /api/admin/settings` and `PUT /api/admin/settings/signup` are admin-only. Without SMTP the address is not verified: keep it for internal networks. Tests: `tests/signup.test.ts`.
+- **Admin settings panel** (`src/AdminSettings.tsx`): sign-up policy plus a read-only state of SMTP, OIDC and AI (model names). Services stay operator configuration (environment/ConfigMap/Secret), never browser-editable, by design. Lost passwords without SMTP: “Lien de récupération” in account administration.
+- **Always-on-top window for visitors:** the visitor page's live timer has the same button; the window logic is the shared `useFloatingWindow` hook in `src/Timer.tsx`.
+- **Minimap:** clicking a group or parallel block scrolls to its header (container titles are registered like block titles).
+
+Deployment readiness (answered to the user): the image, Docker Hub release workflow and OpenShift installer are in place. The release workflow only runs from `main` or a published release, so PR #1 must be merged first; it also needs the `DOCKERHUB_REPOSITORY` variable and `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets. The documented gate (nominal E2E suite before the first release) is the user's call. Not yet exercised on a real cluster.
+
 **Acceptance round 4 (September 24, 2026).** Fixed on `codex/meetloom-v1`, modelled on the SessionLab screenshots the user supplied:
 
 - **Groups and parallel activities are logical containers:** a compact header (`containerHeader` in `src/Editor.tsx`) with only the start time and padlock, the duration computed from the activities (plain text, not a field), the actual duration once passed, a collapse arrow, the title, and delete. No description, category, assignee or columns. Groups are light blue, parallel activities light orange.

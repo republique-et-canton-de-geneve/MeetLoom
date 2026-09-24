@@ -52,7 +52,7 @@ Durations planned at startup are retained to calculate schedule deviation. The d
 
 Moved on too early? Use **previous block**: the clock kept running for the earlier block, so it resumes with its own time plus the detour. Leave a block with 30 seconds left and come back 10 seconds later: 20 seconds remain. The countdown uses the block's current duration, so time added in the agenda (or with **+1**/**+5** once back) is taken into account. The block you left becomes upcoming again and starts fresh when you reach it.
 
-Once the timer has passed a block, the agenda shows its **actual duration** (whole minutes, “< 1 min” under a minute) in a distinct amber style; hover for the exact time and the planned duration, click to edit the planned duration. **Use actual durations** at the end rounds each block down to whole minutes.
+Once the timer has passed a block, the agenda shows its **actual duration** (whole minutes, “< 1 min” under a minute) in a distinct amber style; hover for the exact time and the planned duration, click to edit the planned duration. **Use actual durations** at the end rounds each block down to whole minutes. For parallel activities, the longest room takes the actual time (its activities scaled proportionally) and shorter rooms keep their plan unless the actual time is shorter.
 
 **From scheduled time** is always available: before the day's start time the timer counts down (“Starts in”), then the first block runs on time; after it, the timer catches up the elapsed time. A **parallel** block is one timer step lasting as long as its longest room; +1/+5 add time to the last activity of that room.
 

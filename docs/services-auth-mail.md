@@ -67,3 +67,7 @@ oc rollout status deployment/meetloom
 ```
 
 Keep these values in your usual secret manager. GitHub needs neither cluster access nor SMTP/OIDC credentials. If a network policy controls egress, allow internal DNS, the HTTPS OIDC provider, and the SMTP relay. Docker Compose passes the same variables; place an HTTPS proxy in front of the application and adjust `APP_ORIGIN`/`COOKIE_SECURE` before enabling these services in production.
+
+## Self-service sign-up
+
+By default, accounts are created from administrator invitations (or organizational sign-in with `OIDC_ACCOUNT_POLICY=invited`). An administrator can let people create their own account from the sign-in page in **Account & team → Installation settings**, optionally restricted to a list of email domains. Accounts created this way are never administrators. MeetLoom does not verify the address by email, so keep this option for an internal network, or restrict it to your organization's domains.
