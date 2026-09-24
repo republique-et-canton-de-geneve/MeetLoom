@@ -1,5 +1,13 @@
 # Gstack
 
+gstack is the required AI tooling for this repository; the routing rule and its enforcement are in [AGENTS.md](../AGENTS.md#ai-tooling-gstack). On Claude Code, `.claude/settings.json` installs gstack in web containers (`session-start.sh`), injects the command routing table on every prompt and blocks skills when gstack is missing, as in RetroGemini.
+
+## Review of September 24, 2026 (Claude Code)
+
+gstack 1.89.1.0 was installed with `setup --team` under `~/.claude/skills/gstack`. `/health` gave the quality baseline (typecheck, tests on SQLite and PostgreSQL, knip dead code, shellcheck; no linter was configured) and `/cso` ran a static security audit through its trusted helper (`gstack-cso 3.0.0`, daily mode, 600-second budget, partial coverage: no Docker socket for its qualified scanners or runtime reproduction). Findings, fixes and residual risks are in [architecture-review.md](architecture-review.md) and [security-review.md](security-review.md).
+
+## Initial installation (Codex, September 2026)
+
 Gstack was installed before implementation, as requested, from the [official repository](https://github.com/garrytan/gstack).
 
 - Installed version: `1.87.6.0`.

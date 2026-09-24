@@ -2,7 +2,7 @@
 
 Use Node.js 24 and `npm ci`, then follow [local startup](README.md). Create a `codex/description` branch or your own working branch and submit a PR. Do not commit `.env` files, SQLite databases, dumps, secrets, or private agendas.
 
-Before opening a PR, run `npm run check` and format changed files with Prettier. API contracts must continue to pass on SQLite and PostgreSQL; CI covers both. To test PostgreSQL locally, set `TEST_DATABASE_URL` to a test database whose user can create and drop isolated schemas, then run `npm test`.
+Before opening a PR, run `npm run lint`, `npm run deadcode` and `npm run check`, and format changed files with Prettier. Add a line to `CHANGELOG.md` for user-visible changes. The complete list of rules is in [AGENTS.md](AGENTS.md). API contracts must continue to pass on SQLite and PostgreSQL; CI covers both. To test PostgreSQL locally, set `TEST_DATABASE_URL` to a test database whose user can create and drop isolated schemas, then run `npm test`.
 
 The [architecture](ARCHITECTURE.md) explains where changes belong. Reuse `tests/support.ts` for HTTP tests: it starts an application on loopback, creates isolated accounts, and cleans up its resources. Never point `TEST_DATABASE_URL` at a production database. Schema changes are additive and idempotent; include a compatible migration and a test on both engines when changing storage.
 

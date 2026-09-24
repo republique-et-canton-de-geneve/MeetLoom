@@ -87,14 +87,18 @@ Use the exact model identifier your server expects; nothing is tied to a particu
 
 ## Engineering and verification
 
+The [architecture, security and load review](docs/architecture-review.md) summarizes the controls, test evidence, capacity measurements and open recommendations. AI-assisted work uses [gstack](docs/gstack.md) as described in [AGENTS.md](AGENTS.md).
+
 ```bash
+npm run lint        # ESLint (errors fail; the warning budget only goes down)
+npm run deadcode    # knip
 npm run check       # TypeScript, domain/API tests, and build
 npm test
 npm audit
 npm run format:check
 ```
 
-`TEST_DATABASE_URL` runs the same API contracts against PostgreSQL, using an isolated schema per test. CI runs SQLite and PostgreSQL, renders manifests, and checks dependencies. CodeQL and Trivy provide additional scans. GitHub Actions are pinned to commits. Docker Hub publication is triggered by a GitHub Release or manually and repeats checks, including PostgreSQL, before publishing. The Release retains the digest, commit, SBOM, and installation manifests.
+`TEST_DATABASE_URL` runs the same API contracts against PostgreSQL, using an isolated schema per test. CI runs lint, dead-code and shell checks, SQLite and PostgreSQL, renders manifests, and checks dependencies. `loadtest/run.mjs` measures capacity against a running server ([results](loadtest/README.md)). CodeQL and Trivy provide additional scans. GitHub Actions are pinned to commits. Docker Hub publication is triggered by a GitHub Release or manually and repeats checks, including PostgreSQL, before publishing. The Release retains the digest, commit, SBOM, and installation manifests.
 
 **End-to-end journeys** (`npm run test:e2e`, Playwright) cover accounts, agenda editing, visitor privacy and facilitation in CI and before every release. Dependabot patch and development minor updates are auto-merged only once the required checks pass; the repository must require **CI Success** on `main`.
 

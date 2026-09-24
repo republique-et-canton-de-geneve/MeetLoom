@@ -83,6 +83,18 @@ Set `TRUST_PROXY` to the actual trusted proxy hop count: the default is `0`, whi
 
 Restarting the application resets counters. Counters are kept per pod: with the two application pods of the OpenShift manifests, a client spread across both can reach at most twice each limit (the router usually keeps a browser on one pod). A shared rate-limit store would be needed for exact limits across many replicas.
 
+## Reading the audit trail
+
+Administrator actions are recorded in the `audit_events` table: `installation.setup`, `settings.signup`, `settings.sound`, `account.invite`, `account.update` (enable, disable, administrator right), `account.access-revoke` and `account.reset` (a password-reset link was issued; the link itself is never stored). Each row holds the time, the acting account, the target, the client IP address and a small JSON detail. Rows older than 400 days are removed when new events are written. There is no screen for it; read it with SQL, for example from the PostgreSQL pod:
+
+```bash
+oc -n meetloom-dev exec deploy/meetloom-postgresql -- \
+  psql -U meetloom -d meetloom -c \
+  "SELECT a.at, a.action, u.email AS actor, a.target, a.detail, a.ip FROM audit_events a LEFT JOIN users u ON u.id = a.actor_id ORDER BY a.at DESC LIMIT 50"
+```
+
+The application offers no path to change or delete rows; the database does not enforce it, so restrict direct database access accordingly.
+
 ## Retention, closure, and optional services
 
 Archiving organizes the dashboard without removing existing access. Closing makes the agenda read-only and closes public contributions; deleting immediately removes visitor and collaborator access while retaining a recoverable session for 30 days. Deleted agenda items remain recoverable for 72 hours. Expired sessions are purged in bounded batches when the trash is viewed or used; this is not a precisely scheduled background purge. Copies in backups follow their own retention policy. See the [workspace, history, and lifecycle guide](workspaces-and-lifecycle.md).

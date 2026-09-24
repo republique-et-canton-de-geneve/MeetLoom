@@ -1,4 +1,17 @@
-# Targeted security review — September 23, 2026
+# Security reviews
+
+## gstack `/cso` audit — September 24, 2026
+
+Static audit of `main` after the 0.1.0 release, run through gstack's trusted `gstack-cso` helper (run `1790287748536-5fcffa3aed64615c`, status **partial**: its qualified scanners and runtime reproduction need a Docker socket, unavailable in this environment). Challenge was sequential (no independent reviewer agent). Assessed: application model, attack surface, CI/CD, infrastructure; partially: secrets, dependencies, integrations, LLM/MCP, OWASP, STRIDE, data classification.
+
+| ID / severity                      | Finding                                                                                                                                                                                                                      | Fix and evidence                                                                                                                                                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `3bea3343` medium, high confidence | Anonymous holders of a form or visitor link could grow the database shared by every session without bound: public writes were limited only per IP (about 3 GB a day of form images from one address against a 5 GiB volume). | Per-publication quotas (5,000 responses, 100 MiB of answers and images, running totals freed by deletions) and 2,000 visitor comments per link, checked under the row lock that serializes submissions. `tests/public-quotas.test.ts` on SQLite and PostgreSQL. |
+| `69baa7ed` low, high confidence    | The 7 MB JSON parser of `/api/import/extract` ran before authentication.                                                                                                                                                     | The session cookie is resolved first and anonymous callers are refused before the body is read. `tests/document-api.test.ts` sends a malformed 2 MB body and expects 401, not 400.                                                                              |
+
+Hardening done in the same pass, without a reported vulnerability: CSP restricted to `'self'` for fonts and styles; per-account API budget (a room of visitors behind one address was throttled, found by the load test); audit trail of administrator actions; lint and dead-code gates. Accepted risks and remaining checks are listed in [architecture-review.md](architecture-review.md).
+
+## Targeted security review — September 23, 2026
 
 Review of the `codex/meetloom-v1` working code using the Gstack checklist: SQL and transactions, concurrency, authorization, AI/MCP output boundaries, public fields, tokens, and errors. The reviewed scope covered `accounts`, `oidc`, `mailer`, `participants`, `transfers`, `sharing`, `mcp`, and their mounting points. Existing security tests were read as evidence of safeguards, without sending anything to an external service.
 
@@ -28,7 +41,7 @@ The subsequent image-form and folder work passed **16/16 on SQLite and 16/16 on 
 
 ## Limits to retain
 
-- One application replica is planned. Presence and rate limits remain local to the process; no multi-pod validation is claimed.
+- (September 23) One application replica was planned then. Since September 24, two pods run with presence in PostgreSQL and a startup schema lock; rate-limit counters remain per pod.
 - The added transfer and sharing checks re-read permissions inside their transaction. This is not a formal proof that every endpoint's authorization is linearizable against every simultaneous revocation.
 - SMTP reminders require opt-in and recheck recipient/access before building the message. SMTP acceptance followed by a crash before recording success can cause repeated delivery; exactly-once delivery is not promised.
 - The MCP connector uses explicit personal tokens; no OAuth discovery/DCR, publication, participant identity access, or form-response access through MCP tools.
