@@ -430,12 +430,12 @@ test("audio warnings fire once per block, and a revisited block warns when its r
   frame = timerAudioStep(frame, next, 31000, true).frame;
   const back = transitionRun(next, "previous", {}, 41000);
   frame = timerAudioStep(frame, back, 41000, true).frame;
-  // Resumed at 30 s elapsed: 90 s remain, so the warning is due 30 s later.
-  const early = timerAudioStep(frame, back, 70000, true);
+  // The detour counts: 40 s elapsed, so the warning is due 20 s later.
+  const early = timerAudioStep(frame, back, 60000, true);
   assert.equal(early.warning, false);
-  const warned = timerAudioStep(early.frame, back, 72000, true);
+  const warned = timerAudioStep(early.frame, back, 62000, true);
   assert.equal(warned.warning, true);
-  assert.equal(timerAudioStep(warned.frame, back, 73000, true).warning, false);
+  assert.equal(timerAudioStep(warned.frame, back, 63000, true).warning, false);
 });
 
 test("revisiting a block already past its warning does not replay it", () => {

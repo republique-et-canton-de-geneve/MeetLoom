@@ -161,7 +161,7 @@ export default function GroupEditor({
               <GripVertical size={14} />
             </span>
             <span>{child.title || t("Sans titre", "Untitled")}</span>
-            <small>{blockDuration(child)} min</small>
+            <small>{Math.floor(blockDuration(child) + 1e-9)} min</small>
           </summary>
           <div className="group-editor-fields">
             <label>

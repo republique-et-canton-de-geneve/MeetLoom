@@ -5,7 +5,7 @@ import {
   type Block,
   type SessionCategory,
 } from "./model.js";
-import { allBlocks, blockDuration, runnableBlocks } from "./domain.js";
+import { blockDuration, runnableBlocks } from "./domain.js";
 import {
   contentIds,
   contentOrderSchema,
@@ -452,15 +452,6 @@ export const sessionInputSchema = z
         message: "Unknown running block",
       });
     }
-    if (
-      ["running", "paused"].includes(session.run.status) &&
-      allBlocks(day?.blocks ?? []).some((block) => block.kind === "parallel")
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["run"],
-        message: "Parallel rooms cannot use the linear timer",
-      });
     if (
       session.run.status === "running" &&
       (session.run.startedAt === null ||

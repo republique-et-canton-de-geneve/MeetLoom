@@ -906,7 +906,7 @@ function OperationPreview({
         {operation.blocks.map((block, index) => (
           <div className="ai-new-block" key={index}>
             <strong>
-              {block.title} · {block.duration} min
+              {block.title} · {Math.floor(block.duration + 1e-9)} min
             </strong>
             <p>{block.description}</p>
           </div>

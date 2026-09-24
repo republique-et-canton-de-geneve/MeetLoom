@@ -246,10 +246,6 @@ const messages: Record<string, [string, string]> = {
     "L’agenda change rapidement dans une autre fenêtre. Votre brouillon est conservé ; réessayez l’enregistrement dans un instant.",
     "The agenda is changing quickly in another window. Your draft is preserved; retry saving in a moment.",
   ],
-  PARALLEL_TIMER_UNSUPPORTED: [
-    "Les salles parallèles ne peuvent pas utiliser le minuteur linéaire. Arrêtez-le avant d’ajouter des salles ; pour les animer, créez un agenda séparé par salle.",
-    "Parallel rooms cannot use the linear timer. Stop it before adding rooms; use a separate agenda per room to run them.",
-  ],
   INVALID_PLANNED_START: [
     "L’heure prévue doit être passée et exister dans le fuseau horaire de l’agenda. Vérifiez sa date et son horaire.",
     "The scheduled time must be in the past and exist in the agenda timezone. Check its date and time.",

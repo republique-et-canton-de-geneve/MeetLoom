@@ -198,9 +198,11 @@ export function Loading() {
     </div>
   );
 }
-export function durationLabel(value: number) {
+export function durationLabel(duration: number) {
+  // Durations read in whole minutes, rounded down, whatever is stored.
+  const value = Math.floor(duration + 1e-9);
   return value >= 60
-    ? `${Math.floor(value / 60)} h ${value % 60 ? `${value % 60} min` : ""}`
+    ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}`
     : `${value} min`;
 }
 export function Avatar({

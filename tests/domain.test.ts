@@ -426,13 +426,16 @@ test("planned starts use agenda timezone, first lock and explicit DST behavior",
   assert.equal(started.run.blockId, day.blocks[1].id);
   assert.equal(elapsedSeconds(started.run, now), 120);
   assert.equal(timerView(started, now).deltaSeconds, 0);
-  assert.throws(() =>
-    transitionRun(
-      session,
-      "start",
-      { startMode: "planned" },
-      Date.parse("2026-09-23T07:00:00Z"),
-    ),
+  const early = transitionRun(
+    session,
+    "start",
+    { startMode: "planned" },
+    Date.parse("2026-09-23T07:00:00Z"),
+  );
+  assert.equal(
+    timerView(early, Date.parse("2026-09-23T07:00:00Z")).startsInSeconds,
+    600,
+    "a start still ahead counts down to it",
   );
   day.date = "2026-03-29";
   day.blocks[1].lockedStart = "02:40";
@@ -494,8 +497,8 @@ test("completed runs retain real durations and explicitly apply or restore them"
   revisited = transitionRun(revisited, "stop", {}, 111_000);
   assert.equal(
     revisited.run.actualDurations?.[first],
-    80,
-    "revisits accumulate rather than erase time already spent",
+    110,
+    "revisits keep the time already spent and the detour",
   );
 });
 

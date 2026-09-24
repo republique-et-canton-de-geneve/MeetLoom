@@ -98,11 +98,15 @@ test("nested rooms preserve authorization, public privacy, fresh clone IDs and t
     ).status,
     201,
   );
-  const refused = await h.owner.request(`/sessions/${session.id}/run`, "POST", {
+  const started = await h.owner.request(`/sessions/${session.id}/run`, "POST", {
     action: "start",
   });
-  assert.equal(refused.status, 400);
-  assert.equal(refused.body.code, "PARALLEL_TIMER_UNSUPPORTED");
+  assert.equal(started.status, 200, "parallel rooms no longer block the timer");
+  const reset = await h.owner.request(`/sessions/${session.id}/run`, "POST", {
+    action: "reset",
+  });
+  assert.equal(reset.status, 200);
+  saved.body.session = reset.body.session;
   const duplicate = await h.owner.request(
     `/sessions/${session.id}/duplicate`,
     "POST",

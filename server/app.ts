@@ -851,17 +851,6 @@ async function assembleApp(config: AppConfig) {
     );
     if (
       ["running", "paused"].includes(session.run.status) &&
-      allBlocks(candidateRunDay?.blocks ?? []).some(
-        (block) => block.kind === "parallel",
-      )
-    )
-      return fail(
-        409,
-        "PARALLEL_TIMER_UNSUPPORTED",
-        "Stop the linear timer before adding parallel rooms.",
-      );
-    if (
-      ["running", "paused"].includes(session.run.status) &&
       !runnableBlocks(candidateRunDay?.blocks ?? []).some(
         (block) => block.id === session.run.blockId,
       )
@@ -976,17 +965,6 @@ async function assembleApp(config: AppConfig) {
     const selectedDay = session.days.find(
       (day) => day.id === (input.dayId ?? session.run.dayId),
     );
-    if (
-      input.action === "start" &&
-      allBlocks(selectedDay?.blocks ?? []).some(
-        (block) => block.kind === "parallel",
-      )
-    )
-      return fail(
-        400,
-        "PARALLEL_TIMER_UNSUPPORTED",
-        "Parallel rooms cannot use the linear timer. Run a separate agenda for each room.",
-      );
     if (
       input.blockId &&
       !allBlocks(selectedDay?.blocks ?? []).some(

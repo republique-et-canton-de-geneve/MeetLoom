@@ -68,16 +68,62 @@ export function mapBlocks<T extends PublicBlock>(
     return { ...result, duration: blockDuration(result) };
   });
 }
-/** The linear timer visits activities inside groups; notes are informational. */
+/** The linear timer visits activities inside groups; notes are informational.
+ * A parallel block is one step lasting as long as its longest room. */
 export function runnableBlocks<T extends PublicBlock>(
   blocks: readonly T[],
 ): T[] {
   return blocks.flatMap((block) =>
     block.kind === "group"
       ? runnableBlocks((block.children ?? []) as T[])
-      : block.kind === "note" || block.kind === "parallel"
+      : block.kind === "note"
         ? []
         : [block],
+  );
+}
+
+/** Adds time to a timed step. A parallel block's duration comes from its
+ * rooms, so the time goes to the last activity of its longest room. */
+export function extendBlock<T extends PublicBlock>(
+  blocks: readonly T[],
+  id: string,
+  minutes: number,
+): T[] {
+  const lengthen = (items: readonly T[]): T[] => {
+    const last = items.at(-1);
+    if (!last) return [...items];
+    return [
+      ...items.slice(0, -1),
+      last.kind === "parallel" || last.kind === "group"
+        ? extendContainer(last)
+        : { ...last, duration: last.duration + minutes },
+    ];
+  };
+  const extendContainer = (block: T): T => {
+    if (block.kind === "group")
+      return { ...block, children: lengthen((block.children ?? []) as T[]) };
+    const rooms = block.rooms ?? [];
+    const lengths = rooms.map((room) =>
+      room.blocks.reduce((sum, child) => sum + blockDuration(child), 0),
+    );
+    const longest = lengths.indexOf(Math.max(...lengths));
+    if (longest < 0 || !rooms[longest].blocks.length)
+      return { ...block, duration: block.duration + minutes };
+    return {
+      ...block,
+      rooms: rooms.map((room, index) =>
+        index === longest
+          ? { ...room, blocks: lengthen(room.blocks as T[]) }
+          : room,
+      ),
+    };
+  };
+  return mapBlocks(blocks, (block) =>
+    block.id !== id
+      ? block
+      : block.kind === "parallel"
+        ? extendContainer(block)
+        : { ...block, duration: block.duration + minutes },
   );
 }
 export function cloneBlockTree(block: Block): Block {
@@ -726,8 +772,15 @@ export function timerView(session: TimedSession, now = Date.now()) {
         session.run.completedDuration -
         Math.min(elapsed, plannedBlockSeconds(session.run, block))
       : 0;
+  const waiting =
+    session.run.status === "running" &&
+    session.run.startedAt !== null &&
+    session.run.elapsedBeforePause === 0 &&
+    session.run.startedAt > now;
   return {
     block,
+    /** Seconds until a scheduled start that is still ahead, otherwise 0. */
+    startsInSeconds: waiting ? (session.run.startedAt! - now) / 1000 : 0,
     remainingSeconds: block ? remaining : 0,
     elapsedSeconds: elapsed,
     progress: duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0,
@@ -880,11 +933,7 @@ export function transitionRun(
           ? day
           : {
               ...day,
-              blocks: mapBlocks(day.blocks, (block) =>
-                block.id === target.id
-                  ? { ...block, duration: block.duration + seconds / 60 }
-                  : block,
-              ),
+              blocks: extendBlock(day.blocks, target.id, seconds / 60),
             },
       ),
     };
@@ -924,11 +973,6 @@ export function transitionRun(
       days.find(
         (candidate) => candidate.id === (input.dayId ?? current.dayId),
       ) ?? days[0];
-    if (
-      chosenDay &&
-      allBlocks(chosenDay.blocks).some((block) => block.kind === "parallel")
-    )
-      throw new Error("Parallel rooms cannot use the linear timer");
     const chosenBlocks = runnableBlocks(chosenDay?.blocks ?? []);
     const selected = input.blockId
       ? allBlocks(chosenDay?.blocks ?? []).find(
@@ -945,7 +989,9 @@ export function transitionRun(
       input.startMode === "planned"
         ? plannedStartTimestamp(session, chosenDay.id, chosenBlock.id)
         : now;
-    if (start < 0 || start > now || now - start > 100_000_000_000)
+    // A scheduled start still ahead is accepted: the run counts down until
+    // it, then the first block starts on time.
+    if (start < 0 || Math.abs(now - start) > 100_000_000_000)
       throw new Error("Invalid planned start");
     Object.assign(run, {
       status: "running",
@@ -995,11 +1041,15 @@ export function transitionRun(
       actualDurations[block.id] =
         (actualDurations[block.id] ?? 0) + elapsedSeconds(current, now);
     else {
-      // Going back treats the advance as a mistake: the block being left
-      // becomes upcoming again, and the earlier block resumes from the time
-      // already spent on it, against its current (possibly edited) duration.
+      // Going back treats the advance as a mistake: the clock kept running
+      // for the earlier block, which resumes with its own time plus the
+      // detour, against its current (possibly edited) duration. The block
+      // being left becomes upcoming again.
+      resumed =
+        (actualDurations[next.id] ?? 0) +
+        (actualDurations[block.id] ?? 0) +
+        elapsedSeconds(current, now);
       delete actualDurations[block.id];
-      resumed = actualDurations[next.id] ?? 0;
       delete actualDurations[next.id];
     }
     run.actualDurations = actualDurations;
@@ -1032,9 +1082,7 @@ export function transitionRun(
       candidate.id === current.dayId
         ? {
             ...candidate,
-            blocks: mapBlocks(candidate.blocks, (value) =>
-              value.id === block.id ? { ...value, duration } : value,
-            ),
+            blocks: extendBlock(candidate.blocks, block.id, seconds / 60),
           }
         : candidate,
     );
@@ -1053,7 +1101,11 @@ export function transitionRun(
             ...value,
             blocks: mapBlocks(value.blocks, (value) => {
               if (!Object.hasOwn(durations, value.id)) return value;
-              const duration = durations[value.id] / 60;
+              // Whole minutes, rounded down: the agenda never shows seconds.
+              const duration =
+                action === "apply-actual"
+                  ? Math.floor(durations[value.id] / 60 + 1e-9)
+                  : durations[value.id] / 60;
               if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
                 throw new Error("Actual duration exceeds agenda limit");
               return { ...value, duration };

@@ -32,31 +32,40 @@ function start(session: Session, autoAdvance = false) {
   return transitionRun(session, "start", { autoAdvance }, at(0));
 }
 
-test("reported scenario: returning to an extended block resumes its elapsed time instead of restarting", () => {
-  // Two one-minute blocks; advance after 30 s, give block 1 one more minute,
-  // then go back to it.
+test("reported scenario: leaving with 30 s left and returning 10 s later leaves 20 s", () => {
   let s = start(plan(1, 1));
   const [first, second] = ids(s);
   s = transitionRun(s, "next", {}, at(30));
   assert.equal(s.run.blockId, second);
-  s = setDuration(s, 0, 2);
-  s = transitionRun(s, "previous", {}, at(35));
+  s = transitionRun(s, "previous", {}, at(40));
   assert.equal(s.run.blockId, first);
   assert.equal(s.run.status, "running");
-  const back = timerView(s, at(35));
-  assert.equal(back.elapsedSeconds, 30);
-  assert.equal(back.remainingSeconds, 90, "2 min minus the 30 s already spent");
-  assert.equal(timerView(s, at(45)).remainingSeconds, 80, "keeps counting");
-  assert.equal(timerView(s, at(125)).remainingSeconds, 0);
+  const back = timerView(s, at(40));
+  assert.equal(back.elapsedSeconds, 40, "the clock kept running for block 1");
+  assert.equal(back.remainingSeconds, 20);
+  assert.equal(timerView(s, at(50)).remainingSeconds, 10, "keeps counting");
+  assert.equal(timerView(s, at(60)).remainingSeconds, 0);
   assert.equal(sessionInputSchema.safeParse(s).success, true);
 });
 
-test("returning without changing the duration resumes where the block was left", () => {
+test("returning to a block extended in the agenda counts against its new duration", () => {
+  // Two one-minute blocks; advance after 30 s, give block 1 one more minute,
+  // then go back to it 5 s later.
   let s = start(plan(1, 1));
   s = transitionRun(s, "next", {}, at(30));
-  s = transitionRun(s, "previous", {}, at(45));
-  const view = timerView(s, at(45));
-  assert.equal(view.elapsedSeconds, 30);
+  s = setDuration(s, 0, 2);
+  s = transitionRun(s, "previous", {}, at(35));
+  const view = timerView(s, at(35));
+  assert.equal(view.elapsedSeconds, 35);
+  assert.equal(view.remainingSeconds, 85, "2 min minus 35 s");
+  assert.equal(timerView(s, at(120)).remainingSeconds, 0);
+});
+
+test("going back immediately resumes exactly where the block was left", () => {
+  let s = start(plan(1, 1));
+  s = transitionRun(s, "next", {}, at(30));
+  s = transitionRun(s, "previous", {}, at(30));
+  const view = timerView(s, at(30));
   assert.equal(view.remainingSeconds, 30);
   assert.ok(Math.abs(view.progress - 0.5) < 1e-9);
 });
@@ -69,17 +78,17 @@ test("the block left by going back becomes upcoming again and restarts fresh", (
   assert.equal(
     Object.hasOwn(s.run.actualDurations ?? {}, second),
     false,
-    "the 15 s spent by mistake on block 2 are discarded",
+    "the 15 s spent on block 2 now belong to block 1",
   );
   assert.equal(
     Object.hasOwn(s.run.actualDurations ?? {}, first),
     false,
     "block 1 is live again, so its time is in the running clock",
   );
-  s = transitionRun(s, "next", {}, at(60));
+  s = transitionRun(s, "next", {}, at(55));
   assert.equal(s.run.blockId, second);
-  assert.equal(timerView(s, at(60)).remainingSeconds, 60);
-  assert.equal(s.run.actualDurations?.[first], 45);
+  assert.equal(timerView(s, at(55)).remainingSeconds, 60);
+  assert.equal(s.run.actualDurations?.[first], 55);
 });
 
 test("going back while paused keeps the timer paused at the resumed position", () => {
@@ -92,7 +101,11 @@ test("going back while paused keeps the timer paused at the resumed position", (
   assert.equal(s.run.status, "paused");
   assert.equal(s.run.blockId, first);
   assert.equal(s.run.startedAt, null);
-  assert.equal(timerView(s, at(60)).remainingSeconds, 80);
+  assert.equal(
+    timerView(s, at(60)).remainingSeconds,
+    80,
+    "no time ran while paused",
+  );
   assert.equal(
     timerView(s, at(500)).remainingSeconds,
     80,
@@ -102,22 +115,22 @@ test("going back while paused keeps the timer paused at the resumed position", (
   assert.equal(timerView(s, at(510)).remainingSeconds, 70);
 });
 
-test("time spent paused on the later block is not added to the resumed block", () => {
+test("running detour time counts, paused time does not", () => {
   let s = start(plan(2, 2));
   s = transitionRun(s, "next", {}, at(20));
   s = transitionRun(s, "pause", {}, at(25));
   s = transitionRun(s, "previous", {}, at(300));
   s = transitionRun(s, "resume", {}, at(310));
-  assert.equal(timerView(s, at(310)).elapsedSeconds, 20);
+  assert.equal(timerView(s, at(310)).elapsedSeconds, 25);
 });
 
-test("the timer bar's +1 min after going back adds to the remaining time, not to a restart", () => {
+test("the timer bar's +1 min after going back adds to the remaining time", () => {
   let s = start(plan(1, 1));
   s = transitionRun(s, "next", {}, at(30));
   s = transitionRun(s, "previous", {}, at(40));
   s = transitionRun(s, "extend", { seconds: 60 }, at(40));
   assert.equal(s.days[0].blocks[0].duration, 2);
-  assert.equal(timerView(s, at(40)).remainingSeconds, 90);
+  assert.equal(timerView(s, at(40)).remainingSeconds, 80);
 });
 
 test("shortening a block before returning to it resumes into overtime rather than restarting", () => {
@@ -125,18 +138,18 @@ test("shortening a block before returning to it resumes into overtime rather tha
   s = transitionRun(s, "next", {}, at(90));
   s = setDuration(s, 0, 1);
   s = transitionRun(s, "previous", {}, at(100));
-  assert.equal(timerView(s, at(100)).remainingSeconds, -30);
+  assert.equal(timerView(s, at(100)).remainingSeconds, -40);
 });
 
 test("an overrun block resumes in overtime when revisited", () => {
   let s = start(plan(1, 1));
   s = transitionRun(s, "next", {}, at(75));
   s = transitionRun(s, "previous", {}, at(80));
-  assert.equal(timerView(s, at(80)).remainingSeconds, -15);
+  assert.equal(timerView(s, at(80)).remainingSeconds, -20);
   assert.equal(timerView(s, at(80)).progress, 1);
 });
 
-test("several steps back resume each block with its own elapsed time", () => {
+test("several steps back carry every detour back to the earliest block", () => {
   let s = start(plan(1, 1, 1));
   const [first, second, third] = ids(s);
   s = transitionRun(s, "next", {}, at(20));
@@ -144,16 +157,16 @@ test("several steps back resume each block with its own elapsed time", () => {
   assert.equal(s.run.blockId, third);
   s = transitionRun(s, "previous", {}, at(70));
   assert.equal(s.run.blockId, second);
-  assert.equal(timerView(s, at(70)).elapsedSeconds, 40);
+  assert.equal(timerView(s, at(70)).elapsedSeconds, 50, "40 s + 10 s detour");
   assert.equal(Object.hasOwn(s.run.actualDurations ?? {}, third), false);
   s = transitionRun(s, "previous", {}, at(75));
   assert.equal(s.run.blockId, first);
-  assert.equal(timerView(s, at(75)).elapsedSeconds, 20);
   assert.equal(
-    Object.hasOwn(s.run.actualDurations ?? {}, second),
-    false,
-    "block 2 is upcoming again once the facilitator is back on block 1",
+    timerView(s, at(75)).elapsedSeconds,
+    75,
+    "every second since the start now belongs to block 1",
   );
+  assert.equal(Object.hasOwn(s.run.actualDurations ?? {}, second), false);
   assert.equal(
     transitionRun(s, "previous", {}, at(76)),
     s,
@@ -161,16 +174,16 @@ test("several steps back resume each block with its own elapsed time", () => {
   );
 });
 
-test("repeated round trips accumulate time on the revisited block", () => {
+test("repeated round trips keep counting on the revisited block", () => {
   let s = start(plan(2, 2));
   const [first] = ids(s);
   s = transitionRun(s, "next", {}, at(20));
   s = transitionRun(s, "previous", {}, at(25));
   s = transitionRun(s, "next", {}, at(35));
   s = transitionRun(s, "previous", {}, at(40));
-  assert.equal(timerView(s, at(40)).elapsedSeconds, 30);
+  assert.equal(timerView(s, at(40)).elapsedSeconds, 40);
   s = transitionRun(s, "stop", {}, at(50));
-  assert.equal(s.run.actualDurations?.[first], 40);
+  assert.equal(s.run.actualDurations?.[first], 50);
 });
 
 test("actual durations after a round trip give the real time per block", () => {
@@ -181,12 +194,8 @@ test("actual durations after a round trip give the real time per block", () => {
   s = transitionRun(s, "next", {}, at(125));
   s = transitionRun(s, "next", {}, at(185));
   assert.equal(s.run.status, "finished");
-  const applied = transitionRun(s, "apply-actual", {}, at(190));
-  assert.deepEqual(
-    applied.days[0].blocks.map((block) => block.duration),
-    [2, 1],
-    "30 s + 90 s on block 1, 60 s on block 2; the 5 s detour is discarded",
-  );
+  assert.equal(s.run.actualDurations?.[ids(s)[0]], 125);
+  assert.equal(s.run.actualDurations?.[ids(s)[1]], 60);
   const restored = transitionRun(s, "restore-plan", {}, at(190));
   assert.deepEqual(
     restored.days[0].blocks.map((block) => block.duration),
@@ -195,35 +204,35 @@ test("actual durations after a round trip give the real time per block", () => {
   );
 });
 
-test("the schedule delta still counts the detour as lost time", () => {
+test("a detour is not counted as lost time against the schedule", () => {
   let s = start(plan(1, 1));
   s = transitionRun(s, "next", {}, at(30));
   s = transitionRun(s, "previous", {}, at(45));
   assert.equal(s.run.completedDuration, 0);
-  // 45 s of wall time for 30 s of progress on block 1: 15 s behind.
-  assert.equal(timerView(s, at(45)).deltaSeconds, 15);
+  assert.equal(timerView(s, at(45)).deltaSeconds, 0);
+  assert.equal(timerView(s, at(75)).deltaSeconds, 15, "overrun is delay");
 });
 
-test("automatic advance after going back fires at the resumed block's real end", () => {
+test("automatic advance after going back fires at the block's real end", () => {
   let s = start(plan(1, 1), true);
   const [first, second] = ids(s);
   s = transitionRun(s, "next", {}, at(30));
   s = transitionRun(s, "previous", {}, at(40));
-  assert.equal(transitionRun(s, "sync", {}, at(69)).run.blockId, first);
-  const advanced = transitionRun(s, "sync", {}, at(70));
+  assert.equal(transitionRun(s, "sync", {}, at(59)).run.blockId, first);
+  const advanced = transitionRun(s, "sync", {}, at(60));
   assert.equal(advanced.run.blockId, second);
   assert.equal(advanced.run.actualDurations?.[first], 60);
-  assert.equal(timerView(advanced, at(70)).remainingSeconds, 60);
+  assert.equal(timerView(advanced, at(60)).remainingSeconds, 60);
 });
 
-test("an extended block revisited in automatic mode runs its full new duration", () => {
+test("an extended block revisited in automatic mode ends at its new duration", () => {
   let s = start(plan(1, 1), true);
   const [first, second] = ids(s);
   s = transitionRun(s, "next", {}, at(30));
   s = setDuration(s, 0, 2);
   s = transitionRun(s, "previous", {}, at(35));
-  assert.equal(transitionRun(s, "sync", {}, at(124)).run.blockId, first);
-  assert.equal(transitionRun(s, "sync", {}, at(125)).run.blockId, second);
+  assert.equal(transitionRun(s, "sync", {}, at(119)).run.blockId, first);
+  assert.equal(transitionRun(s, "sync", {}, at(120)).run.blockId, second);
 });
 
 test("runs recorded before this change, without actual durations, still go back safely", () => {
@@ -231,7 +240,7 @@ test("runs recorded before this change, without actual durations, still go back 
   s = transitionRun(s, "next", {}, at(30));
   delete s.run.actualDurations;
   s = transitionRun(s, "previous", {}, at(40));
-  assert.equal(timerView(s, at(40)).remainingSeconds, 60);
+  assert.equal(timerView(s, at(40)).remainingSeconds, 50);
   assert.equal(sessionInputSchema.safeParse(s).success, true);
 });
 
@@ -241,8 +250,8 @@ test("visitors see the resumed countdown, not a restarted one", () => {
   s = setDuration(s, 0, 2);
   s = transitionRun(s, "previous", {}, at(35));
   const visitor = publicProjection(s);
-  assert.equal(timerView(visitor, at(35)).remainingSeconds, 90);
-  assert.equal(timerView(visitor, at(35)).elapsedSeconds, 30);
+  assert.equal(timerView(visitor, at(35)).remainingSeconds, 85);
+  assert.equal(timerView(visitor, at(35)).elapsedSeconds, 35);
 });
 
 test("audio: added time re-arms the warning and the end chime within one block", () => {

@@ -184,19 +184,6 @@ export function installTransfersApi(
       input.mode === "move"
         ? removeTransferredContent(source.session, input.dayIds, input.blockIds)
         : source.session;
-    if (
-      input.destinationDayId &&
-      ["running", "paused"].includes(destination.run.status) &&
-      destination.run.dayId === input.destinationDayId &&
-      allBlocks(
-        copied.days.find((day) => day.id === input.destinationDayId)!.blocks,
-      ).some((block) => block.kind === "parallel")
-    )
-      return fail(
-        409,
-        "PARALLEL_TIMER_UNSUPPORTED",
-        "Stop the destination timer before adding parallel rooms.",
-      );
     const result = await db.transaction(async (sql) => {
       // Consistent lock order prevents opposite moves from deadlocking on PostgreSQL.
       for (const sessionId of [

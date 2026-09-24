@@ -5,7 +5,6 @@ import {
   Play,
   SkipForward,
   SkipBack,
-  CirclePlus,
   Square,
   RotateCcw,
   PictureInPicture2,
@@ -24,7 +23,6 @@ import {
   warningThresholdSeconds,
   plannedStartTimestamp,
   runnableBlocks,
-  allBlocks,
 } from "../shared/domain";
 import { useI18n } from "./i18n";
 import { TIMER_COLORS, timerVisualState } from "../shared/timer-visual";
@@ -162,12 +160,11 @@ export function timerAudioStep(
   const enabled = audible && session.sound.enabled;
   return { frame, warning: enabled && warning, end: enabled && end };
 }
-/** Why "from scheduled time" cannot be chosen yet, or null when it can. */
+/** Why "from scheduled time" cannot be chosen, or null when it can. */
 export function plannedStartUnavailableReason(
   plannedStart: number | null,
   now: number,
-  timezone: string,
-  locale: Locale,
+  locale: Locale = "fr",
 ): string | null {
   const t = (fr: string, en: string) => (locale === "fr" ? fr : en);
   if (plannedStart === null)
@@ -175,9 +172,18 @@ export function plannedStartUnavailableReason(
       "vérifiez la date et l’heure de début",
       "check the start date and time",
     );
-  if (now - plannedStart > 100_000_000_000)
-    return t("heure prévue trop ancienne", "scheduled time is too old");
-  if (plannedStart <= now) return null;
+  if (Math.abs(now - plannedStart) > 100_000_000_000)
+    return t("heure prévue trop éloignée", "scheduled time is too far away");
+  return null;
+}
+
+/** Explains that a scheduled start still ahead begins with a countdown. */
+export function plannedStartCountdownLabel(
+  plannedStart: number,
+  now: number,
+  timezone: string,
+  locale: Locale,
+): string {
   const format = (options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(locale === "fr" ? "fr-CH" : "en-GB", {
       timeZone: timezone,
@@ -191,7 +197,9 @@ export function plannedStartUnavailableReason(
       ? {}
       : { day: "numeric", month: "short" }),
   }).format(plannedStart);
-  return t(`disponible dès ${when}`, `available from ${when}`);
+  return locale === "fr"
+    ? `décompte jusqu’à ${when}`
+    : `countdown until ${when}`;
 }
 function clock(seconds: number) {
   const n = Math.abs(Math.ceil(seconds));
@@ -215,11 +223,12 @@ export function TimerContent({
     remaining = view.remainingSeconds;
   const progress = view.progress * 100;
   const delta = view.deltaSeconds;
+  const waiting = view.startsInSeconds > 0;
   const isOver = remaining < 0;
   const visual = timerVisualState(remaining, (block?.duration ?? 0) * 60);
   return (
     <div
-      className={`timer-content ${compact ? "compact" : ""} ${isOver ? "overtime" : ""}`}
+      className={`timer-content ${compact ? "compact" : ""} ${isOver ? "overtime" : ""} ${waiting ? "waiting" : ""}`}
     >
       <div className="timer-current">
         <span className="timer-kicker">
@@ -228,11 +237,13 @@ export function TimerContent({
               session.run.status === "running" ? "live-dot" : "paused-dot"
             }
           />
-          {session.run.status === "paused"
-            ? t("EN PAUSE", "PAUSED")
-            : session.run.status === "finished"
-              ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
-              : t("EN CE MOMENT", "RIGHT NOW")}
+          {waiting
+            ? t("DÉBUT DANS", "STARTS IN")
+            : session.run.status === "paused"
+              ? t("EN PAUSE", "PAUSED")
+              : session.run.status === "finished"
+                ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
+                : t("EN CE MOMENT", "RIGHT NOW")}
         </span>
         <strong>{block?.title ?? session.title}</strong>
         <span className="timer-position">
@@ -243,12 +254,19 @@ export function TimerContent({
       </div>
       <div className="timer-clock">
         <strong>
-          {session.run.status === "finished" ? "✓" : clock(remaining)}
+          {session.run.status === "finished"
+            ? "✓"
+            : clock(waiting ? view.startsInSeconds : remaining)}
         </strong>
         <span>
-          {isOver
-            ? t("de dépassement", "over time")
-            : t("restantes", "remaining")}
+          {waiting
+            ? t(
+                `avant le début · ${clock(remaining)} prévues`,
+                `until start · ${clock(remaining)} planned`,
+              )
+            : isOver
+              ? t("de dépassement", "over time")
+              : t("restantes", "remaining")}
         </span>
       </div>
       <div className="timer-track">
@@ -315,9 +333,6 @@ export default function Timer({
   const running = run.status !== "idle";
   const selectedBlocks =
     session.days.find((day) => day.id === dayId)?.blocks ?? [];
-  const parallelDay = allBlocks(selectedBlocks).some(
-    (block) => block.kind === "parallel",
-  );
   const plannedStart = useMemo(() => {
     try {
       return plannedStartTimestamp(session, dayId);
@@ -326,8 +341,12 @@ export default function Timer({
     }
   }, [session.days, session.timezone, dayId]);
   const plannedUnavailable = runnableBlocks(selectedBlocks).length
-    ? plannedStartUnavailableReason(plannedStart, now, session.timezone, locale)
+    ? plannedStartUnavailableReason(plannedStart, now, locale)
     : t("ajoutez d’abord un bloc", "add a block first");
+  const plannedLabel =
+    plannedStart !== null && plannedStart > now
+      ? plannedStartCountdownLabel(plannedStart, now, session.timezone, locale)
+      : null;
   const canStartPlanned = plannedUnavailable === null;
   useEffect(() => {
     const result = timerAudioStep(previous.current, session, Date.now(), sound);
@@ -406,8 +425,8 @@ export default function Timer({
             <select
               aria-label={t("Début du minuteur", "Timer start")}
               title={t(
-                "« Depuis l’heure prévue » démarre le minuteur comme s’il avait commencé à l’heure de début de la journée ; possible une fois cette heure passée.",
-                "“From scheduled time” starts the timer as if it had begun at the day's start time; available once that time has passed.",
+                "« Depuis l’heure prévue » cale le minuteur sur l’heure de début de la journée : décompte jusqu’à cette heure si elle n’est pas encore atteinte, rattrapage du temps écoulé sinon.",
+                "“From scheduled time” aligns the timer with the day's start time: it counts down until that time if it is still ahead, or catches up the elapsed time otherwise.",
               )}
               value={startMode}
               onChange={(event) =>
@@ -420,7 +439,9 @@ export default function Timer({
               </option>
               <option value="planned" disabled={!canStartPlanned}>
                 {t("Depuis l’heure prévue", "From scheduled time")}
-                {plannedUnavailable && ` (${plannedUnavailable})`}
+                {plannedUnavailable
+                  ? ` (${plannedUnavailable})`
+                  : plannedLabel && ` (${plannedLabel})`}
               </option>
             </select>
             <button
@@ -428,7 +449,6 @@ export default function Timer({
               disabled={
                 busy ||
                 !runnableBlocks(selectedBlocks).length ||
-                parallelDay ||
                 (startMode === "planned" && !canStartPlanned)
               }
               onClick={() => {
@@ -441,14 +461,6 @@ export default function Timer({
               {t("Animer la séance", "Run session")}
             </button>
           </>
-        )}
-        {canRun && parallelDay && (
-          <p className="notice">
-            {t(
-              "Le minuteur linéaire ne prend pas en charge les salles parallèles. Animez chaque salle depuis un agenda séparé.",
-              "The linear timer does not support parallel rooms. Run each room from a separate agenda.",
-            )}
-          </p>
         )}
       </div>
     );
@@ -512,7 +524,7 @@ export default function Timer({
                   "Add one minute to this block",
                 )}
               >
-                <CirclePlus size={17} />
+                +1
               </button>
               <button
                 className="timer-control"

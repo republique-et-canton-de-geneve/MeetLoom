@@ -114,9 +114,9 @@ test("nested locks preserve sequence gaps while rooms start together", () => {
   assert.equal(top[2].startMinute, 645);
 });
 
-test("the linear timer visits group leaves, skips notes, extends nested blocks and rejects parallel rooms", () => {
+test("the linear timer visits group leaves, skips notes, extends nested blocks and accepts parallel rooms", () => {
   const { session, group } = tree();
-  assert.throws(() => transitionRun(session, "start", {}, 1000), /Parallel/);
+  assert.equal(transitionRun(session, "start", {}, 1000).run.status, "running");
   session.days[0].blocks = [group];
   assert.deepEqual(
     runnableBlocks([group]).map((block) => block.title),
