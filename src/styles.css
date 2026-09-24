@@ -2887,11 +2887,11 @@ hr {
   .nav-item svg {
     width: 15px;
   }
-  .sidebar nav .nav-item:last-child:not(.day-nav) {
+  .sidebar > nav .nav-item:last-child:not(.day-nav) {
     font-size: 0;
     gap: 0;
   }
-  .sidebar nav .nav-item:last-child:not(.day-nav) svg {
+  .sidebar > nav .nav-item:last-child:not(.day-nav) svg {
     width: 17px;
   }
   .nav-count {

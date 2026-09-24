@@ -50,3 +50,21 @@ test("Escape closes the actions menu and side panels, and returns focus", async 
   await expect(page.locator(".editor-inspector")).toHaveCount(0);
   await expect(page.locator("button.expand-block").first()).toBeFocused();
 });
+
+test("on a phone the editor fits the screen and days keep their names", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByText("Atelier E2E").first().click();
+  await expect(page.locator(".display-time-control")).toBeVisible();
+  const navigation = page.locator(".session-navigation nav");
+  await expect(navigation.getByText("Jour 1")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+});

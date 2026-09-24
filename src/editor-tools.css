@@ -1668,3 +1668,25 @@
   font-size: 13px;
   line-height: 1.8;
 }
+/* Phones: session contents become one row that scrolls on its own instead of
+   widening the page, and each entry keeps its name. */
+@media (max-width: 650px) {
+  .session-navigation {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .sidebar .session-navigation nav {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    padding: 0 0 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .session-navigation .content-nav-row {
+    flex: 0 0 auto;
+  }
+  .session-navigation .content-nav-row .nav-item {
+    max-width: 160px;
+  }
+}
