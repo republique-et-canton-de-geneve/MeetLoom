@@ -126,3 +126,89 @@ export function moveBlockToList(
     return block;
   })[0];
 }
+
+/** Where a block goes: a list (the day's top level when `listId` is null, a
+ * group's children, or a parallel room) and the sibling it is placed before
+ * (the end of the list when omitted or unknown). */
+export type BlockDestination = { listId: string | null; beforeId?: string };
+
+const insertInList = (
+  items: Block[],
+  inserted: Block,
+  beforeId?: string,
+): Block[] => {
+  const index = beforeId ? items.findIndex((item) => item.id === beforeId) : -1;
+  return index < 0
+    ? [...items, inserted]
+    : [...items.slice(0, index), inserted, ...items.slice(index)];
+};
+
+/** Inserts a block into any list of the tree. Unknown lists leave it unchanged. */
+export function insertBlockInto(
+  blocks: Block[],
+  inserted: Block,
+  destination: BlockDestination,
+): Block[] {
+  if (destination.listId === null)
+    return normalized(insertInList(blocks, inserted, destination.beforeId));
+  return mapBlocks(blocks, (block) => {
+    if (block.kind === "group" && block.id === destination.listId)
+      return {
+        ...block,
+        children: insertInList(
+          block.children ?? [],
+          inserted,
+          destination.beforeId,
+        ),
+      };
+    if (block.rooms?.some((room) => room.id === destination.listId))
+      return {
+        ...block,
+        rooms: block.rooms.map((room) =>
+          room.id === destination.listId
+            ? {
+                ...room,
+                blocks: insertInList(
+                  room.blocks,
+                  inserted,
+                  destination.beforeId,
+                ),
+              }
+            : room,
+        ),
+      };
+    return block;
+  });
+}
+
+const listExists = (blocks: Block[], listId: string | null) =>
+  listId === null ||
+  allBlocks(blocks).some(
+    (block) =>
+      (block.kind === "group" && block.id === listId) ||
+      block.rooms?.some((room) => room.id === listId),
+  );
+
+/** Moves a block anywhere in the tree, including into or out of groups and
+ * rooms. A container never moves into itself, and an invalid move keeps the
+ * tree unchanged rather than losing the block. */
+export function relocateBlock(
+  blocks: Block[],
+  id: string,
+  destination: BlockDestination,
+): Block[] {
+  if (id === destination.beforeId) return blocks;
+  const source = allBlocks(blocks).find((block) => block.id === id);
+  if (!source || !listExists(blocks, destination.listId)) return blocks;
+  const inside = allBlocks([source]);
+  if (
+    destination.listId !== null &&
+    inside.some(
+      (block) =>
+        block.id === destination.listId ||
+        block.rooms?.some((room) => room.id === destination.listId),
+    )
+  )
+    return blocks;
+  return insertBlockInto(removeBlockFromTree(blocks, id), source, destination);
+}

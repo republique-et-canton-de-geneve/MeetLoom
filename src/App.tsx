@@ -412,6 +412,20 @@ function AuthScreen({
               "Hosted in your organization. No advertising.",
             )}
           </p>
+          {!setup && (
+            <p className="auth-account-hint">
+              <strong>{t("Pas encore de compte ?", "No account yet?")}</strong>{" "}
+              {auth.oidcEnabled
+                ? t(
+                    "Utilisez la connexion de votre organisation ci-dessous, ou demandez une invitation à un administrateur MeetLoom.",
+                    "Use your organization's sign-in below, or ask a MeetLoom administrator for an invitation.",
+                  )
+                : t(
+                    "Les comptes sont créés sur invitation : demandez-en une à un administrateur MeetLoom de votre organisation. Vous recevrez un lien pour choisir votre mot de passe.",
+                    "Accounts are created by invitation: ask a MeetLoom administrator in your organization. You will receive a link to choose your password.",
+                  )}
+            </p>
+          )}
         </form>
         {!setup &&
           !inviteToken &&

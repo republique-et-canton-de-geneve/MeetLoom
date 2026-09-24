@@ -8,7 +8,7 @@
   white-space: nowrap;
 }
 .duration-field input {
-  width: 43px;
+  width: 34px;
   padding: 5px 1px;
   border: 1px solid transparent;
   background: transparent;
@@ -25,7 +25,7 @@
 .clock-field:focus {
   background: #fff;
 }
-.duration-field > span:not(.duration-steppers) {
+.duration-field > span {
   color: var(--muted);
   font-size: 11px;
 }
@@ -34,25 +34,47 @@
   border-color: #b63835;
   background: #fff2ef;
 }
-.duration-steppers {
-  display: none;
-  position: absolute;
-  left: 100%;
-  z-index: 2;
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  box-shadow: 0 2px 6px #0001;
-}
-.duration-steppers button {
+/* "− 10 min +": steppers sit on each side and appear on hover or focus. */
+.duration-step {
   display: flex;
+  visibility: hidden;
   background: transparent;
   border: 0;
-  padding: 4px;
+  border-radius: 4px;
+  padding: 3px;
+  color: var(--muted);
 }
-.duration-field:hover .duration-steppers,
-.duration-field:focus-within .duration-steppers {
-  display: flex;
+.duration-step:hover:not(:disabled) {
+  background: #fff;
+  color: var(--green);
+}
+.duration-field:hover .duration-step,
+.duration-field:focus-within .duration-step {
+  visibility: visible;
+}
+@media (hover: none) {
+  .duration-step {
+    visibility: visible;
+  }
+}
+/* Completed blocks show their actual duration in a distinct colour. */
+.actual-duration {
+  border: 1px dashed #c9a24a;
+  background: #fbf5e6;
+  color: #7a5a12;
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.actual-duration:hover:not(:disabled) {
+  border-style: solid;
+}
+.actual-duration:disabled {
+  cursor: default;
+  opacity: 1;
 }
 .clock-field {
   font-variant-numeric: tabular-nums;
@@ -82,6 +104,19 @@
   background: transparent;
   color: var(--green);
   padding: 2px;
+}
+.lock-toggle.unlocked {
+  color: var(--muted);
+  visibility: hidden;
+}
+.start-time:hover .lock-toggle.unlocked,
+.start-time:focus-within .lock-toggle.unlocked {
+  visibility: visible;
+}
+@media (hover: none) {
+  .lock-toggle.unlocked {
+    visibility: visible;
+  }
 }
 .is-locked .clock-field {
   color: var(--green);
@@ -1211,4 +1246,231 @@
 }
 .overview-group-children {
   margin: 7px 0 0 8px;
+}
+/* Groups and parallel activities visibly contain their blocks. */
+.block-group {
+  position: relative;
+}
+.block-group.container-block {
+  border: 1px solid #cbdad0;
+  border-left: 4px solid var(--green);
+  border-radius: 10px;
+  background: #f2f7f3;
+  padding: 8px 8px 4px;
+  margin-bottom: 12px;
+}
+.block-group.container-parallel {
+  border-left-color: #6d8fb3;
+  background: #f1f5f9;
+}
+.container-block > .agenda-row {
+  min-height: 0;
+  margin-bottom: 8px;
+}
+.container-block > .group-outline,
+.container-block > .parallel-outline {
+  margin: 0 0 6px 92px;
+  border-left: 0;
+  background: transparent;
+  padding: 0 4px;
+}
+.outline-list {
+  min-height: 34px;
+  border-radius: 6px;
+  padding: 2px 0;
+}
+.outline-list.drop-here {
+  outline: 2px dashed var(--green);
+  background: #e6f1e8;
+}
+.group-outline-row.drop-before,
+.agenda-row.drop-before {
+  box-shadow: inset 0 3px 0 var(--green);
+}
+.outline-drag {
+  display: flex;
+  color: #b5c2bb;
+  cursor: grab;
+}
+.group-outline-row .outline-delete,
+.agenda-row .row-delete {
+  visibility: hidden;
+}
+.group-outline-row:hover .outline-delete,
+.group-outline-row:focus-within .outline-delete,
+.agenda-row:hover .row-delete,
+.agenda-row:focus-within .row-delete {
+  visibility: visible;
+}
+.row-delete:hover:not(:disabled),
+.outline-delete:hover:not(:disabled) {
+  color: #b63835;
+}
+@media (hover: none) {
+  .group-outline-row .outline-delete,
+  .agenda-row .row-delete {
+    visibility: visible;
+  }
+}
+.outline-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px dashed #c3d3cb;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+.outline-add span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.outline-add:hover {
+  background: #fff;
+}
+/* Insert between rows: a line with a "+" appears in the gap above a row. */
+.insert-slot {
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 4;
+}
+.container-block > .insert-slot {
+  top: -13px;
+}
+.insert-slot::before {
+  content: "";
+  position: absolute;
+  left: 30px;
+  right: 0;
+  top: 4px;
+  border-top: 2px solid var(--green);
+  opacity: 0;
+}
+.insert-slot-button {
+  position: absolute;
+  left: 4px;
+  top: -6px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--green);
+  padding: 0;
+  opacity: 0;
+}
+.insert-slot:hover::before,
+.insert-slot.open::before,
+.insert-slot:hover .insert-slot-button,
+.insert-slot.open .insert-slot-button,
+.insert-slot-button:focus-visible {
+  opacity: 1;
+}
+.insert-menu {
+  position: absolute;
+  left: 30px;
+  top: 12px;
+  z-index: 20;
+  display: grid;
+  min-width: 260px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #1d2b2226;
+}
+.insert-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  color: var(--text, #22312a);
+}
+.insert-menu button:hover,
+.insert-menu button:focus-visible {
+  background: #eef4ef;
+}
+.insert-menu strong {
+  display: block;
+  font-size: 13px;
+}
+.insert-menu small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+@media print {
+  .insert-slot,
+  .outline-add,
+  .outline-drag,
+  .outline-delete {
+    display: none !important;
+  }
+}
+/* Switching the details panel to another block is visible: the panel
+   replays a short highlight and names the block, and its row is outlined. */
+.detail-switch {
+  animation: detail-switch 0.45s ease-out;
+}
+@keyframes detail-switch {
+  from {
+    opacity: 0.35;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.detail-current {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--category-color, var(--green));
+  border-radius: 6px;
+  background: #eef4ef;
+  animation: detail-flash 1.2s ease-out;
+}
+.detail-current span {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.detail-current strong {
+  font-size: 15px;
+}
+@keyframes detail-flash {
+  from {
+    background: #cfe5d4;
+  }
+  to {
+    background: #eef4ef;
+  }
+}
+.agenda-row.inspected-row,
+.group-outline-row.inspected-row {
+  outline: 2px solid #5b8fd6;
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detail-switch,
+  .detail-current {
+    animation: none;
+  }
 }

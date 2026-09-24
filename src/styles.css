@@ -1091,6 +1091,13 @@ hr {
   padding: 12px;
   font-size: 13px;
 }
+.auth-form-side form > p.auth-account-hint {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  text-align: center;
+  color: #6f8174;
+}
 .auth-note {
   display: flex;
   align-items: center;
@@ -1351,6 +1358,12 @@ hr {
   background: #ecf2e7;
   border-radius: 4px;
   padding: 5px 8px;
+}
+.timer-start-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .timer-start-row .button {
   font-size: 13px;
@@ -2104,6 +2117,57 @@ hr {
 }
 .floating-window .timer-track > span {
   height: 6px;
+}
+/* The always-on-top window scales with its own size and sheds details as it
+   shrinks, down to the clock alone. */
+.floating-window {
+  padding: clamp(6px, 3vmin, 20px);
+}
+.floating-window .timer-clock strong {
+  font-size: clamp(18px, min(16vw, 34vh), 140px);
+  line-height: 1;
+}
+.floating-window .timer-current strong {
+  font-size: clamp(12px, min(5.5vw, 11vh), 40px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 460px) {
+  .floating-window .timer-content {
+    grid-template-columns: 1fr;
+  }
+  .floating-window .timer-clock {
+    align-items: flex-start;
+  }
+  .floating-window .timer-position,
+  .floating-window .timer-delta {
+    display: none;
+  }
+}
+@media (max-height: 200px) {
+  .floating-window .timer-kicker,
+  .floating-window .timer-position,
+  .floating-window .timer-delta,
+  .floating-window .timer-clock span {
+    display: none;
+  }
+  .floating-window .timer-track {
+    margin-top: 6px;
+  }
+}
+@media (max-height: 120px), (max-width: 260px) {
+  .floating-window .timer-current,
+  .floating-window .timer-track {
+    display: none;
+  }
+  .floating-window .timer-content {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .floating-window .timer-clock {
+    align-items: center;
+  }
 }
 .modal {
   width: min(550px, calc(100vw - 36px));

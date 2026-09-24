@@ -1,21 +1,39 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useI18n } from "./i18n";
 import { parseClock, parseDuration, shiftClock } from "./time-input";
+
+/** Seconds actually spent per block during the current run, by block ID. */
+export const ActualDurationsContext = createContext<
+  Record<string, number> | undefined
+>(undefined);
+
+export const actualDurationLabel = (seconds: number) =>
+  seconds < 60 ? "< 1 min" : `${Math.floor(seconds / 60)} min`;
 
 export function DurationField({
   value,
   change,
   label,
   readOnly = false,
+  blockId,
 }: {
   value: number;
   change: (value: number) => void;
   label: string;
   readOnly?: boolean;
+  /** Shows the block's actual duration once the timer has moved past it. */
+  blockId?: string;
 }) {
   const { t } = useI18n();
-  const displayValue = Number(value.toFixed(2)).toString();
+  const actuals = useContext(ActualDurationsContext);
+  const actual = blockId === undefined ? undefined : actuals?.[blockId];
+  const [showPlanned, setShowPlanned] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (showPlanned) input.current?.focus();
+  }, [showPlanned]);
+  const displayValue = String(Math.floor(value + 1e-9));
   const [draft, setDraft] = useState(displayValue);
   const [invalid, setInvalid] = useState(false);
   const focused = useRef(false);
@@ -29,7 +47,8 @@ export function DurationField({
       setDraft(displayValue);
       return true;
     }
-    const parsed = parseDuration(draft);
+    const typed = parseDuration(draft);
+    const parsed = typed === null ? null : Math.floor(typed + 1e-9);
     if (parsed === null) {
       setInvalid(true);
       return false;
@@ -43,18 +62,58 @@ export function DurationField({
   const step = (amount: number) => {
     const next = Math.min(
       1440,
-      Math.max(0, (parseDuration(draft) ?? value) + amount),
+      Math.max(0, Math.floor((parseDuration(draft) ?? value) + 1e-9) + amount),
     );
     setDraft(String(next));
     edited.current = false;
     setInvalid(false);
     change(next);
   };
+  if (actual !== undefined && !showPlanned) {
+    const seconds = Math.round(actual);
+    const spent = `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+    const explanation = t(
+      `Durée réelle : ${spent} · prévue : ${displayValue} min`,
+      `Actual duration: ${spent} · planned: ${displayValue} min`,
+    );
+    return (
+      <button
+        type="button"
+        className="actual-duration"
+        title={
+          readOnly
+            ? explanation
+            : `${explanation} · ${t("cliquer pour modifier la durée prévue", "click to edit the planned duration")}`
+        }
+        aria-label={`${label} · ${explanation}`}
+        disabled={readOnly}
+        onClick={() => setShowPlanned(true)}
+      >
+        {actualDurationLabel(actual)}
+      </button>
+    );
+  }
+  const stepButton = (direction: -1 | 1) =>
+    !readOnly && (
+      <button
+        type="button"
+        tabIndex={-1}
+        className="duration-step"
+        aria-label={`${direction < 0 ? t("Réduire :", "Shorten:") : t("Prolonger :", "Extend:")} ${label}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => step(direction)}
+        disabled={direction < 0 ? value === 0 : value >= 1440}
+      >
+        {direction < 0 ? <Minus size={11} /> : <Plus size={11} />}
+      </button>
+    );
   return (
     <span className={`duration-field ${invalid ? "invalid" : ""}`}>
+      {stepButton(-1)}
       <input
+        ref={input}
         value={draft}
-        inputMode="decimal"
+        inputMode="numeric"
         aria-label={label}
         aria-invalid={invalid}
         title={
@@ -82,6 +141,7 @@ export function DurationField({
           focused.current = false;
           if (!readOnly && !skipBlur.current) commit();
           skipBlur.current = false;
+          setShowPlanned(false);
         }}
         onKeyDown={(e) => {
           if (readOnly || e.nativeEvent.isComposing) return;
@@ -106,30 +166,7 @@ export function DurationField({
         }}
       />
       <span>min</span>
-      {!readOnly && (
-        <span className="duration-steppers">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`${t("Réduire :", "Shorten:")} ${label}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => step(-1)}
-            disabled={value === 0}
-          >
-            <Minus size={11} />
-          </button>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={`${t("Prolonger :", "Extend:")} ${label}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => step(1)}
-            disabled={value >= 1440}
-          >
-            <Plus size={11} />
-          </button>
-        </span>
-      )}
+      {stepButton(1)}
     </span>
   );
 }
