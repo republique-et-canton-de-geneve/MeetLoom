@@ -2,22 +2,61 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { harness, password } from "./support.js";
 
-test("self-service sign-up is off by default and needs an administrator to enable it", async (t) => {
+test("anyone can create their own account once the installation is set up", async (t) => {
   const h = await harness(t);
   const visitor = h.client();
-  assert.equal(
-    (
-      await visitor.request("/auth/signup", "POST", {
-        name: "Early",
-        email: "early@example.test",
-        password,
-      })
-    ).status,
-    403,
-  );
+  const early = await visitor.request("/auth/signup", "POST", {
+    name: "Early",
+    email: "early@example.test",
+    password,
+  });
+  assert.equal(early.status, 409, "the first account is the setup account");
+  assert.equal(early.body.code, "SETUP_REQUIRED");
   await h.setup();
   const status = await visitor.request("/auth/status");
-  assert.equal(status.body.signupEnabled, false);
+  assert.equal(status.body.signupEnabled, true);
+  const created = await visitor.request("/auth/signup", "POST", {
+    name: "Camille",
+    email: "camille@example.test",
+    password,
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.user.isAdmin, false);
+  const other = h.client();
+  await other.request("/auth/signup", "POST", {
+    name: "Dominique",
+    email: "dominique@example.test",
+    password,
+  });
+  const mine = await visitor.request("/sessions", "POST", {
+    title: "Camille's workshop",
+    locale: "en",
+  });
+  assert.equal(mine.status, 201);
+  const listed = await other.request("/sessions");
+  assert.equal(
+    JSON.stringify(listed.body).includes("Camille's workshop"),
+    false,
+    "each account only sees its own sessions",
+  );
+  assert.equal(
+    (await other.request(`/sessions/${mine.body.session.id}`)).status,
+    404,
+  );
+});
+
+test("an administrator can close sign-up again (invitations only)", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  await h.owner.request("/admin/settings/signup", "PUT", {
+    enabled: false,
+    domains: [],
+  });
+  const visitor = h.client();
+  assert.equal(
+    (await visitor.request("/auth/status")).body.signupEnabled,
+    false,
+  );
   const refused = await visitor.request("/auth/signup", "POST", {
     name: "Camille",
     email: "camille@example.test",
@@ -32,7 +71,7 @@ test("an enabled policy creates ordinary accounts, restricted to allowed domains
   await h.setup();
   const settings = await h.owner.request("/admin/settings");
   assert.equal(settings.status, 200);
-  assert.deepEqual(settings.body.signup, { enabled: false, domains: [] });
+  assert.deepEqual(settings.body.signup, { enabled: true, domains: [] });
   assert.deepEqual(settings.body.services, {
     smtp: false,
     oidc: false,

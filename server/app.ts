@@ -119,8 +119,9 @@ const email = z
   .transform((value) => value.toLowerCase().trim());
 const password = z.string().min(12).max(256);
 const name = z.string().trim().min(1).max(120);
-/** Self-service sign-up, off until an administrator enables it; optionally
- * restricted to email domains. */
+/** Self-service sign-up, open by default like SessionLab: anyone creates an
+ * account with their email and manages their own sessions. Administrators can
+ * restrict it to email domains or close it (invitations only). */
 const signupSchema = z.object({
   enabled: z.boolean(),
   domains: z
@@ -378,7 +379,7 @@ async function assembleApp(config: AppConfig) {
     );
     return row
       ? signupSchema.parse(JSON.parse(row.payload))
-      : { enabled: false, domains: [] };
+      : { enabled: true, domains: [] };
   }
   app.get("/api/auth/status", async (_request, response) => {
     const initialized =
