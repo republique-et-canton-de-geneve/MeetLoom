@@ -413,8 +413,11 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
       // the day's own lock. Later locks leave gaps or expose overlaps.
       const startMinute =
         depth === 0 && index === 0 ? initial : (blockAnchor(block) ?? cursor);
+      // Agenda times are whole minutes: a sub-minute difference (from a
+      // fractional legacy duration, or a lock set at a displayed time) is
+      // neither a gap nor an overlap.
       const gapMinutes =
-        Math.abs(startMinute - cursor) < 1e-8 ? 0 : startMinute - cursor;
+        Math.abs(startMinute - cursor) < 1 ? 0 : startMinute - cursor;
       const children =
         block.kind === "group"
           ? sequence(

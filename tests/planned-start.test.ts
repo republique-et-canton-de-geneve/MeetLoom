@@ -133,3 +133,11 @@ test("the planned start is the day's start time, never a minute earlier", () => 
   assert.equal(timerView(started, at1330 - 90_000).startsInSeconds, 90);
   assert.equal(timerView(started, at1330).startsInSeconds, 0);
 });
+
+test("timer clocks switch to hours past sixty minutes", async () => {
+  const { clock } = await import("../src/Timer.tsx");
+  assert.equal(clock(59), "00:59");
+  assert.equal(clock(3599), "59:59");
+  assert.equal(clock(34_658), "9:37:38");
+  assert.equal(clock(-3_725), "+1:02:05");
+});
