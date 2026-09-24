@@ -31,3 +31,22 @@ test("editing an agenda saves blocks, durations and groups across reloads", asyn
   );
   await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
 });
+
+test("Escape closes the actions menu and side panels, and returns focus", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Atelier clavier");
+  await addActivities(page, ["Accueil"]);
+  const more = page.getByRole("button", { name: "Autres actions" });
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dropdown-menu")).toHaveCount(0);
+  await expect(more).toBeFocused();
+  await page.locator("button.expand-block").first().click();
+  await expect(page.locator(".editor-inspector")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".editor-inspector")).toHaveCount(0);
+  await expect(page.locator("button.expand-block").first()).toBeFocused();
+});

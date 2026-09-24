@@ -305,6 +305,17 @@ export default function Editor({
     }
   }, [panel]);
   const [menu, setMenu] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenu(false);
+      menuButton.current?.focus();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [menu]);
   const [compact, setCompact] = useState(false);
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(
     new Set(),
@@ -1965,8 +1976,10 @@ export default function Editor({
                     </button>
                     <div className="menu-anchor">
                       <button
+                        ref={menuButton}
                         className="icon-button"
                         onClick={() => setMenu(!menu)}
+                        aria-expanded={menu}
                         aria-label={t("Autres actions", "More actions")}
                       >
                         <MoreHorizontal size={21} />

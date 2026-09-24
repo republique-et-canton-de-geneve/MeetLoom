@@ -636,6 +636,9 @@
   min-height: 20px;
   width: 22px;
 }
+.editor-inspector:focus {
+  outline: none;
+}
 .editor-inspector {
   width: var(--inspector-width, 420px);
   min-width: 320px;
