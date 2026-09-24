@@ -16,6 +16,7 @@ export const folderPathSchema = z
       value
         .split("/")
         .every((part) => part.length <= 80 && ![".", ".."].includes(part)) &&
+      // eslint-disable-next-line no-control-regex -- control characters are refused in folder names
       !/[\u0000-\u001f\\]/.test(value),
     "Invalid folder path",
   );

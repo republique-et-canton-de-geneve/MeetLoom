@@ -18,7 +18,20 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // A sandbox whose pre-installed Chromium differs from this Playwright
+        // version sets PW_CHROMIUM_PATH (see .claude/hooks/session-start.sh)
+        // instead of downloading the pinned build.
+        ...(process.env.PW_CHROMIUM_PATH
+          ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } }
+          : {}),
+      },
+    },
+  ],
   webServer: {
     command: "node e2e/serve.mjs",
     url: `http://127.0.0.1:${port}/api/health`,

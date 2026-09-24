@@ -6,7 +6,6 @@ import {
   validateFormAnswers,
   type FormPublication,
   type FormResponse,
-  type SessionForm,
 } from "../shared/content.js";
 import type { Role, Session, User } from "../shared/model.js";
 import type { Database, Sql } from "./db.js";

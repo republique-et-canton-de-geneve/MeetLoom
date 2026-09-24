@@ -107,7 +107,9 @@ export function Inspector({
     setWidth(next);
     try {
       localStorage.setItem("meetloom-inspector-width", String(next));
-    } catch {}
+    } catch {
+      // Storage unavailable (private browsing): the width stays for this tab.
+    }
   };
   return (
     <aside

@@ -1,12 +1,6 @@
-import type { Locale, PublicSession, Session } from "../shared/model";
+import type { Locale, PublicSession } from "../shared/model";
+import { allBlocks, formatTime } from "../shared/domain";
 import {
-  allBlocks,
-  formatTime,
-  publicProjection,
-  scheduleTreeDay,
-} from "../shared/domain";
-import {
-  extractMaterials,
   richTextDocument,
   richTextToPlain,
   type RichNode,
@@ -16,7 +10,6 @@ import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from "./export-options";
 import { categoriesFor } from "./categories";
 
 import {
-  exportProjection,
   exportMaterials,
   defaultSlideOutline,
   scheduleExportDay,
@@ -42,6 +35,7 @@ export function saveBlob(blob: Blob, filename: string) {
 export function documentFilename(title: string, extension: string) {
   return `${
     title
+      // eslint-disable-next-line no-control-regex -- control characters are not valid in file names
       .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
       .slice(0, 100)
       .trim() || "meetloom"

@@ -40,7 +40,6 @@ import {
   Maximize2,
   ArrowUp,
   ArrowDown,
-  Play,
   BarChart3,
   Archive,
   X,
@@ -74,7 +73,6 @@ import {
   ErrorBanner,
   LanguageSwitch,
   Loading,
-  Modal,
   Inspector,
 } from "./ui";
 import { useSession } from "./useSession";
@@ -329,7 +327,9 @@ export default function Editor({
   useEffect(() => {
     try {
       localStorage.setItem(`meetloom-widths-${id}`, JSON.stringify(widths));
-    } catch {}
+    } catch {
+      // Storage unavailable (private browsing): widths stay for this tab.
+    }
   }, [id, widths]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -504,15 +504,6 @@ export default function Editor({
     }
     data.update(() => result.session!);
   };
-  const reorderDay = (dayId: string, offset: number) =>
-    mutate((s) => {
-      const from = s.days.findIndex((d) => d.id === dayId),
-        to = from + offset;
-      if (from < 0 || to < 0 || to >= s.days.length) return s;
-      const days = [...s.days];
-      [days[from], days[to]] = [days[to], days[from]];
-      return { ...s, days };
-    });
   const leave = async () => {
     try {
       await multiLeave.current?.();

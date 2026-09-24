@@ -43,6 +43,7 @@ export function safeLink(value: unknown): string | undefined {
   if (
     typeof value !== "string" ||
     value.length > 2048 ||
+    // eslint-disable-next-line no-control-regex -- links must not hide control characters
     /[\u0000-\u0020\u007f]/u.test(value)
   )
     return;

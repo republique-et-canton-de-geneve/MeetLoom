@@ -23,7 +23,7 @@ import type {
 } from "../shared/model";
 import { useI18n } from "./i18n";
 import { api, post } from "./api";
-import { Avatar, durationLabel, ErrorBanner, Modal } from "./ui";
+import { Avatar, ErrorBanner, Modal } from "./ui";
 import { chime } from "./Timer";
 import {
   FIELD_PRESETS,
@@ -437,7 +437,6 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
               e.preventDefault();
               setBusy(true);
               setError("");
-              const values = Object.fromEntries(new FormData(e.currentTarget));
               try {
                 const payload = {
                   label: linkLabel,

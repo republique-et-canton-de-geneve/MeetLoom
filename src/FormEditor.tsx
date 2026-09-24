@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Check,
   Copy,
   Download,
   ExternalLink,

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { Session, Role, User, Share } from "../shared/model.js";
+import type { Session, Role, User } from "../shared/model.js";
 import { DEFAULT_SOUND, INITIAL_RUN } from "../shared/model.js";
 import {
   createSession,
@@ -36,6 +36,7 @@ import {
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerSharing } from "./sharing.js";
+import { audit } from "./audit.js";
 import {
   publicQuotas,
   requestBudget,
@@ -230,6 +231,14 @@ async function assembleWith(db: Database, config: AppConfig) {
     helmet({
       crossOriginEmbedderPolicy: false,
       referrerPolicy: { policy: "no-referrer" },
+      // Everything is self-hosted (internal and air-gapped networks): helmet's
+      // defaults would also allow fonts and styles from any HTTPS origin.
+      contentSecurityPolicy: {
+        directives: {
+          "font-src": ["'self'", "data:"],
+          "style-src": ["'self'", "'unsafe-inline'"],
+        },
+      },
     }),
   );
   app.use("/api", (_request, response, next) => {
@@ -490,6 +499,10 @@ async function assembleWith(db: Database, config: AppConfig) {
         await sql.run("INSERT INTO bootstrap(id,user_id) VALUES(1,$1)", [
           row.id,
         ]);
+        await audit(sql, request, response, "installation.setup", {
+          target: row.id,
+          actorId: row.id,
+        });
         return issueAuth(sql, row.id);
       });
     } catch (error) {
@@ -587,10 +600,15 @@ async function assembleWith(db: Database, config: AppConfig) {
   app.put("/api/admin/settings/signup", admin, async (request, response) => {
     const signup = signupSchema.parse(request.body);
     signup.domains = [...new Set(signup.domains)];
-    await db.run(
-      "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
-      ["signup", JSON.stringify(signup)],
-    );
+    await db.transaction(async (sql) => {
+      await sql.run(
+        "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+        ["signup", JSON.stringify(signup)],
+      );
+      await audit(sql, request, response, "settings.signup", {
+        detail: { enabled: signup.enabled, domains: signup.domains.length },
+      });
+    });
     response.json({ signup });
   });
   app.post("/api/auth/login", authLimiter, async (request, response) => {
@@ -712,6 +730,10 @@ async function assembleWith(db: Database, config: AppConfig) {
         "INSERT INTO invites(token_hash,email,name,expires_at,created_by) VALUES($1,$2,$3,$4,$5)",
         [hashToken(raw), input.email, input.name, expires, user(response).id],
       );
+      await audit(sql, request, response, "account.invite", {
+        target: input.email,
+        detail: { role: input.role ?? null },
+      });
     });
     response
       .status(201)
@@ -804,10 +826,13 @@ async function assembleWith(db: Database, config: AppConfig) {
   );
   app.put("/api/settings", admin, async (request, response) => {
     const { sound } = z.object({ sound: soundSchema }).parse(request.body);
-    await db.run(
-      "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
-      ["sound", JSON.stringify(sound)],
-    );
+    await db.transaction(async (sql) => {
+      await sql.run(
+        "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+        ["sound", JSON.stringify(sound)],
+      );
+      await audit(sql, request, response, "settings.sound");
+    });
     response.json({ sound });
   });
 

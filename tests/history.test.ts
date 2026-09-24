@@ -8,7 +8,7 @@ import { harness } from "./support.js";
 test("named versions support private previews, optimistic metadata and cross-session isolation", async (t) => {
   const h = await harness(t);
   await h.setup();
-  let session = await h.session();
+  const session = await h.session();
   const path = `/sessions/${session.id}`;
   const named = await h.owner.request(path + "/versions", "POST", {
     version: session.version,

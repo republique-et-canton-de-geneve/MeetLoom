@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Database, Sql } from "./db.js";
 import { removeAccountMembership } from "./workspaces.js";
+import { audit } from "./audit.js";
 import {
   accountPreferencesSchema,
   DEFAULT_ACCOUNT_PREFERENCES,
@@ -277,6 +278,10 @@ export async function installAccountsApi(
         await sql.run("DELETE FROM account_disabled WHERE user_id=$1", [
           userId,
         ]);
+      await audit(sql, req, res, "account.update", {
+        target: userId,
+        detail: input,
+      });
     });
     res.json({ ok: true });
   });
@@ -285,6 +290,7 @@ export async function installAccountsApi(
     await db.transaction(async (sql) => {
       await removeAccountMembership(sql, userId);
       await sql.run("DELETE FROM members WHERE user_id=$1", [userId]);
+      await audit(sql, req, res, "account.access-revoke", { target: userId });
     });
     res.json({ ok: true });
   });
@@ -310,6 +316,7 @@ export async function installAccountsApi(
         "INSERT INTO account_resets(token_hash,user_id,expires_at) VALUES($1,$2,$3)",
         [hashToken(raw), userId, expiresAt],
       );
+      await audit(sql, req, res, "account.reset", { target: userId });
     });
     res.status(201).json({ token: raw, expiresAt });
   });

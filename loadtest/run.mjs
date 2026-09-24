@@ -70,8 +70,7 @@ function client(ip = nextAddress()) {
   let cookie = "";
   return async (name, path, method = "GET", body, measured = true) => {
     const started = performance.now();
-    let status = 0,
-      json;
+    let status, json;
     try {
       const response = await fetch(`${base}/api${path}`, {
         method,

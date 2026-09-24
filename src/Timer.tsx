@@ -381,7 +381,6 @@ export default function Timer({
   const [sound, setSound] = useState(false);
   const [startMode, setStartMode] = useState<"now" | "planned">("now");
   const { floating, openFloating, floatingNotice } = useFloatingWindow();
-  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const previous = useRef<AudioFrame | null>(null);
@@ -684,9 +683,7 @@ export default function Timer({
           </small>
         </div>
       )}
-      {(notice || floatingNotice) && (
-        <p className="notice">{notice || floatingNotice}</p>
-      )}
+      {floatingNotice && <p className="notice">{floatingNotice}</p>}
       {floating &&
         createPortal(
           <TimerContent session={session} now={now} compact />,
