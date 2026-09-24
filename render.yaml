@@ -7,8 +7,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    # Render supplies RENDER_EXTERNAL_URL. Shell expansion happens at startup.
-    dockerCommand: /bin/sh -c 'export APP_ORIGIN="${APP_ORIGIN:-$RENDER_EXTERNAL_URL}"; exec node dist/server/index.js'
+    # The server uses Render's RENDER_EXTERNAL_URL as APP_ORIGIN unless APP_ORIGIN is set.
     healthCheckPath: /api/ready
     autoDeployTrigger: off
     envVars:

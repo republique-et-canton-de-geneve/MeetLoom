@@ -380,6 +380,32 @@ test("scheduled mail is opt-in, deduplicated, scoped to current access and owner
   );
 });
 
+test("production origin falls back to Render's public URL unless APP_ORIGIN is set", () => {
+  const render = "https://meetloom-demo.onrender.com";
+  assert.throws(() => readConfig({ NODE_ENV: "production" }), /APP_ORIGIN/);
+  assert.equal(
+    readConfig({ NODE_ENV: "production", RENDER_EXTERNAL_URL: render }).app
+      .origin,
+    render,
+  );
+  assert.equal(
+    readConfig({
+      NODE_ENV: "production",
+      APP_ORIGIN: "",
+      RENDER_EXTERNAL_URL: render,
+    }).app.origin,
+    render,
+  );
+  assert.equal(
+    readConfig({
+      NODE_ENV: "production",
+      APP_ORIGIN: origin,
+      RENDER_EXTERNAL_URL: render,
+    }).app.origin,
+    origin,
+  );
+});
+
 test("service configuration requires complete trusted endpoints and keeps disabled services absent", () => {
   assert.equal(readConfig({}).app.oidc, undefined);
   assert.equal(readConfig({}).app.mail, undefined);

@@ -77,20 +77,21 @@ bash scripts/deploy-openshift.sh development docker.io/your-account/meetloom:0.1
 MEETLOOM_NAMESPACE=my-project bash scripts/deploy-openshift.sh production docker.io/your-account/meetloom:0.1.0
 ```
 
-### Windows and an internal registry mirror
+### From Windows
 
-On Windows, install [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) (`winget install Microsoft.PowerShell`): the built-in Windows PowerShell 5.1 cannot run the installer. Put `oc.exe` on the `PATH`, then run the commands above from `pwsh`, in the repository or the extracted release archive.
+Install [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) (`winget install Microsoft.PowerShell`): the built-in Windows PowerShell 5.1 cannot run the installer. Put `oc.exe` on the `PATH`, then run the PowerShell commands above from `pwsh`, in the repository or the extracted release archive.
 
-When the cluster pulls images through an internal mirror such as a Nexus Docker proxy, keep publishing to Docker Hub and give the installer the mirrored reference instead. `-DatabaseImage` (or `MEETLOOM_DATABASE_IMAGE` with Bash) does the same for PostgreSQL when the cluster cannot reach `quay.io`:
+### Behind a registry mirror (Nexus, Artifactory, Harbor…)
+
+Some clusters cannot pull from Docker Hub or `quay.io` directly and go through an internal registry proxy instead. The release is still published to Docker Hub; only the image name given to the installer changes. Prefix it with your mirror's address, using the path your mirror administrators document:
 
 ```powershell
-oc login --token=... --server=https://api.cluster.example:6443
 pwsh ./scripts/deploy-openshift.ps1 -Environment development -Project meetloom-dev `
-  -Image registry-mirror.example/your-account/meetloom:0.1.0 `
-  -DatabaseImage registry-mirror.example/sclorg/postgresql-16-c9s:latest
+  -Image <mirror-host>/your-account/meetloom:0.1.0 `
+  -DatabaseImage <mirror-host>/sclorg/postgresql-16-c9s:latest
 ```
 
-Omit `-DatabaseImage` when `quay.io` is reachable. If the mirror requires credentials, add its pull secret to the namespace and link it to the `default` ServiceAccount (`oc secrets link default <secret> --for=pull`). Use the same mirrored reference in `oc set image` for later updates.
+`-DatabaseImage` (or `MEETLOOM_DATABASE_IMAGE` with Bash) does the same for the bundled PostgreSQL image; omit it when `quay.io` is reachable. If the mirror requires credentials, add its pull secret to the namespace and link it to the `default` ServiceAccount (`oc secrets link default <secret> --for=pull`). Use the same mirrored name in `oc set image` for later updates.
 
 Create the project first if it does not exist, using `oc new-project meetloom-dev`, or ask the cluster administrator to create it. The installer neither adds nor deletes namespaces. It generates missing secrets, creates the Route to determine the HTTPS URL, applies manifests, waits for deployments, and checks readiness. It does not change your current project. Each namespace's secrets and configuration remain outside Kustomization and are preserved on subsequent runs.
 

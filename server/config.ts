@@ -24,7 +24,12 @@ function integer(
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const production = env.NODE_ENV === "production";
-  const suppliedOrigin = (env.APP_ORIGIN ?? env.PUBLIC_ORIGIN)?.trim();
+  // Render supplies its public URL; an explicit APP_ORIGIN (custom domain) wins.
+  const suppliedOrigin = (
+    env.APP_ORIGIN ||
+    env.PUBLIC_ORIGIN ||
+    env.RENDER_EXTERNAL_URL
+  )?.trim();
   if (production && !suppliedOrigin)
     throw new Error("APP_ORIGIN is required in production.");
   let origin: string | undefined;

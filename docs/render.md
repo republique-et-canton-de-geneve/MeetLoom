@@ -2,7 +2,7 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/republique-et-canton-de-geneve/MeetLoom)
 
-The button opens the [render.yaml](../render.yaml) Blueprint in your Render account. Review resources and confirm their creation in Render: the button deploys nothing without that action. After forking, replace the repository in the button URL with your own.
+The button opens the [render.yaml](../render.yaml) Blueprint of the repository's **default branch** in your Render account, so it works only once `render.yaml` is on `main` and the repository is public (or Render's GitHub app can read it). To try another branch, append `/tree/<branch>` to the repository URL in the button link. Review resources and confirm their creation in Render: the button deploys nothing without that action. After forking, replace the repository in the button URL with your own.
 
 The Blueprint builds the repository's Dockerfile, starts a **Free** web service, and adds no paid database. Automatic deployments are disabled; you choose updates in the dashboard. This prevents upstream repository changes from modifying a demo installed through its button. See the [Render button documentation](https://render.com/docs/deploy-to-render).
 
