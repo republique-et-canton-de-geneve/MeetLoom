@@ -4,9 +4,10 @@
 
 1. Create a session or open the example from the dashboard. The example is an original, editable agenda.
 2. Name the session and describe its purpose. Set the date, start time and timezone.
-3. Add blocks. Edit their titles, durations and descriptions directly. Later times update immediately.
-4. Open block details to edit its section, facilitator, fields and locked start time. A section groups blocks with the same label and can be collapsed.
-5. Move a block using its handle or the arrows in its details. Undo/redo restores recent local changes.
+3. Add blocks. Edit their titles, durations (whole minutes, with − and + on either side) and descriptions directly. Later times update immediately. Hover the gap between two blocks and click **+** to insert a block, a group, a note or parallel activities at that spot. The trash icon on a block deletes it (Ctrl+Z undoes).
+4. Groups and parallel activities are framed around their activities. Add activities inline with **Add an activity**, and drag blocks into a group or a room, or out of it back into the agenda. Their duration is computed automatically.
+5. Hover a block's start time and click the padlock to lock or unlock it. Open block details for its section, facilitator and fields; the panel names the block it shows and its row is outlined. A section groups blocks with the same label and can be collapsed.
+6. Move a block using its handle or the arrows in its details. Undo/redo restores recent local changes.
 
 Changes save automatically. Independent changes are merged; concurrent edits to the same field require explicit resolution. MeetLoom preserves the local copy and lets you export it before loading the latest server version. Internal links, notifications and the browser Back/Forward buttons wait for saving before leaving the editor. If a field is invalid, the network fails or a conflict occurs, the session remains open with a message. Do not close the tab while a save error remains unresolved.
 
@@ -49,7 +50,11 @@ Choose the day, then **Run session**. Timer timestamps are stored on the server,
 
 Durations planned at startup are retained to calculate schedule deviation. The default reference is the actual start: starting at 10:00 for an agenda planned at 09:00 does not automatically add an hour of delay. Pauses count toward session delay. Extensions adjust remaining time without erasing the overrun against the initial duration.
 
-Moved on too early? Use **previous block**: the earlier block resumes where it was left, with the time already spent, against its current duration. If you gave it more time in the agenda (or with **+1 min**/**+5 min** once back on it), the countdown reflects that new duration instead of restarting. The block you left becomes upcoming again: its detour time is discarded and it starts fresh when you reach it. The schedule delta still counts the detour as lost time.
+Moved on too early? Use **previous block**: the clock kept running for the earlier block, so it resumes with its own time plus the detour. Leave a block with 30 seconds left and come back 10 seconds later: 20 seconds remain. The countdown uses the block's current duration, so time added in the agenda (or with **+1**/**+5** once back) is taken into account. The block you left becomes upcoming again and starts fresh when you reach it.
+
+Once the timer has passed a block, the agenda shows its **actual duration** (whole minutes, “< 1 min” under a minute) in a distinct amber style; hover for the exact time and the planned duration, click to edit the planned duration. **Use actual durations** at the end rounds each block down to whole minutes.
+
+**From scheduled time** is always available: before the day's start time the timer counts down (“Starts in”), then the first block runs on time; after it, the timer catches up the elapsed time. A **parallel** block is one timer step lasting as long as its longest room; +1/+5 add time to the last activity of that room.
 
 Did the timer advance automatically while discussion was still going? Increase the preceding block's duration in the agenda, or use **+1 min to previous** / **+5 min to previous**. If its new duration still covers the current moment, the timer returns to it with elapsed time preserved. Otherwise, timing of the current block is adjusted. A pause stays paused, and delay against the original plan is retained. Recovery applies to the last automatic transition and ends after manual navigation or an explicit stop. This follows the [documented Time Tracker behavior](https://help.sessionlab.com/en/articles/6103716-time-tracker-track-your-session-timing).
 

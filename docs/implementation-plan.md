@@ -11,7 +11,7 @@ The target is equivalent SessionLab functional coverage, with the three explicit
 - Local accounts, first-administrator setup, persistent sessions and collaborators with roles; optional OIDC and SMTP integrations.
 - Workspaces, administration, dashboard, folders, metadata, session creation, duplication, archiving and lifecycle reporting.
 - Multi-day agendas, block editing, categories, sections, facilitators, recalculated durations and times, movement, duplication and recoverable deletion.
-- Nested sequential groups, zero-duration notes and parallel rooms. Group duration is the sum of its children; parallel duration is the longest room. The linear timer follows activities inside groups, skips notes and explicitly refuses a day containing parallel rooms.
+- Nested sequential groups, zero-duration notes and parallel rooms. Group duration is the sum of its children; parallel duration is the longest room. The linear timer follows activities inside groups, skips notes and runs a parallel block as one step lasting as long as its longest room (a user decision during acceptance; extra time goes to the last activity of the longest room).
 - Internal client, tag and folder metadata; custom categories and colors. Visitors receive only categories used by the public agenda.
 - Customizable columns and presentation notes restricted to the team by default. Anonymous projections remove internal data on the server.
 - Visitor and simplified Online Agenda links with random tokens, revocation, expiry, scoped days/Pages/Forms and an initial destination. Public comments are separate from private discussions.

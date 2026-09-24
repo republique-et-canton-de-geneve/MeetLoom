@@ -68,6 +68,18 @@ Executed on September 24, 2026 against a production build with a new SQLite data
 - With no block, the start options read “Commencer maintenant” and “Depuis l’heure prévue (ajoutez d’abord un bloc)”, disabled; English shows “From scheduled time (add a block first)”. The explanation for a start time still ahead (“disponible dès 09:00”) is covered by unit tests, because the browser clock could not be moved before the scheduled time.
 - The dashboard sidebar shows a single “ESPACE DE TRAVAIL” caption, no longer shows the “Un espace qui vous appartient” card, and lists the folders above the account footer.
 
+## Acceptance round 2 fixes (Claude Code, headless Chromium)
+
+Executed on September 24, 2026 against a production build with the scratch database from round 1.
+
+- Sign-in shows “Pas encore de compte ? Les comptes sont créés sur invitation…” under the form.
+- The start menu and “Animer la séance” are 10 px apart. Both start options are enabled; when the start time is still ahead, the option reads “(décompte jusqu’à HH:MM)” (unit-tested, since the browser clock could not be moved).
+- Inserted a group between “bloc 1” and “bloc 2” with the “+” in the gap (menu: Bloc, Groupe, Note, Activités en parallèle). The group is framed around its activities. Added “Sous-activité” inline, moved “bloc 1” into the group and then moved a child back out with dispatched HTML5 drag events; the result survived a reload. Physical mouse dragging was not reproduced by the automation.
+- The padlock beside a start time locks it (the time turns green) and unlocks it again.
+- Opening details for one block and then another updates the “Bloc affiché” banner (“Nouveau groupe”, then “bloc 2”) and outlines exactly one row.
+- During a run, the controls read “+1” and “+5”. After “Bloc suivant” a few seconds in, the passed block shows “< 1 min” in amber with the tooltip “Durée réelle : 0 min 3 s · prévue : 2 min · cliquer pour modifier la durée prévue”; clicking it focuses the planned duration field.
+- The timer content rendered in a separate document with the `floating-window` class: at 520×260 everything is visible (clock 83 px); at 360×180 the kicker, position and delta are hidden (clock 58 px); at 220×90 only the clock remains (31 px). No size scrolled. The real Document Picture-in-Picture window was not resized by the automation.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -90,3 +102,4 @@ Executed on September 24, 2026 against a production build with a new SQLite data
 - Hosted verification of code commit `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8`: [CI 35885304817](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) passed every job, including PostgreSQL. [Security 35885304655](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655) passed the exact Docker build, arbitrary-UID/read-only-root runtime check, Trivy, and CodeQL. The separate CodeQL findings check `107264308348` also passed. The pause requested by the user follows this completed checkpoint; the final documentation-only follow-up records these results.
 - Continuation checkpoint (branch `claude/epic-pascal-3gk99i`): local `npm run check` passed with 228 tests, both TypeScript projects, and the production build. The same 228 tests passed on a disposable PostgreSQL 16 database. Formatting checks passed and the production dependency audit reported zero vulnerabilities. Three new tests cover rate-limiter store shutdown when an application closes or fails to assemble. Hosted CI does not run on a pull request targeting `codex/meetloom-v1`; hosted results for these commits are expected once they reach that branch.
 - Acceptance round 1 (`codex/meetloom-v1`): local `npm run check` passed with 251 tests, both TypeScript projects, and the production build. The same 251 tests passed on PostgreSQL 16, and formatting checks passed. Hosted checks run when these commits are pushed to `codex/meetloom-v1`.
+- Acceptance round 2 (`codex/meetloom-v1`): local `npm run check` passed with 272 tests, both TypeScript projects and the production build; the same 272 tests passed on PostgreSQL 16; formatting checks passed.
