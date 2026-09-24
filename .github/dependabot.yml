@@ -36,4 +36,5 @@ updates:
       interval: weekly
     commit-message:
       prefix: "container"
-# No auto-merge until the validated V1 has required E2E checks and branch rules.
+# Patch updates and development minor updates are auto-merged by
+# .github/workflows/dependabot-auto-merge.yml once required checks pass.

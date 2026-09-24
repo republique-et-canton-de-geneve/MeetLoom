@@ -113,10 +113,35 @@ jobs:
           POSTGRES_PASSWORD: ci-only-validation-value
           BOOTSTRAP_TOKEN: ci-only-validation-value
         run: docker compose config --quiet
+  e2e:
+    name: End-to-end journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Install the Chromium matching @playwright/test
+        run: npx playwright install --with-deps chromium
+      - name: Build and run the nominal journeys
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
   success:
     name: CI Success
     if: always()
-    needs: [check, audit, postgres, manifests]
+    needs: [check, audit, postgres, manifests, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require every check to succeed

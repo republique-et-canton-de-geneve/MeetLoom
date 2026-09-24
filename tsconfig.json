@@ -12,5 +12,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "shared", "vite.config.ts"]
+  "include": ["src", "shared", "e2e", "vite.config.ts", "playwright.config.ts"]
 }

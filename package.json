@@ -13,9 +13,10 @@
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "format": "prettier --write src shared server tests docs package.json *.json *.md",
-    "format:check": "prettier --check src shared server tests docs package.json *.json *.md",
-    "check": "npm run typecheck && npm test && npm run build"
+    "format": "prettier --write src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
+    "format:check": "prettier --check src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -52,6 +53,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "@types/nodemailer": "^8.0.2",

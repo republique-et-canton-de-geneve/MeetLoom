@@ -101,6 +101,10 @@ jobs:
           TEST_DATABASE_URL: postgresql://meetloom:ci-only-disposable-database@127.0.0.1:${{ job.services.postgres.ports[5432] }}/meetloom_test
         run: npm test
       - run: npm audit --omit=dev --audit-level=high
+      - name: Run the nominal end-to-end journeys on this exact commit
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
       - name: Build this version from the tested commit
         env:
           IMAGE: ${{ steps.release.outputs.image }}

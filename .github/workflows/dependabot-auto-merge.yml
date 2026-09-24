@@ -1,0 +1,29 @@
+name: Dependabot auto-merge
+# Narrow auto-merge for low-risk Dependabot updates. It only *enables*
+# GitHub auto-merge: the pull request merges once the branch protection's
+# required checks (including "CI Success" with the end-to-end journeys) pass.
+# Without required checks on main, GitHub refuses auto-merge and nothing
+# merges. Major updates and production minor updates always wait for review.
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  enable:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'republique-et-canton-de-geneve/MeetLoom'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - name: Enable auto-merge for patch updates and development minor updates
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
+           steps.metadata.outputs.dependency-type == 'direct:development')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

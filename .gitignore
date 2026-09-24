@@ -11,3 +11,4 @@ data/
 .gstack/
 test-results/
 playwright-report/
+.e2e/
