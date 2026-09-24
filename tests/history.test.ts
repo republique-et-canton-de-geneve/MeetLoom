@@ -282,7 +282,12 @@ test("deleted nested elements survive automatic snapshot pruning, restore once a
       ),
     ),
   );
-  assert.deepEqual(attempts.map((result) => result.status).sort(), [200, 409]);
+  // Exactly one concurrent restore wins. The other is refused either by the
+  // version check (409) or, if it read the session before the winner committed,
+  // because the item is already restored (410); both orders are legitimate.
+  const statuses = attempts.map((result) => result.status).sort();
+  assert.equal(statuses[0], 200, JSON.stringify(statuses));
+  assert.ok([409, 410].includes(statuses[1]), JSON.stringify(statuses));
   session = attempts.find((result) => result.status === 200)!.body.session;
   assert.equal(
     session.days[0].blocks.find((block) => block.id === group.id)?.children?.[0]
