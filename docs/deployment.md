@@ -42,6 +42,8 @@ Choose one trigger:
 - **GitHub → Releases → Draft a new release**: publish tag `v0.1.0` on the intended commit, whose `package.json` contains `0.1.0`.
 - **GitHub → Actions → Release GitHub and Docker Hub → Run workflow**, branch `main`: the version from `package.json` is published and the GitHub Release is created after successful checks.
 
+To try a version in OpenShift before merging it, publish a **release candidate**: in **Releases → Draft a new release**, create tag `v0.1.0-rc.1` (the `package.json` version plus `-rc.N`) targeting the pull request branch, check **Set as a pre-release**, and publish. The same checks run on that commit and the image is published as `your-account/meetloom:0.1.0-rc.1`. Increment `N` for each new candidate; the final `v0.1.0` is released from `main` after the merge.
+
 The workflow verifies the tag, tests that exact commit on SQLite and PostgreSQL, checks dependencies, and builds and scans the image. It then publishes:
 
 ```text

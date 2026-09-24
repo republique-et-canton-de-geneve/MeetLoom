@@ -46,6 +46,7 @@ jobs:
         id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
           DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY || secrets.DOCKERHUB_REPOSITORY }}
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
@@ -53,7 +54,16 @@ jobs:
             echo 'package.json must contain a stable X.Y.Z version.' >&2; exit 1
           fi
           if [[ -n "$RELEASE_TAG" && "$RELEASE_TAG" != "v$VERSION" ]]; then
-            echo 'The GitHub release tag must match the checked-out package.json version.' >&2; exit 1
+            # A release candidate (vX.Y.Z-rc.N, published as a pre-release) lets operators
+            # try an image before the version is released, for example from a pull request branch.
+            if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ && "${RELEASE_TAG%-rc.*}" == "v$VERSION" ]]; then
+              if [[ "$PRERELEASE" != true ]]; then
+                echo 'Publish release candidates with "Set as a pre-release" checked.' >&2; exit 1
+              fi
+              VERSION=${RELEASE_TAG#v}
+            else
+              echo 'The GitHub release tag must match the checked-out package.json version (or vX.Y.Z-rc.N).' >&2; exit 1
+            fi
           fi
           IMAGE=${DOCKERHUB_REPOSITORY#docker.io/}
           if [[ ! "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9._-]*$ ]]; then
