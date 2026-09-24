@@ -902,9 +902,6 @@ function Dashboard({
             </span>
           </div>
         </div>
-        <span className="nav-caption">
-          {t("ESPACE DE TRAVAIL", "WORKSPACE")}
-        </span>
         <nav>
           <button className="nav-item" onClick={() => setReportTrash("report")}>
             <BarChart3 size={18} />
@@ -990,20 +987,6 @@ function Dashboard({
             )}
           </p>
         </nav>
-        <div className="sidebar-note">
-          <span className="note-icon">
-            <ShieldCheck size={19} />
-          </span>
-          <strong>
-            {t("Un espace qui vous appartient", "A space of your own")}
-          </strong>
-          <p>
-            {t(
-              "Vos agendas restent sur votre infrastructure, sous votre contrôle.",
-              "Your agendas stay on your infrastructure, in your control.",
-            )}
-          </p>
-        </div>
         <div className="sidebar-user">
           <Avatar src={user.avatar} name={user.name} />
           <div>

@@ -111,7 +111,7 @@ export function DurationField({
           <button
             type="button"
             tabIndex={-1}
-            aria-label={`${t("Réduire la durée de", "Shorten")} ${label}`}
+            aria-label={`${t("Réduire :", "Shorten:")} ${label}`}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => step(-1)}
             disabled={value === 0}
@@ -121,7 +121,7 @@ export function DurationField({
           <button
             type="button"
             tabIndex={-1}
-            aria-label={`${t("Prolonger la durée de", "Extend")} ${label}`}
+            aria-label={`${t("Prolonger :", "Extend:")} ${label}`}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => step(1)}
             disabled={value >= 1440}

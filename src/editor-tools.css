@@ -955,20 +955,24 @@
 }
 .display-time-control label {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
   margin: 0;
+  font-weight: 600;
 }
 .display-time-control select {
   font-size: 11px;
   max-width: 250px;
   padding: 5px 8px;
-  border-color: transparent;
-  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
 }
 .display-time-control input[type="checkbox"] {
   width: 14px;
   height: 14px;
+  margin: 0;
 }
 .display-time-control > small {
   max-width: 450px;

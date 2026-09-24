@@ -12,7 +12,12 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import type { Session, PublicSession, SoundSettings } from "../shared/model";
+import type {
+  Locale,
+  Session,
+  PublicSession,
+  SoundSettings,
+} from "../shared/model";
 import {
   timerView,
   shouldPlayWarning,
@@ -157,6 +162,37 @@ export function timerAudioStep(
   const enabled = audible && session.sound.enabled;
   return { frame, warning: enabled && warning, end: enabled && end };
 }
+/** Why "from scheduled time" cannot be chosen yet, or null when it can. */
+export function plannedStartUnavailableReason(
+  plannedStart: number | null,
+  now: number,
+  timezone: string,
+  locale: Locale,
+): string | null {
+  const t = (fr: string, en: string) => (locale === "fr" ? fr : en);
+  if (plannedStart === null)
+    return t(
+      "vérifiez la date et l’heure de début",
+      "check the start date and time",
+    );
+  if (now - plannedStart > 100_000_000_000)
+    return t("heure prévue trop ancienne", "scheduled time is too old");
+  if (plannedStart <= now) return null;
+  const format = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale === "fr" ? "fr-CH" : "en-GB", {
+      timeZone: timezone,
+      ...options,
+    });
+  const day = format({ year: "numeric", month: "2-digit", day: "2-digit" });
+  const when = format({
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(day.format(plannedStart) === day.format(now)
+      ? {}
+      : { day: "numeric", month: "short" }),
+  }).format(plannedStart);
+  return t(`disponible dès ${when}`, `available from ${when}`);
+}
 function clock(seconds: number) {
   const n = Math.abs(Math.ceil(seconds));
   return `${seconds < 0 ? "+" : ""}${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
@@ -249,7 +285,7 @@ export default function Timer({
   canRun: boolean;
   action: (action: string, input?: Record<string, unknown>) => Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [now, setNow] = useState(Date.now());
   const [sound, setSound] = useState(false);
   const [startMode, setStartMode] = useState<"now" | "planned">("now");
@@ -289,10 +325,10 @@ export default function Timer({
       return null; /* Invalid local drafts stay editable. */
     }
   }, [session.days, session.timezone, dayId]);
-  const canStartPlanned =
-    plannedStart !== null &&
-    plannedStart <= now &&
-    now - plannedStart <= 100_000_000_000;
+  const plannedUnavailable = runnableBlocks(selectedBlocks).length
+    ? plannedStartUnavailableReason(plannedStart, now, session.timezone, locale)
+    : t("ajoutez d’abord un bloc", "add a block first");
+  const canStartPlanned = plannedUnavailable === null;
   useEffect(() => {
     const result = timerAudioStep(previous.current, session, Date.now(), sound);
     previous.current = result.frame;
@@ -369,6 +405,10 @@ export default function Timer({
           <>
             <select
               aria-label={t("Début du minuteur", "Timer start")}
+              title={t(
+                "« Depuis l’heure prévue » démarre le minuteur comme s’il avait commencé à l’heure de début de la journée ; possible une fois cette heure passée.",
+                "“From scheduled time” starts the timer as if it had begun at the day's start time; available once that time has passed.",
+              )}
               value={startMode}
               onChange={(event) =>
                 setStartMode(event.target.value as "now" | "planned")
@@ -380,6 +420,7 @@ export default function Timer({
               </option>
               <option value="planned" disabled={!canStartPlanned}>
                 {t("Depuis l’heure prévue", "From scheduled time")}
+                {plannedUnavailable && ` (${plannedUnavailable})`}
               </option>
             </select>
             <button
@@ -447,7 +488,10 @@ export default function Timer({
                       [],
                   ).findIndex((block) => block.id === run.blockId) <= 0
                 }
-                title={t("Bloc précédent", "Previous block")}
+                title={t(
+                  "Bloc précédent : il reprend là où il en était",
+                  "Previous block: it resumes where it was left",
+                )}
               >
                 <SkipBack size={18} />
               </button>

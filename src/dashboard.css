@@ -2,6 +2,17 @@
   margin-top: 22px;
   min-height: 0;
 }
+.dashboard-shell .sidebar-user {
+  margin-top: auto;
+}
+@media (min-width: 651px) {
+  /* Folders take the remaining height and scroll, keeping every folder
+     reachable above the account footer. */
+  .dashboard-shell .dashboard-folders {
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+}
 .dashboard-folders .nav-caption {
   display: block;
   margin-bottom: 10px;
