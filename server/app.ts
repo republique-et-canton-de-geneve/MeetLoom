@@ -36,6 +36,7 @@ import {
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerSharing } from "./sharing.js";
+import { publicQuotas, type PublicQuotas } from "./quotas.js";
 import { installTransfersApi } from "./transfers.js";
 import { installAccountsApi, accountProfile } from "./accounts.js";
 import { cloneContent } from "../shared/content.js";
@@ -96,6 +97,8 @@ export interface AppConfig {
   oidcAdapter?: OidcAdapter;
   mail?: MailConfig;
   mailTransport?: MailTransport;
+  /** Caps on data stored through public links; defaults in quotas.ts. */
+  quotas?: Partial<PublicQuotas>;
 }
 type UserRow = {
   id: string;
@@ -271,8 +274,6 @@ async function assembleWith(db: Database, config: AppConfig) {
     }
     next();
   });
-  app.use("/api/import/extract", express.json({ limit: "7mb", strict: true }));
-  app.use(express.json({ limit: "1mb", strict: true }));
   app.use("/api", async (request, response, next) => {
     const raw = (request.get("Cookie") ?? "")
       .split(";")
@@ -294,6 +295,17 @@ async function assembleWith(db: Database, config: AppConfig) {
     }
     next();
   });
+  // Bodies are parsed after the session cookie is resolved, so the larger
+  // import limit is only ever spent on signed-in users.
+  app.use(
+    "/api/import/extract",
+    (_request, response, next) =>
+      response.locals.user
+        ? next()
+        : next(new HttpError(401, "UNAUTHENTICATED", "Please sign in.")),
+    express.json({ limit: "7mb", strict: true }),
+  );
+  app.use(express.json({ limit: "1mb", strict: true }));
   const authenticated = (
     _request: Request,
     response: Response,
@@ -1135,6 +1147,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     accessible,
     synchronized,
     rateLimits: config.rateLimits,
+    quotas: publicQuotas(config.quotas),
   });
   installTransfersApi(app, { db, accessible, save });
   app.get("/api/sessions/:id/members", async (request, response) => {
@@ -1240,6 +1253,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     accessible,
     authenticated,
     rateLimits: config.rateLimits,
+    quotas: publicQuotas(config.quotas),
   });
   await installAiApi(app, {
     db,

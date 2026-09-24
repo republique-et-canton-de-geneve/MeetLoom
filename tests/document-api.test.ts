@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { harness, listen, stop } from "./support.js";
+import { harness, listen, origin, stop } from "./support.js";
 test("document API requires auth, extracts without persistence and keeps AI opt-in", async (t) => {
   const h = await harness(t);
   await h.setup();
@@ -105,4 +105,21 @@ test("AI import returns a validated private preview and image OCR uses configure
     ).body.code,
     "AI_IMPORT_INVALID",
   );
+});
+
+test("the large import body is refused before parsing when the caller is not signed in", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  // A malformed 2 MB body: parsing it would answer 400 INVALID_JSON, so a 401
+  // proves the request was rejected before the 7 MB parser read it.
+  const response = await fetch(`${h.base}/api/import/extract`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+    },
+    body: "{" + "x".repeat(2_000_000),
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, "UNAUTHENTICATED");
 });

@@ -226,6 +226,14 @@ const messages: Record<string, [string, string]> = {
     "Cette discussion a atteint sa limite. Créez une nouvelle discussion.",
     "This conversation reached its limit. Start a new thread.",
   ],
+  VISITOR_COMMENT_LIMIT: [
+    "Ce lien n’accepte plus de commentaires.",
+    "This link is no longer accepting comments.",
+  ],
+  FORM_FULL: [
+    "Ce formulaire n’accepte plus de réponses.",
+    "This form is no longer accepting responses.",
+  ],
   FORM_EMPTY: [
     "Ajoutez au moins une question avant de publier le formulaire.",
     "Add at least one question before publishing the form.",

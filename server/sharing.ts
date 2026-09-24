@@ -13,6 +13,7 @@ import type { Database, Sql } from "./db.js";
 import { guardSessionLifecycle } from "./lifecycle.js";
 import { accessibleSessionRows, mappedSession } from "./workspaces.js";
 import { fail, hashToken, rateLimit, token } from "./security.js";
+import type { PublicQuotas } from "./quotas.js";
 
 interface Dependencies {
   db: Database;
@@ -23,6 +24,7 @@ interface Dependencies {
   ) => Promise<{ session: Session; role: Role }>;
   synchronized: (session: Session) => Promise<Session>;
   rateLimits?: boolean;
+  quotas: PublicQuotas;
 }
 const id = z.string().min(1).max(120),
   rawToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -35,7 +37,7 @@ const commentInput = z.object({
 });
 export async function registerSharing(
   app: Express,
-  { db, accessible, synchronized, rateLimits }: Dependencies,
+  { db, accessible, synchronized, rateLimits, quotas }: Dependencies,
 ) {
   await db.transaction(async (sql) => {
     await sql.run(
@@ -464,6 +466,18 @@ export async function registerSharing(
             );
           input.blockId = parent.block_id;
         }
+        // The link row is locked above (session version touch), so the count
+        // cannot be raced past the quota by parallel posts.
+        const [stored] = await sql.all<{ count: number | string }>(
+          "SELECT COUNT(*) AS count FROM visitor_comments WHERE share_id=$1",
+          [link.id],
+        );
+        if (Number(stored.count) >= quotas.visitorComments)
+          return fail(
+            409,
+            "VISITOR_COMMENT_LIMIT",
+            "This link has reached its comment limit.",
+          );
         const comment = {
           id: randomUUID(),
           ...input,
