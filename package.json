@@ -33,7 +33,7 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.1.0",
     "jszip": "^3.10.2",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.47.0",
     "mammoth": "^1.12.3",
     "nodemailer": "^10.0.10",
     "openid-client": "^6.8.8",
