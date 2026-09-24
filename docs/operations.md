@@ -11,7 +11,7 @@ oc -n meetloom-dev logs deployment/meetloom --tail=100
 oc -n meetloom-dev exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:3000/api/ready').then(async r=>{console.log(r.status);process.exit(r.ok?0:1)})"
 ```
 
-`/api/health` confirms that the process responds. `/api/ready` checks database availability. Readiness must not depend on the optional LLM: a Qwen outage must not remove the application from service. Do not use logs to store prompts or private meeting content.
+`/api/health` confirms that the process responds. `/api/ready` checks database availability. Readiness must not depend on the optional LLM: an LLM outage must not remove the application from service. Do not use logs to store prompts or private meeting content.
 
 | Symptom                 | Check                                                                         |
 | ----------------------- | ----------------------------------------------------------------------------- |
@@ -20,7 +20,7 @@ oc -n meetloom-dev exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:
 | Pod rejected by an SCC  | No manually added UID, unprivileged policy, and a compatible PostgreSQL image |
 | Cookie/session rejected | HTTPS, exact `APP_ORIGIN`, Route, and trusted proxy count                     |
 | Readiness failure       | Application/database logs, `DATABASE_URL`, DNS, and PostgreSQL network access |
-| AI unavailable          | `QWEN_BASE_URL` and `QWEN_MODEL` in the ConfigMap, restart after changes      |
+| AI unavailable          | `LLM_BASE_URL` and `LLM_MODEL` in the ConfigMap, restart after changes        |
 | LLM certificate error   | Mounted internal CA and `NODE_EXTRA_CA_CERTS`, without disabling TLS          |
 
 ## Back up and restore
@@ -111,4 +111,4 @@ The release workflow publishes version `X.Y.Z` and a `sha-COMMIT` tag from the v
 
 ## Remaining checks on the target platform
 
-Local syntax and rendering checks do not prove admission by actual SCCs, image pulls, or storage availability. Before declaring an environment ready, validate rootless startup, probes, the Route/certificate, first-account setup, restart with persistence, a database backup/restore, and the internal Qwen connection. The maintained E2E suite will be added after functional acceptance of the first version.
+Local syntax and rendering checks do not prove admission by actual SCCs, image pulls, or storage availability. Before declaring an environment ready, validate rootless startup, probes, the Route/certificate, first-account setup, restart with persistence, a database backup/restore, and the internal LLM connection. The maintained E2E suite will be added after functional acceptance of the first version.

@@ -80,15 +80,15 @@ if ! resource_exists configmap meetloom-settings; then
   python3 - <<'PY' | oc -n "$project" create -f - >/dev/null
 import json, os
 data = {'APP_ORIGIN':os.environ['MEETLOOM_INSTALL_ORIGIN']}
-for key in ['QWEN_BASE_URL','QWEN_MODEL','QWEN_VISION_MODEL']:
+for key in ['LLM_BASE_URL','LLM_MODEL','LLM_VISION_MODEL']:
     if os.environ.get(key): data[key] = os.environ[key]
 print(json.dumps({'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'meetloom-settings'},'data':data}))
 PY
 fi
-if [[ -n ${QWEN_API_KEY:-} ]] && ! resource_exists secret meetloom-ai; then
+if [[ -n ${LLM_API_KEY:-} ]] && ! resource_exists secret meetloom-ai; then
   python3 - <<'PY' | oc -n "$project" create -f - >/dev/null
 import json, os
-print(json.dumps({'apiVersion':'v1','kind':'Secret','type':'Opaque','metadata':{'name':'meetloom-ai'},'stringData':{'QWEN_API_KEY':os.environ['QWEN_API_KEY']}}))
+print(json.dumps({'apiVersion':'v1','kind':'Secret','type':'Opaque','metadata':{'name':'meetloom-ai'},'stringData':{'LLM_API_KEY':os.environ['LLM_API_KEY']}}))
 PY
 fi
 

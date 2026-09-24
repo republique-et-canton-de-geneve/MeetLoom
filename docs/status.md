@@ -30,7 +30,7 @@ User acceptance round 5 (parallel actual time spread over rooms, self-service si
 
 ## Environment limits
 
-- The organization's Qwen endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.
+- The organization's LLM endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.
 - OIDC and SMTP are optional and have automated contract coverage; production identity and mail services still require operator configuration and verification.
 - The local Docker engine could not reach the registry during the exact image build. The organization's GitHub runner subsequently built and checked that image successfully; no local DNS settings were changed.
 - Chrome can be controlled, but native PowerPoint is unavailable to the browser tools. The floating window can be opened in Chrome; its behavior above a real slideshow still requires an environment check.

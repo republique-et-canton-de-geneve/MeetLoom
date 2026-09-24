@@ -1,6 +1,6 @@
 # Internal AI and document import
 
-AI is disabled without `QWEN_BASE_URL`. The URL, model and key remain on the server. The API expects the Chat Completions-compatible protocol. `QWEN_MODEL` selects the text model; `QWEN_VISION_MODEL` explicitly enables PNG/JPEG OCR. No document or message is sent to an implicitly configured provider.
+AI is disabled without `LLM_BASE_URL`. The URL, model and key remain on the server. The API expects the Chat Completions-compatible protocol. `LLM_MODEL` selects the text model; `LLM_VISION_MODEL` explicitly enables PNG/JPEG OCR. No document or message is sent to an implicitly configured provider.
 
 ## Conversations and proposals
 
@@ -26,6 +26,6 @@ Columns from imported documents are private. JSON merging preserves the source's
 
 ## Verification
 
-`tests/ai-api.test.ts`, `ai-proposals.test.ts`, `form-ai.test.ts`, `document-api.test.ts` and `document-import.test.ts` check permissions, conflicts, atomic decisions, identity exclusion from summaries, extraction of real file formats, malicious archives, timeouts and private merging. Test providers are local HTTP servers; no real Qwen service has been contacted by these tests. The actual internal model still requires validation in the deployment environment.
+`tests/ai-api.test.ts`, `ai-proposals.test.ts`, `form-ai.test.ts`, `document-api.test.ts` and `document-import.test.ts` check permissions, conflicts, atomic decisions, identity exclusion from summaries, extraction of real file formats, malicious archives, timeouts and private merging. Test providers are local HTTP servers; no real LLM service has been contacted by these tests. The actual internal model still requires validation in the deployment environment.
 
 Technical sources: [Mammoth](https://github.com/mwilliamson/mammoth.js), [PDF.js](https://mozilla.github.io/pdf.js/), [read-excel-file](https://github.com/catamphetamine/read-excel-file), [JSZip](https://stuk.github.io/jszip/documentation/), [saxes](https://github.com/lddubeau/saxes), [CSV Parse](https://csv.js.org/parse/).

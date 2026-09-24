@@ -21,4 +21,4 @@ This configuration is for **testing with disposable data**. SQLite lives in `/tm
 
 To retain data, use persistent PostgreSQL through `DATABASE_URL` with a provider of your choice, or adapt the service to a plan with a persistent disk and point `SQLITE_PATH` to that disk. These options may cost money. For private internal data, use [OpenShift/Kubernetes deployment](deployment.md) or Docker Compose on your own infrastructure.
 
-Qwen remains disabled until its endpoint is configured. A Render instance cannot automatically reach an LLM server restricted to your organization's internal network.
+AI remains disabled until its endpoint is configured. A Render instance cannot automatically reach an LLM server restricted to your organization's internal network.

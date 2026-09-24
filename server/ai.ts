@@ -67,7 +67,7 @@ export async function complete(
         ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: image ? config.visionModel : (config.model ?? "qwen3.8"),
+        model: image ? config.visionModel : config.model,
         messages: [
           { role: "system", content: system },
           ...history,

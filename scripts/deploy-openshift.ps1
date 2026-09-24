@@ -78,13 +78,13 @@ if (-not $routeHost) { throw 'The Route has no hostname. Check router admission.
 $origin = "https://$routeHost"
 if (-not (Get-Resource 'configmap' 'meetloom-settings')) {
     $settings = @{ APP_ORIGIN = $origin }
-    if ($env:QWEN_BASE_URL) { $settings.QWEN_BASE_URL = $env:QWEN_BASE_URL }
-    if ($env:QWEN_MODEL) { $settings.QWEN_MODEL = $env:QWEN_MODEL }
-    if ($env:QWEN_VISION_MODEL) { $settings.QWEN_VISION_MODEL = $env:QWEN_VISION_MODEL }
+    if ($env:LLM_BASE_URL) { $settings.LLM_BASE_URL = $env:LLM_BASE_URL }
+    if ($env:LLM_MODEL) { $settings.LLM_MODEL = $env:LLM_MODEL }
+    if ($env:LLM_VISION_MODEL) { $settings.LLM_VISION_MODEL = $env:LLM_VISION_MODEL }
     New-Resource @{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = @{ name = 'meetloom-settings' }; data = $settings } | Out-Null
 }
-if ($env:QWEN_API_KEY -and -not (Get-Resource 'secret' 'meetloom-ai')) {
-    New-Resource @{ apiVersion = 'v1'; kind = 'Secret'; type = 'Opaque'; metadata = @{ name = 'meetloom-ai' }; stringData = @{ QWEN_API_KEY = $env:QWEN_API_KEY } } | Out-Null
+if ($env:LLM_API_KEY -and -not (Get-Resource 'secret' 'meetloom-ai')) {
+    New-Resource @{ apiVersion = 'v1'; kind = 'Secret'; type = 'Opaque'; metadata = @{ name = 'meetloom-ai' }; stringData = @{ LLM_API_KEY = $env:LLM_API_KEY } } | Out-Null
 }
 
 $overlay = if ($ExternalDatabase) { 'k8s/overlays/openshift-external-db' }

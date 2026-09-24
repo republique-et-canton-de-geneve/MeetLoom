@@ -6,7 +6,7 @@ One Node.js 24 application serves the Express API and the React frontend built b
 flowchart LR
   Browser[React: accounts, editing, visitors] --> API[Express: origin, identity, permissions]
   API --> DB[(Local SQLite or PostgreSQL)]
-  API -. selected context .-> AI[Optional internal Qwen]
+  API -. selected context .-> AI[Optional OpenAI-compatible LLM]
   API -. configured sign-in .-> OIDC[Optional OpenID Connect]
   API -. authorized notifications .-> SMTP[Optional SMTP]
   MCP[Authorized MCP client] --> API

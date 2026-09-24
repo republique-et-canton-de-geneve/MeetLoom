@@ -38,4 +38,4 @@ oc -n meetloom-dev rollout status deployment/meetloom
 
 After validation in development, repeat with `-n meetloom-prod`. This changes neither secrets nor data. Rollback uses the same command with the previous version, subject to schema compatibility.
 
-The [complete guide](../docs/deployment.md) covers GitHub secrets, the first account, publication, upgrades, PostgreSQL/Qwen variants, and internal registries. The [operations guide](../docs/operations.md) covers backups and diagnostics.
+The [complete guide](../docs/deployment.md) covers GitHub secrets, the first account, publication, upgrades, PostgreSQL/LLM variants, and internal registries. The [operations guide](../docs/operations.md) covers backups and diagnostics.

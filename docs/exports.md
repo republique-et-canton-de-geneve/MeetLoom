@@ -10,7 +10,7 @@ Detailed, table, compact, day overview, multi-day overview and details-only layo
 
 Personal presets store only the audience and presentation settings. They can be created, renamed, updated or deleted; session, block and field selections are not stored in these presets. Each account can have up to twenty presets.
 
-When Qwen is configured, **Propose settings or an outline with internal AI** sends only the selected content, including internal fields only for the Team audience. AI can propose bounded settings or reorder and rename existing slides. It creates no URLs, code, files or presets. Review and apply or reject the proposal, then generate the file or save the preset. Documents are generated in the browser without an external conversion service.
+When an LLM is configured, **Propose settings or an outline with internal AI** sends only the selected content, including internal fields only for the Team audience. AI can propose bounded settings or reorder and rename existing slides. It creates no URLs, code, files or presets. Review and apply or reject the proposal, then generate the file or save the preset. Documents are generated in the browser without an external conversion service.
 
 ## Automated checks
 

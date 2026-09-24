@@ -19,7 +19,7 @@ The target is equivalent SessionLab functional coverage, with the three explicit
 - Document Picture-in-Picture progress window where supported, with a separate-window fallback.
 - Safe rich text, checklists and aggregated materials; Pages and versioned, published Forms, including bounded image responses stored privately.
 - Presence, three-way conflict handling, threaded comments, mentions, notifications, named versions, change history and recovery bins.
-- Optional server-side Chat Completions-compatible adapter for internal Qwen: private conversations, explicit contexts, instruction sets, reviewed typed proposals, form-response summaries and bounded export suggestions. Scoped personal-token MCP access is available.
+- Optional server-side Chat Completions-compatible adapter for an internal LLM: private conversations, explicit contexts, instruction sets, reviewed typed proposals, form-response summaries and bounded export suggestions. Scoped personal-token MCP access is available.
 - French and English UI; JSON/CSV, configurable browser PDF printing, DOCX and PPTX exports, clipboard tables and document import with preview.
 - Docker, SQLite for local use, PostgreSQL and OpenShift guides/installers, CI and dependency monitoring.
 
@@ -43,7 +43,7 @@ The last automatic transition can be recovered by extending the preceding block.
 
 ## Environment-dependent validation
 
-The overlay depends on the browser, operating system and PowerPoint mode; a universal guarantee across full-screen modes would require a native companion. The Qwen model and exact URL remain configurable. Real internal OpenShift, Qwen, identity-provider and SMTP access has not been available for this work. Local tests and simulated providers must not be reported as successful validation against those real services.
+The overlay depends on the browser, operating system and PowerPoint mode; a universal guarantee across full-screen modes would require a native companion. The LLM model and exact URL remain configurable. Real internal OpenShift, LLM, identity-provider and SMTP access has not been available for this work. Local tests and simulated providers must not be reported as successful validation against those real services.
 
 ## Remaining acceptance work
 

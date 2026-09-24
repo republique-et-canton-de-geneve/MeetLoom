@@ -86,8 +86,8 @@ When the cluster pulls images through an internal mirror such as a Nexus Docker 
 ```powershell
 oc login --token=... --server=https://api.cluster.example:6443
 pwsh ./scripts/deploy-openshift.ps1 -Environment development -Project meetloom-dev `
-  -Image docker-all.devops.etat-ge.ch/jpfroud/meetloom:0.1.0 `
-  -DatabaseImage mirror.example/sclorg/postgresql-16-c9s:latest
+  -Image registry-mirror.example/your-account/meetloom:0.1.0 `
+  -DatabaseImage registry-mirror.example/sclorg/postgresql-16-c9s:latest
 ```
 
 Omit `-DatabaseImage` when `quay.io` is reachable. If the mirror requires credentials, add its pull secret to the namespace and link it to the `default` ServiceAccount (`oc secrets link default <secret> --for=pull`). Use the same mirrored reference in `oc set image` for later updates.
@@ -137,14 +137,14 @@ Keep the previous image reference and a backup before updating. If the new versi
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Secret `meetloom-database`             | `POSTGRESQL_USER`, `POSTGRESQL_PASSWORD`, `POSTGRESQL_DATABASE`, `DATABASE_URL`; external mode: `DATABASE_URL` only |
 | Secret `meetloom-auth`                 | `BOOTSTRAP_TOKEN`                                                                                                   |
-| ConfigMap `meetloom-settings`          | `APP_ORIGIN` derived from the Route; optional `QWEN_BASE_URL`, `QWEN_MODEL`, and `QWEN_VISION_MODEL`                |
-| Optional Secret `meetloom-ai`          | `QWEN_API_KEY`                                                                                                      |
+| ConfigMap `meetloom-settings`          | `APP_ORIGIN` derived from the Route; optional `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_VISION_MODEL`                   |
+| Optional Secret `meetloom-ai`          | `LLM_API_KEY`                                                                                                       |
 | Optional ConfigMap `meetloom-services` | Non-secret OIDC and SMTP settings; example in `k8s/optional/services-config.example.yaml`                           |
 | Optional Secret `meetloom-services`    | `OIDC_CLIENT_SECRET`, `SMTP_USER`, and `SMTP_PASSWORD` according to enabled services                                |
 
 Environment-specific resources are not rewritten by `oc apply -k`. An initialized PostgreSQL password cannot be changed by editing the Secret alone: update the database and `DATABASE_URL` together. Changing a Secret/ConfigMap injected into the application requires restarting its Deployment.
 
-For Qwen, set `QWEN_BASE_URL`, `QWEN_MODEL`, and optionally `QWEN_API_KEY` in the environment during initial installation, or edit the resources above afterward. Example endpoint: `https://internal-llm.example/v1`. To import documents using a compatible vision model, add `QWEN_VISION_MODEL` to the ConfigMap; the text model is sufficient for agenda construction. Mount the internal CA and use `NODE_EXTRA_CA_CERTS` if needed; retain TLS verification.
+For the LLM, set `LLM_BASE_URL`, `LLM_MODEL`, and optionally `LLM_API_KEY` in the environment during initial installation, or edit the resources above afterward. Example endpoint: `https://internal-llm.example/v1`. To import documents using a compatible vision model, add `LLM_VISION_MODEL` to the ConfigMap; the text model is sufficient for agenda construction. Mount the internal CA and use `NODE_EXTRA_CA_CERTS` if needed; retain TLS verification.
 
 OIDC sign-in, email password recovery, and email digests are optional. They require no mandatory public service. Follow the [OIDC and SMTP guide](services-auth-mail.md) to create the two `meetloom-services` resources, register the callback URL with your identity provider, and test SMTP delivery. Installation scripts neither generate nor replace their secrets. Local sign-in and in-app notifications remain available without this configuration.
 
@@ -166,6 +166,6 @@ docker compose up --build -d
 
 Open `http://localhost:3000`. PostgreSQL is not exposed on the host, and the application binds only to `127.0.0.1`. `docker compose down` preserves data; do not add `--volumes` for an update. The local profile uses HTTP; OpenShift manifests use HTTPS. For a trial without Docker, see the [README](../README.md).
 
-Manifests and scripts have been checked locally. Admission, pull secrets, storage, Routes, and your Qwen endpoint still need operator verification in the target environments. Access to those environments is not required to prepare these files.
+Manifests and scripts have been checked locally. Admission, pull secrets, storage, Routes, and your LLM endpoint still need operator verification in the target environments. Access to those environments is not required to prepare these files.
 
 For a hosted demonstration launched from a button, see [Render](render.md). The free plan uses ephemeral storage; prefer your own infrastructure for retaining private agendas.

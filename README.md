@@ -2,6 +2,8 @@
 
 Plan and facilitate sessions with a shared agenda and notes that stay private. A free, self-hosted application in English and French.
 
+> **Developed with AI.** MeetLoom's code, tests and documentation were written by AI coding agents (OpenAI Codex, then Anthropic Claude Code), directed, reviewed and accepted by a human maintainer. Every change goes through automated tests, end-to-end journeys and security scans before it reaches `main`. Review it like any other open-source project before deploying it, and report issues through [SECURITY.md](SECURITY.md) or GitHub issues.
+
 **Version 0.1 is undergoing functional review.** Implemented features are listed below; the [parity matrix](docs/product-parity.md) and [manual QA evidence](docs/manual-qa.md) track their verification. User acceptance comes before maintained end-to-end tests, the first release, and deployment.
 
 [![CI](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/workflows/ci.yml)
@@ -49,7 +51,7 @@ Open [the Vite server](http://127.0.0.1:5173). If `APP_ORIGIN` is set during dev
 - Advance warnings in minutes or as a percentage of remaining duration, an end sound, sound selection, and volume. Per-session settings and defaults for new sessions.
 - A **Document Picture-in-Picture** window in compatible browsers, with a separate window as a fallback. The display includes the title and timing, without internal notes.
 - Session closure, facilitator selection, and a filterable report; deleted sessions remain recoverable for 30 days in a trash area separate from archives.
-- Optional internal AI: conversations, organization/workspace instructions, and proposals based on a selected context, with review before applying changes. An OpenAI-compatible adapter connects to your Qwen server.
+- Optional internal AI: conversations, organization/workspace instructions, and proposals based on a selected context, with review before applying changes. It connects to any OpenAI-compatible LLM server (vLLM, Ollama, LiteLLM, Azure OpenAI, OpenAI…).
 - JSON/CSV/Word/PowerPoint exports and printing/PDF; JSON import and DOCX/PPTX/XLSX/PDF/CSV extraction. Image OCR requires a configured internal vision model. Imported files are processed temporarily and do not become attachments.
 - An [MCP server](docs/mcp.md) with personal tokens and account permissions for authorized clients.
 
@@ -69,19 +71,19 @@ pwsh ./scripts/deploy-openshift.ps1 -Environment development -Project meetloom-d
 MEETLOOM_NAMESPACE=meetloom-dev bash scripts/deploy-openshift.sh development docker.io/your-account/meetloom:0.1.0
 ```
 
-The scripts are idempotent, preserve the PVC and secrets, and check readiness. To update, change only the `app` container image in the `meetloom` Deployment. GitHub receives no cluster access. The [deployment guide](docs/deployment.md) covers installation, publication, upgrades, rollback, Kubernetes without OpenShift, external PostgreSQL, internal registries, Qwen, and Docker Compose. See also [operations and backups](docs/operations.md).
+The scripts are idempotent, preserve the PVC and secrets, and check readiness. To update, change only the `app` container image in the `meetloom` Deployment. GitHub receives no cluster access. The [deployment guide](docs/deployment.md) covers installation, publication, upgrades, rollback, Kubernetes without OpenShift, external PostgreSQL, internal registries, the LLM connection, and Docker Compose. See also [operations and backups](docs/operations.md).
 
-## Connect Qwen
+## Connect an LLM
 
-Configure these values on the server only:
+AI assistance is optional and works with any server exposing the OpenAI-compatible Chat Completions API (`/v1/chat/completions`): an internal vLLM, Ollama, LiteLLM or TGI gateway, Azure OpenAI, OpenAI, Mistral, and similar. Configure these values on the server only:
 
 ```dotenv
-QWEN_BASE_URL=https://your-internal-llm.example/v1
-QWEN_MODEL=exact-model-identifier
-QWEN_API_KEY=if-required
+LLM_BASE_URL=https://your-internal-llm.example/v1
+LLM_MODEL=exact-model-identifier
+LLM_API_KEY=if-required
 ```
 
-The model is not tied to a fixed version number. The server calls `/chat/completions`, validates the response, bounds its size and duration, and returns a preview. There is no default external endpoint, no key sent to the browser, and no agenda applied without user action. Internal columns enter the AI context only when explicitly selected. For OCR, add `QWEN_VISION_MODEL` on the same internal provider. Mount an internal CA through `NODE_EXTRA_CA_CERTS` if needed; do not disable TLS verification.
+Use the exact model identifier your server expects; nothing is tied to a particular model family. The server calls `/chat/completions`, validates the response, bounds its size and duration, and returns a preview. There is no default external endpoint, no key sent to the browser, and no agenda applied without user action. Internal columns enter the AI context only when explicitly selected. For OCR, add `LLM_VISION_MODEL` on the same internal provider. Mount an internal CA through `NODE_EXTRA_CA_CERTS` if needed; do not disable TLS verification.
 
 ## Engineering and verification
 
@@ -104,7 +106,7 @@ The [architecture](ARCHITECTURE.md) describes modules and trust boundaries. The 
 
 Visitors cannot access team columns, internal comments, accounts, or versions. A public discussion may be enabled separately on a link without exposing internal conversations. All authorized session members, including viewers, can read its team columns. Anyone possessing a visitor link can access its scope until expiration or revocation. Revocation stops future reads; it cannot retract information already read or exported.
 
-Saving uses version checks and merging by object identifier and field; conflicting edits to the same field require explicit resolution. Periodic refresh is not character-level CRDT editing. One application instance is supported. The timer runs a parallel block as one step lasting as long as its longest track. Actual deployment, your OIDC/SMTP provider, Qwen endpoint, and the overlay above PowerPoint still need validation in your environment.
+Saving uses version checks and merging by object identifier and field; conflicting edits to the same field require explicit resolution. Periodic refresh is not character-level CRDT editing. One application instance is supported. The timer runs a parallel block as one step lasting as long as its longest track. Actual deployment, your OIDC/SMTP provider, LLM endpoint, and the overlay above PowerPoint still need validation in your environment.
 
 The explicitly excluded features remain absent: parking lot, block/session library, and attachments in blocks.
 

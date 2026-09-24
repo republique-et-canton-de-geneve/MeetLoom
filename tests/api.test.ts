@@ -1453,7 +1453,7 @@ test("AI adapter validates model output, bounds responses and leaves agendas unc
   const h = await harness(t, {
     ai: {
       baseUrl: `${providerBase}/v1`,
-      model: "internal-qwen",
+      model: "internal-model",
       maxResponseBytes: 2000,
     },
   });

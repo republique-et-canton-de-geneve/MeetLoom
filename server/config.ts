@@ -56,10 +56,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     trustProxy: integer(env, "TRUST_PROXY", 0, 0, 10),
     bootstrapToken: env.BOOTSTRAP_TOKEN?.trim() || undefined,
     ai: {
-      baseUrl: env.QWEN_BASE_URL?.trim() || undefined,
-      model: env.QWEN_MODEL?.trim() || undefined,
-      visionModel: env.QWEN_VISION_MODEL?.trim() || undefined,
-      apiKey: env.QWEN_API_KEY || undefined,
+      baseUrl: env.LLM_BASE_URL?.trim() || undefined,
+      model: env.LLM_MODEL?.trim() || undefined,
+      visionModel: env.LLM_VISION_MODEL?.trim() || undefined,
+      apiKey: env.LLM_API_KEY || undefined,
       timeoutMs: integer(env, "AI_TIMEOUT_MS", 30000, 100, 300000),
       maxResponseBytes: integer(
         env,
