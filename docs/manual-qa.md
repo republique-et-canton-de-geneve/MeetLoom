@@ -80,6 +80,16 @@ Executed on September 24, 2026 against a production build with the scratch datab
 - During a run, the controls read “+1” and “+5”. After “Bloc suivant” a few seconds in, the passed block shows “< 1 min” in amber with the tooltip “Durée réelle : 0 min 3 s · prévue : 2 min · cliquer pour modifier la durée prévue”; clicking it focuses the planned duration field.
 - The timer content rendered in a separate document with the `floating-window` class: at 520×260 everything is visible (clock 83 px); at 360×180 the kicker, position and delta are hidden (clock 58 px); at 220×90 only the clock remains (31 px). No size scrolled. The real Document Picture-in-Picture window was not resized by the automation.
 
+## Acceptance round 3 fixes (Claude Code, headless Chromium)
+
+Executed on September 24, 2026 against a production build with the same scratch database.
+
+- Changing the day's start time to 13:30 moved the first row to 13:30, shown with the fixed padlock; typing 14:00 in the first row changed the day's start time to 14:00.
+- A block inside “Nouveau groupe” renders as a full agenda row, identical to rows outside the group, followed by “Ajouter une activité au groupe · ou glissez un bloc ici”. Dragging that child over the last row shows a 3 px green line above it; dropping moves it out of the group (dispatched DragEvents; physical mouse dragging not reproduced).
+- Clicking the insert line away from its “+” opens the insert menu.
+- After locking then unlocking a time, moving the pointer away hides the open padlock.
+- The timer content rendered as the floating window: at 560×188 kicker, title (22 px), position, clock (45 px), label, delta and progress bar are all visible; at 560×130 position and delta disappear; at 420×100 the kicker and label too; at 360×70 and 200×60 only the clock (18 px) and the progress bar remain.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -103,3 +113,4 @@ Executed on September 24, 2026 against a production build with the scratch datab
 - Continuation checkpoint (branch `claude/epic-pascal-3gk99i`): local `npm run check` passed with 228 tests, both TypeScript projects, and the production build. The same 228 tests passed on a disposable PostgreSQL 16 database. Formatting checks passed and the production dependency audit reported zero vulnerabilities. Three new tests cover rate-limiter store shutdown when an application closes or fails to assemble. Hosted CI does not run on a pull request targeting `codex/meetloom-v1`; hosted results for these commits are expected once they reach that branch.
 - Acceptance round 1 (`codex/meetloom-v1`): local `npm run check` passed with 251 tests, both TypeScript projects, and the production build. The same 251 tests passed on PostgreSQL 16, and formatting checks passed. Hosted checks run when these commits are pushed to `codex/meetloom-v1`.
 - Acceptance round 2 (`codex/meetloom-v1`): local `npm run check` passed with 272 tests, both TypeScript projects and the production build; the same 272 tests passed on PostgreSQL 16; formatting checks passed.
+- Acceptance round 3: local `npm run check` passed with 273 tests, both TypeScript projects and the build; the same 273 tests passed on PostgreSQL 16; formatting checks passed.

@@ -4,6 +4,17 @@ Last updated: September 24, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**Acceptance round 3 (September 24, 2026).** Fixed on `codex/meetloom-v1`:
+
+- **Day start and first block:** the day's first block always starts at the day's start time and is shown locked (a non-toggleable padlock). Editing the day's start time moves it; editing the first block's time changes the day's start time and clears any stale lock on it. The scheduler no longer back-calculates the day from the first lock found (`scheduleTreeDay`); later locks create gaps or expose overlaps. This also fixes “start from scheduled time” beginning a minute early: a 1-minute first block followed by a block locked at the day's start used to move the day one minute earlier. Tests: `tests/domain.test.ts`, `tests/tree.test.ts`, `tests/planned-start.test.ts`.
+- **Groups are containers:** blocks inside a group render with exactly the same row as blocks outside it (`renderRow` in `src/Editor.tsx`), with the same insert line, delete, lock, drag handle and keyboard shortcuts (Enter, Alt+arrows and Backspace work within the group). Parallel rooms keep the side-by-side outline.
+- **Drop indicator:** a dragged block, including a group child, shows the same green line as the insert line where it will land.
+- **Insert line:** clicking anywhere on the line opens the menu, not only its “+”.
+- **Padlock:** an unlocked padlock disappears as soon as the pointer leaves the time (it no longer stays visible through focus after a click).
+- **Always-on-top window:** at its default size (560×188) it shows everything again, at the previous text sizes. Shrinking scales text down and drops the delta and position, then the kicker, then the title; the remaining time and the progress bar always stay.
+
+Local verification: `npm run check` passed with 273 tests, both TypeScript projects and the build; the same 273 tests passed on PostgreSQL 16; formatting checks passed. Browser evidence is in [manual-qa.md](manual-qa.md).
+
 **Acceptance round 2 (September 24, 2026).** The user's second round of findings, all addressed on `codex/meetloom-v1`:
 
 - **Timer, going back (corrected rule):** the clock keeps running for the block you return to. Leaving with 30 s left and coming back 10 s later leaves 20 s. `previous` resumes the earlier block with its own time plus the detour (the time on the abandoned later blocks, pauses excluded), against its current duration; the left block becomes upcoming again. This replaces round 1's “detour discarded” rule. `tests/timer-revisit.test.ts` was rewritten accordingly.
