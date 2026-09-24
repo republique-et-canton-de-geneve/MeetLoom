@@ -408,8 +408,11 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
         before += blockDuration(block);
       }
     }
-    return blocks.flatMap((block) => {
-      const startMinute = blockAnchor(block) ?? cursor;
+    return blocks.flatMap((block, index) => {
+      // The day's first block always starts at the day's start time: it is
+      // the day's own lock. Later locks leave gaps or expose overlaps.
+      const startMinute =
+        depth === 0 && index === 0 ? initial : (blockAnchor(block) ?? cursor);
       const gapMinutes =
         Math.abs(startMinute - cursor) < 1e-8 ? 0 : startMinute - cursor;
       const children =
@@ -451,7 +454,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
       ];
     });
   };
-  return sequence(day.blocks, minuteOfDay(day.startTime), 0, [], true);
+  return sequence(day.blocks, minuteOfDay(day.startTime), 0, [], false);
 }
 export function scheduleDay<T extends PublicBlock>(day: {
   startTime: string;

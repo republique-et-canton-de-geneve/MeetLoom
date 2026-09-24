@@ -94,6 +94,8 @@ test("group work is summed, parallel work takes the longest room, notes cost zer
 test("nested locks preserve sequence gaps while rooms start together", () => {
   const { session, group } = tree();
   const day = session.days[0];
+  // The day's start time anchors the first (group) block and its first child.
+  day.startTime = "10:00";
   group.children![0].lockedStart = "10:00";
   group.children![2].children![0].lockedStart = "10:20";
   const rows = scheduleTreeDay(day),

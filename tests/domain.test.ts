@@ -32,9 +32,10 @@ function fixture(): Session {
   return session;
 }
 
-test("first lock back-calculates preceding blocks; later locks expose gaps and overlaps", () => {
+test("the day's start time anchors its first block; later locks expose gaps and overlaps", () => {
   const session = fixture();
   const day = session.days[0];
+  day.startTime = "09:00";
   day.blocks[1].lockedStart = "09:20";
   day.blocks[2].lockedStart = "09:22";
   assert.deepEqual(
@@ -47,14 +48,20 @@ test("first lock back-calculates preceding blocks; later locks expose gaps and o
       }),
     ),
     [
-      { startMinute: 550, endMinute: 560, gapMinutes: 0, conflict: false },
-      { startMinute: 560, endMinute: 565, gapMinutes: 0, conflict: false },
+      { startMinute: 540, endMinute: 550, gapMinutes: 0, conflict: false },
+      { startMinute: 560, endMinute: 565, gapMinutes: 10, conflict: false },
       { startMinute: 562, endMinute: 564, gapMinutes: -3, conflict: true },
     ],
   );
+  day.blocks[0].lockedStart = "08:00";
+  assert.equal(
+    scheduleDay(day)[0].startMinute,
+    540,
+    "a stale lock on the first block never moves the day's start",
+  );
   day.blocks[0].duration = 25;
-  assert.equal(scheduleDay(day)[0].startMinute, 535);
-  assert.equal(scheduleDay(day)[1].gapMinutes, 0);
+  assert.equal(scheduleDay(day)[1].gapMinutes, -5);
+  assert.equal(scheduleDay(day)[1].conflict, true);
   day.blocks[2].lockedStart = "09:30";
   assert.equal(scheduleDay(day)[2].gapMinutes, 5);
   assert.equal(totalDuration(session), 32);
@@ -407,10 +414,11 @@ test("zero-minute milestones validate and auto-advance without drift or infinite
   );
 });
 
-test("planned starts use agenda timezone, first lock and explicit DST behavior", () => {
+test("planned starts use agenda timezone, the day start and explicit DST behavior", () => {
   const session = fixture();
   const day = session.days[0];
   day.date = "2026-09-23";
+  day.startTime = "09:10";
   day.blocks[1].lockedStart = "09:20";
   assert.equal(
     plannedStartTimestamp(session, day.id),
@@ -438,7 +446,7 @@ test("planned starts use agenda timezone, first lock and explicit DST behavior",
     "a start still ahead counts down to it",
   );
   day.date = "2026-03-29";
-  day.blocks[1].lockedStart = "02:40";
+  day.startTime = "02:30";
   assert.throws(() => plannedStartTimestamp(session, day.id), /does not exist/);
   day.date = "2026-10-25";
   assert.equal(

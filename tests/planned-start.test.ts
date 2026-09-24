@@ -111,3 +111,25 @@ test("an unusable or very distant schedule is still explained", () => {
     ),
   );
 });
+
+test("the planned start is the day's start time, never a minute earlier", () => {
+  // Reported: a 1-minute first block and a second block locked at the day's
+  // start used to back-calculate the day to 13:29.
+  const s = plan();
+  s.days[0].startTime = "13:30";
+  s.days[0].blocks[0].duration = 1;
+  s.days[0].blocks[1].lockedStart = "13:30";
+  const at1330 = Date.UTC(2026, 8, 24, 11, 30);
+  assert.equal(plannedStartTimestamp(s, s.days[0].id), at1330);
+  // A stale lock on the first block no longer moves the day either.
+  s.days[0].blocks[0].lockedStart = "12:30";
+  assert.equal(plannedStartTimestamp(s, s.days[0].id), at1330);
+  const started = transitionRun(
+    s,
+    "start",
+    { startMode: "planned" },
+    at1330 - 90_000,
+  );
+  assert.equal(timerView(started, at1330 - 90_000).startsInSeconds, 90);
+  assert.equal(timerView(started, at1330).startsInSeconds, 0);
+});
