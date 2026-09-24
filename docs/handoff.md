@@ -4,6 +4,14 @@ Last updated: September 24, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**Acceptance round 6 (September 24, 2026).** The user accepted the parallel-room rule and asked for the E2E suite before merging to `main`:
+
+- **Accounts like SessionLab:** self-service sign-up is now **open by default** once the first administrator exists; each account manages its own sessions. Administrators can restrict it to email domains or close it in “Paramètres de l’installation”. The first account is still the setup/administrator account.
+- **E2E suite** (`e2e/`, Playwright 1.56.1, `npm run test:e2e`): first-account setup, self-service sign-up and session isolation, sign-in/wrong password and FR→EN, agenda editing persisted across reload (durations, total, inserted group), visitor link privacy (a team-only note is stored but absent from the visitor page and its API responses), and facilitation (next/previous resumes, actual duration chip, visitor live timer and always-on-top button, pause propagation, reset). 7 journeys, stable over consecutive runs. CI job “End-to-end journeys” is required by “CI Success”; the release workflow also runs them on the exact commit.
+- **Dependabot:** already configured (npm daily, GitHub Actions and Docker weekly). New `.github/workflows/dependabot-auto-merge.yml` enables auto-merge for patch updates and development minor updates only; it depends on the user enabling branch protection (required “CI Success”) and “Allow auto-merge” (documented in `docs/deployment.md`).
+
+Next steps for the user: configure Docker Hub secrets/variable, protect `main`, merge PR #1, publish `v0.1.0`, then run the OpenShift installer in development.
+
 **Acceptance round 5 (September 24, 2026).** Fixed on `codex/meetloom-v1`:
 
 - **Parallel rooms and actual time (design decision to confirm with the user):** the timer measures a parallel block as one step because all rooms run at once. “Use actual durations” gives the actual time (whole minutes) to the longest room(s), scaling their activities proportionally with largest-remainder rounding so they add up exactly; shorter rooms keep their plan unless the actual time is shorter, which caps them. Groups inside a room are scaled through their activities; a nested parallel keeps its plan. “Restore plan” also restores room activities, because a run now captures their planned durations at start. Rooms are not limited to one activity. `spreadParallelActual` in `shared/domain.ts`; tests in `tests/timer-parallel.test.ts`.

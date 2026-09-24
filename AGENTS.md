@@ -17,7 +17,7 @@ Before every pause or handoff, update `docs/handoff.md` with what is complete, w
 - Explicit user instructions take precedence over skill suggestions. Proceed without routine confirmations and document reversible decisions.
 - Never expose an internal column through a public API, public export, public window, or log.
 - Provide French and English translations for every application label.
-- Run `npm run check` before delivery. Do not introduce a maintained end-to-end suite before the user validates the first version. Do not enable dependency auto-merge before a real E2E gate exists.
+- Run `npm run check` before delivery, and `npm run test:e2e` when a user journey changes. Keep the E2E suite small and nominal. Dependency auto-merge relies on the required **CI Success** check on `main`.
 - Keep secrets and local data out of Git. Do not copy AGPL SessionPlan code into this Unlicense repository.
 - Prefer simple components, shared functions, and native APIs before adding dependencies.
 
@@ -35,6 +35,6 @@ Before every pause or handoff, update `docs/handoff.md` with what is complete, w
 - Use Node.js 24, `npm ci`, and `npm run check`, then format changed files. Also test persistence changes with `TEST_DATABASE_URL`: tests create isolated schemas in a test database and remove them afterward.
 - Check visual flows in a real browser in French and English, including empty, loading, error, and permission states. Lazy loading uses Suspense boundaries; do not artificially raise bundle limits to hide warnings.
 - SPA navigation goes through `src/navigation.ts`. Editor guards save both agendas before unmounting, including on `popstate`, and preserve drafts when a save is rejected. Keep domain helpers imported by tests independent of CSS imports.
-- Do not publish a release, merge, or install on a cloud service or cluster during implementation and manual acceptance preparation. The agreed sequence is functional coverage and manual testing, user acceptance, a maintained nominal E2E suite, then release and operator-led deployment.
+- Do not publish a release, merge to `main`, or install on a cloud service or cluster unless the user asks. Releases and OpenShift deployments are operator-led.
 - CI covers SQLite/PostgreSQL, compilation, formatting, dependency auditing, and manifests. Security workflows use CodeQL and Trivy. Docker Hub images are built and verified before publication, including arbitrary UID and read-only root filesystem checks. Never give GitHub OpenShift credentials.
 - Keep manifests and guides generic. Organization-specific values belong in operator configuration. Preserve secrets and volumes during upgrades; code changes must never deploy as a side effect.

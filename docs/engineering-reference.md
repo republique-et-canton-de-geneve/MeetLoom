@@ -110,7 +110,7 @@ Sources: [docker-deploy.yml](https://github.com/republique-et-canton-de-geneve/R
 | Scheduled and PR CodeQL                  | `security.yml`, security/quality suite, visible rather than hidden failure                               |
 | Image and dependency scans               | Blocking production npm audit, blocking Trivy, arbitrary-UID/read-only-root smoke test                   |
 | npm/actions/Docker Dependabot            | Related React, Tiptap, and CodeQL groups; no assignment to a personal account                            |
-| Automatic merging after E2E              | Deferred until V1 acceptance and configured branch protections                                           |
+| Automatic merging after E2E              | Patch and development minor Dependabot updates, once the required **CI Success** check (with E2E) passes |
 | GitHub Release and Docker Hub            | One workflow checks the same commit, then publishes version, SHA, digest, SBOM, and installation archive |
 | `k8s`, overlays, separate secrets        | Generic environments, secrets created once, guard against lost credentials for an existing PVC           |
 | Render button and Blueprint              | Repository build and documented ephemeral free plan; first account protected by a generated token        |

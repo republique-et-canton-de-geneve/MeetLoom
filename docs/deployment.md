@@ -29,6 +29,10 @@ For compatibility with RetroGemini, `DOCKERHUB_REPOSITORY` may also be a Secret 
 
 If the Docker Hub repository is private, prepare a pull secret in each namespace and associate it with the `default` ServiceAccount using your cluster's procedure. PostgreSQL uses the public `quay.io/sclorg/postgresql-16-c9s` image, designed for OpenShift. An overlay can substitute `registry.redhat.io/rhel9/postgresql-16` with the required Red Hat permissions, or an internal mirror. See [SCLorg PostgreSQL images](https://github.com/sclorg/postgresql-container).
 
+### Branch protection and auto-merge
+
+In **GitHub → Settings → Branches**, protect `main`: require a pull request and the **CI Success** status check (it includes the end-to-end journeys). In **Settings → General**, enable **Allow auto-merge**. Dependabot patch and development minor updates then merge by themselves once CI Success passes; everything else waits for review.
+
 ## 2. Publish a version
 
 The version source is `package.json`, currently `0.1.0`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version 0.1.1 --no-git-tag-version`), then merge the validated changes.

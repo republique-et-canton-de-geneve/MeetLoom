@@ -94,7 +94,7 @@ npm run format:check
 
 `TEST_DATABASE_URL` runs the same API contracts against PostgreSQL, using an isolated schema per test. CI runs SQLite and PostgreSQL, renders manifests, and checks dependencies. CodeQL and Trivy provide additional scans. GitHub Actions are pinned to commits. Docker Hub publication is triggered by a GitHub Release or manually and repeats checks, including PostgreSQL, before publishing. The Release retains the digest, commit, SBOM, and installation manifests.
 
-**End-to-end tests and automatic dependency merges await V1 acceptance.** Dependabot already proposes PRs; no automatic merge bypasses verification. The E2E workflow will cover stable user journeys and then become a required branch check.
+**End-to-end journeys** (`npm run test:e2e`, Playwright) cover accounts, agenda editing, visitor privacy and facilitation in CI and before every release. Dependabot patch and development minor updates are auto-merged only once the required checks pass; the repository must require **CI Success** on `main`.
 
 The [RetroGemini audit](docs/engineering-reference.md) explains adopted practices and differences. The [product research](docs/product-research.md) cites SessionLab/SessionPlan sources and explains the fresh implementation. Gstack was installed first and subsequently used for reviews; see [Gstack tooling](docs/gstack.md).
 
