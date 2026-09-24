@@ -62,11 +62,11 @@ spec:
             periodSeconds: 30
           resources:
             requests:
-              cpu: 100m
+              # Same minimal CPU request as the application; no CPU limit.
+              cpu: 1m
               memory: 256Mi
             limits:
-              cpu: "1"
-              memory: 1Gi
+              memory: 512Mi
           volumeMounts:
             - name: data
               mountPath: /var/lib/pgsql/data

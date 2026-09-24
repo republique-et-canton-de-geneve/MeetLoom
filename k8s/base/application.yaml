@@ -88,10 +88,11 @@ spec:
             timeoutSeconds: 3
           resources:
             requests:
-              cpu: 100m
+              # Minimal CPU request, as on shared OpenShift projects whose quota allows
+              # only a few millicores of requests; no CPU limit, so the pod can burst.
+              cpu: 1m
               memory: 128Mi
             limits:
-              cpu: "1"
               memory: 512Mi
           volumeMounts:
             - name: temporary
