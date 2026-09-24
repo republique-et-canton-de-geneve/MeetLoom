@@ -171,7 +171,8 @@ export function createPresenceRouter(dependencies: {
   router.delete(path, async (request, response) => {
     const id = getId(request.params.id),
       user = response.locals.user as User;
-    await dependencies.accessible(id, user.id);
+    // No access check: a tab closing after its session was trashed or its
+    // access revoked still leaves, and only the caller's own rows go.
     const input = z.object({ clientId: z.uuid() }).strict().parse(request.body);
     await store.leave(id, user.id, input.clientId);
     response.status(204).end();
