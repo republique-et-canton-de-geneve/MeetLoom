@@ -14,6 +14,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  XCircle,
   Clock3,
   CalendarDays,
   GripVertical,
@@ -88,6 +89,7 @@ import { exportSessionCsv } from "./export";
 import { PrintableAgenda } from "./PrintableAgenda";
 import {
   ActualDurationsContext,
+  actualDurationLabel,
   ClockField,
   DurationField,
 } from "./TimeFields";
@@ -338,6 +340,7 @@ export default function Editor({
   const [undo, setUndo] = useState<{ before: Session; after: Session }[]>([]),
     [redo, setRedo] = useState<{ before: Session; after: Session }[]>([]);
   const dragId = useRef<string | null>(null);
+  const [roomTabs, setRoomTabs] = useState<Record<string, string>>({});
   const titleInputs = useRef(new Map<string, HTMLInputElement>());
   const focusAfterRender = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -673,6 +676,361 @@ export default function Editor({
   };
   // Every block renders the same way, at the top level or inside a group:
   // a group is only a container around its blocks.
+  const actualChip = (block: Block) => {
+    const actual =
+      session.run.status === "idle"
+        ? undefined
+        : session.run.actualDurations?.[block.id];
+    return actual === undefined ? null : (
+      <span
+        className="actual-duration"
+        title={t("Durée réelle", "Actual duration")}
+      >
+        {actualDurationLabel(actual)}
+      </span>
+    );
+  };
+  // Groups and parallel activities are logical containers: their header
+  // only carries the time, the duration computed from their activities and
+  // a title, like SessionLab.
+  const containerHeader = (
+    block: Block,
+    startMinute: number,
+    dayAnchor: boolean,
+    listId: string | null,
+  ): ReactNode => (
+    <div
+      className={`container-header ${containsActive(block) ? "current-block" : ""} ${detail === block.id ? "inspected-row" : ""}`}
+      onDragOver={
+        editable
+          ? (e) => {
+              if (!dragId.current) return;
+              e.preventDefault();
+              e.currentTarget.classList.add("drop-before");
+            }
+          : undefined
+      }
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node))
+          e.currentTarget.classList.remove("drop-before");
+      }}
+      onDrop={
+        editable
+          ? (e) => {
+              e.currentTarget.classList.remove("drop-before");
+              drop(e, block.id, listId);
+            }
+          : undefined
+      }
+    >
+      {editable && (
+        <button
+          className="drag-handle"
+          draggable={!containsActive(block)}
+          onDragStart={(e) => {
+            dragId.current = block.id;
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", block.id);
+          }}
+          onDragEnd={() => {
+            dragId.current = null;
+          }}
+          aria-label={t("Déplacer le bloc", "Move block")}
+        >
+          <GripVertical size={17} />
+        </button>
+      )}
+      <div className="container-meta">
+        {startTimeCell(block, startMinute, dayAnchor)}
+        <span
+          className="container-duration"
+          title={t(
+            "Durée calculée à partir des activités",
+            "Duration computed from the activities",
+          )}
+        >
+          ({durationLabel(blockDuration(block))})
+        </span>
+        {actualChip(block)}
+      </div>
+      <div className="container-title-row">
+        <button
+          className="collapse-block"
+          aria-expanded={!collapsedBlocks.has(block.id)}
+          aria-label={t(
+            "Développer ou replier le bloc",
+            "Expand or collapse block",
+          )}
+          onClick={() =>
+            setCollapsedBlocks((current) => {
+              const next = new Set(current);
+              if (next.has(block.id)) next.delete(block.id);
+              else next.add(block.id);
+              return next;
+            })
+          }
+        >
+          {collapsedBlocks.has(block.id) ? (
+            <ChevronRight size={18} />
+          ) : (
+            <ChevronDown size={18} />
+          )}
+        </button>
+        <input
+          className="container-title"
+          value={block.title}
+          maxLength={240}
+          readOnly={!editable}
+          aria-label={
+            block.kind === "group"
+              ? t("Titre du groupe", "Group title")
+              : t(
+                  "Titre des activités en parallèle",
+                  "Parallel activities title",
+                )
+          }
+          onChange={(e) => editBlock(block.id, { title: e.target.value })}
+        />
+      </div>
+      {editable && (
+        <button
+          className="icon-button row-delete"
+          title={`${t("Supprimer", "Delete")} ${block.title}`}
+          aria-label={`${t("Supprimer", "Delete")} ${block.title}`}
+          disabled={containsActive(block)}
+          onClick={() => removeBlock(block.id)}
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+    </div>
+  );
+  // Parallel rooms are tabs: an overview side by side, then each room's
+  // activities as ordinary rows. Rooms are added and renamed in place.
+  const roomsArea = (block: Block): ReactNode => {
+    const rooms = block.rooms ?? [];
+    const selected =
+      roomTabs[block.id] === "overview"
+        ? "overview"
+        : (rooms.find((room) => room.id === roomTabs[block.id]) ?? rooms[0])
+            ?.id;
+    const room = rooms.find((candidate) => candidate.id === selected);
+    const actual = actualChip(block);
+    const updateRooms = (next: NonNullable<Block["rooms"]>) =>
+      editBlock(block.id, { rooms: next });
+    return (
+      <div className="rooms-area">
+        <div className="room-tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={selected === "overview"}
+            className={selected === "overview" ? "active" : ""}
+            onClick={() =>
+              setRoomTabs((tabs) => ({ ...tabs, [block.id]: "overview" }))
+            }
+          >
+            <Columns3 size={14} />
+            {t("Vue d’ensemble", "Overview")}
+          </button>
+          {rooms.map((candidate) => (
+            <button
+              key={candidate.id}
+              role="tab"
+              aria-selected={selected === candidate.id}
+              className={selected === candidate.id ? "active" : ""}
+              onClick={() =>
+                setRoomTabs((tabs) => ({ ...tabs, [block.id]: candidate.id }))
+              }
+            >
+              {candidate.title}
+              <small>
+                (
+                {durationLabel(
+                  candidate.blocks.reduce((n, b) => n + blockDuration(b), 0),
+                )}
+                )
+              </small>
+              {actual}
+            </button>
+          ))}
+          {editable && (
+            <button
+              className="room-add"
+              onClick={() => {
+                const added = {
+                  id: crypto.randomUUID(),
+                  title: t(
+                    `Salle ${rooms.length + 1}`,
+                    `Room ${rooms.length + 1}`,
+                  ),
+                  blocks: [],
+                };
+                updateRooms([...rooms, added]);
+                setRoomTabs((tabs) => ({ ...tabs, [block.id]: added.id }));
+              }}
+            >
+              <Plus size={14} />
+              {t("Ajouter une salle", "Add room")}
+            </button>
+          )}
+        </div>
+        {selected === "overview" || !room ? (
+          <GroupOutline
+            block={block}
+            editable={editable}
+            actions={outlineActions}
+          />
+        ) : (
+          <div className="room-panel" role="tabpanel">
+            {editable && (
+              <div className="room-toolbar">
+                <input
+                  value={room.title}
+                  maxLength={120}
+                  aria-label={t("Nom de la salle", "Room name")}
+                  onChange={(e) =>
+                    updateRooms(
+                      rooms.map((candidate) =>
+                        candidate.id === room.id
+                          ? { ...candidate, title: e.target.value }
+                          : candidate,
+                      ),
+                    )
+                  }
+                />
+                {rooms.length > 1 && (
+                  <button
+                    className="icon-button"
+                    title={t("Supprimer cette salle", "Delete this room")}
+                    aria-label={t("Supprimer cette salle", "Delete this room")}
+                    disabled={containsActive(block)}
+                    onClick={() =>
+                      updateRooms(
+                        rooms.filter((candidate) => candidate.id !== room.id),
+                      )
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            )}
+            {room.blocks.map((child, childIndex) => {
+              const row = treeRows.get(child.id);
+              return row
+                ? renderRow(row, childIndex, room.blocks, room.id)
+                : null;
+            })}
+            {editable && (
+              <button
+                className="outline-add group-drop"
+                onClick={() =>
+                  insertAt(createBlock("activity"), { listId: room.id })
+                }
+                onDragOver={(e) => {
+                  if (!dragId.current) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.classList.add("drop-here");
+                }}
+                onDragLeave={(e) =>
+                  e.currentTarget.classList.remove("drop-here")
+                }
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.classList.remove("drop-here");
+                  if (dragId.current)
+                    outlineActions.relocate(dragId.current, {
+                      listId: room.id,
+                    });
+                  dragId.current = null;
+                }}
+              >
+                <Plus size={14} />
+                {t(
+                  "Ajouter une activité à la salle",
+                  "Add an activity to the room",
+                )}
+                <span>
+                  {t("ou glissez un bloc ici", "or drag a block here")}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+  const startTimeCell = (
+    block: Block,
+    startMinute: number,
+    dayAnchor: boolean,
+  ): ReactNode => (
+    <div
+      className={`start-time ${block.lockedStart || dayAnchor ? "is-locked" : ""}`}
+    >
+      <ClockField
+        value={formatTime(startMinute)}
+        label={`${t("Heure de", "Start time of")} ${block.title}`}
+        readOnly={!editable}
+        change={(value) =>
+          dayAnchor
+            ? setDayStart(value)
+            : editBlock(block.id, { lockedStart: value })
+        }
+      />
+      <LocalClock
+        minute={startMinute}
+        date={day.date}
+        timezone={session.timezone}
+      />
+      {dayAnchor ? (
+        <span
+          className="lock-toggle day-anchor"
+          title={t(
+            "Premier bloc : il commence toujours à l’heure de début de la journée",
+            "First block: it always starts at the day's start time",
+          )}
+        >
+          <LockKeyhole size={12} />
+        </span>
+      ) : (
+        (editable || block.lockedStart) && (
+          <button
+            className={`lock-toggle ${block.lockedStart ? "" : "unlocked"}`}
+            disabled={!editable}
+            aria-pressed={!!block.lockedStart}
+            title={
+              block.lockedStart
+                ? t("Déverrouiller cet horaire", "Unlock this time")
+                : t("Verrouiller cet horaire", "Lock this time")
+            }
+            aria-label={
+              block.lockedStart
+                ? t("Déverrouiller cet horaire", "Unlock this time")
+                : t("Verrouiller cet horaire", "Lock this time")
+            }
+            onClick={(e) => {
+              editBlock(block.id, {
+                lockedStart: block.lockedStart
+                  ? undefined
+                  : formatTime(startMinute),
+              });
+              // A mouse click must not keep an unlocked padlock shown.
+              if (e.detail > 0) e.currentTarget.blur();
+            }}
+          >
+            {block.lockedStart ? (
+              <LockKeyhole size={12} />
+            ) : (
+              <LockKeyholeOpen size={12} />
+            )}
+          </button>
+        )
+      )}
+    </div>
+  );
   const renderRow = (
     {
       block,
@@ -690,6 +1048,7 @@ export default function Editor({
   ): ReactNode => {
     // The day's first block is anchored to the day's start time.
     const dayAnchor = listId === null && index === 0;
+    const isContainer = block.kind === "group" || block.kind === "parallel";
     return (
       <div
         key={block.id}
@@ -734,352 +1093,310 @@ export default function Editor({
               <div />
             </div>
           )}
+        {gapMinutes < 0 && (
+          <div className="schedule-overlap" role="alert">
+            <XCircle size={18} />
+            <span>
+              <strong>{durationLabel(Math.ceil(-gapMinutes - 1e-9))}</strong>{" "}
+              {t("de chevauchement entre", "overlap between")}{" "}
+              <strong>
+                {siblings[index - 1]?.title ||
+                  t("le bloc précédent", "the previous block")}
+              </strong>{" "}
+              {t("et", "and")} <strong>{block.title}</strong>
+            </span>
+          </div>
+        )}
         {gapMinutes > 0 && (
           <div className="schedule-gap">
             {durationLabel(gapMinutes)}{" "}
             {t("de marge avant ce bloc", "buffer before this block")}
           </div>
         )}
-        <div
-          className={`agenda-row category-${block.category} ${detail === block.id ? "inspected-row" : ""} ${selection.has(block.id) ? "selected-row" : ""} ${containsActive(block) ? "current-block" : ""} ${conflict ? "schedule-conflict" : ""}`}
-          style={{
-            gridTemplateColumns: gridTemplate,
-            ...({
-              "--category-color": categoryColor(
-                block.category,
-                session.categories,
-              ),
-            } as CSSProperties),
-            display: collapsedSections.has(`${day.id}:${block.section}`)
-              ? "none"
-              : undefined,
-          }}
-          onDragOver={
-            editable
-              ? (e) => {
-                  if (!dragId.current) return;
-                  e.preventDefault();
-                  e.currentTarget.classList.add("drop-before");
-                }
-              : undefined
-          }
-          onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node))
-              e.currentTarget.classList.remove("drop-before");
-          }}
-          onDrop={
-            editable
-              ? (e) => {
-                  e.currentTarget.classList.remove("drop-before");
-                  drop(e, block.id, listId);
-                }
-              : undefined
-          }
-        >
-          <div className="block-time">
-            {editable && (
-              <input
-                className="block-select"
-                type="checkbox"
-                aria-label={`${t("Sélectionner", "Select")} ${block.title}`}
-                checked={selection.has(block.id)}
-                onChange={(e) => selectBlock(block.id, e.target.checked)}
-              />
-            )}
-            <button
-              className="drag-handle"
-              draggable={editable && !containsActive(block)}
-              onDragStart={(e) => {
-                dragId.current = block.id;
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", block.id);
-              }}
-              onDragEnd={() => {
-                dragId.current = null;
-              }}
-              title={t(
-                "Glisser pour déplacer · flèches dans les détails",
-                "Drag to reorder · arrow controls in details",
+        {isContainer ? (
+          containerHeader(block, startMinute, dayAnchor, listId)
+        ) : (
+          <div
+            className={`agenda-row category-${block.category} ${detail === block.id ? "inspected-row" : ""} ${selection.has(block.id) ? "selected-row" : ""} ${containsActive(block) ? "current-block" : ""} ${conflict ? "schedule-conflict" : ""}`}
+            style={{
+              gridTemplateColumns: gridTemplate,
+              ...({
+                "--category-color": categoryColor(
+                  block.category,
+                  session.categories,
+                ),
+              } as CSSProperties),
+              display: collapsedSections.has(`${day.id}:${block.section}`)
+                ? "none"
+                : undefined,
+            }}
+            onDragOver={
+              editable
+                ? (e) => {
+                    if (!dragId.current) return;
+                    e.preventDefault();
+                    e.currentTarget.classList.add("drop-before");
+                  }
+                : undefined
+            }
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node))
+                e.currentTarget.classList.remove("drop-before");
+            }}
+            onDrop={
+              editable
+                ? (e) => {
+                    e.currentTarget.classList.remove("drop-before");
+                    drop(e, block.id, listId);
+                  }
+                : undefined
+            }
+          >
+            <div className="block-time">
+              {editable && (
+                <input
+                  className="block-select"
+                  type="checkbox"
+                  aria-label={`${t("Sélectionner", "Select")} ${block.title}`}
+                  checked={selection.has(block.id)}
+                  onChange={(e) => selectBlock(block.id, e.target.checked)}
+                />
               )}
-              aria-label={t("Déplacer le bloc", "Move block")}
-            >
-              <GripVertical size={17} />
-            </button>
-            <div
-              className={`start-time ${block.lockedStart || dayAnchor ? "is-locked" : ""}`}
-            >
-              <ClockField
-                value={formatTime(startMinute)}
-                label={`${t("Heure de", "Start time of")} ${block.title}`}
-                readOnly={!editable}
-                change={(value) =>
-                  dayAnchor
-                    ? setDayStart(value)
-                    : editBlock(block.id, { lockedStart: value })
-                }
-              />
-              <LocalClock
-                minute={startMinute}
-                date={day.date}
-                timezone={session.timezone}
-              />
-              {dayAnchor ? (
+              <button
+                className="drag-handle"
+                draggable={editable && !containsActive(block)}
+                onDragStart={(e) => {
+                  dragId.current = block.id;
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", block.id);
+                }}
+                onDragEnd={() => {
+                  dragId.current = null;
+                }}
+                title={t(
+                  "Glisser pour déplacer · flèches dans les détails",
+                  "Drag to reorder · arrow controls in details",
+                )}
+                aria-label={t("Déplacer le bloc", "Move block")}
+              >
+                <GripVertical size={17} />
+              </button>
+              {startTimeCell(block, startMinute, dayAnchor)}
+              {!separateTime && durationControl(block)}
+              <span className="end-time">{formatTime(endMinute)}</span>
+              {conflict && (
                 <span
-                  className="lock-toggle day-anchor"
+                  className="conflict-icon"
                   title={t(
-                    "Premier bloc : il commence toujours à l’heure de début de la journée",
-                    "First block: it always starts at the day's start time",
+                    "L’horaire verrouillé chevauche le bloc précédent",
+                    "Locked start overlaps the previous block",
                   )}
                 >
-                  <LockKeyhole size={12} />
+                  <AlertCircle size={14} />
                 </span>
-              ) : (
-                (editable || block.lockedStart) && (
-                  <button
-                    className={`lock-toggle ${block.lockedStart ? "" : "unlocked"}`}
-                    disabled={!editable}
-                    aria-pressed={!!block.lockedStart}
-                    title={
-                      block.lockedStart
-                        ? t("Déverrouiller cet horaire", "Unlock this time")
-                        : t("Verrouiller cet horaire", "Lock this time")
-                    }
-                    aria-label={
-                      block.lockedStart
-                        ? t("Déverrouiller cet horaire", "Unlock this time")
-                        : t("Verrouiller cet horaire", "Lock this time")
-                    }
-                    onClick={(e) => {
-                      editBlock(block.id, {
-                        lockedStart: block.lockedStart
-                          ? undefined
-                          : formatTime(startMinute),
-                      });
-                      // A mouse click must not keep an unlocked padlock shown.
-                      if (e.detail > 0) e.currentTarget.blur();
-                    }}
-                  >
-                    {block.lockedStart ? (
-                      <LockKeyhole size={12} />
-                    ) : (
-                      <LockKeyholeOpen size={12} />
-                    )}
-                  </button>
-                )
               )}
             </div>
-            {!separateTime && durationControl(block)}
-            <span className="end-time">{formatTime(endMinute)}</span>
-            {conflict && (
-              <span
-                className="conflict-icon"
-                title={t(
-                  "L’horaire verrouillé chevauche le bloc précédent",
-                  "Locked start overlaps the previous block",
-                )}
-              >
-                <AlertCircle size={14} />
-              </span>
+            {separateTime && (
+              <div className="block-duration-column">
+                {durationControl(block)}
+              </div>
             )}
-          </div>
-          {separateTime && (
-            <div className="block-duration-column">
-              {durationControl(block)}
-            </div>
-          )}
-          <div className="block-main">
-            <div className="block-title-row">
-              <button
-                className="collapse-block"
-                aria-expanded={!compact && !collapsedBlocks.has(block.id)}
-                aria-label={t(
-                  "Développer ou replier le bloc",
-                  "Expand or collapse block",
-                )}
-                onClick={() =>
-                  setCollapsedBlocks((current) => {
-                    const next = new Set(current);
-                    if (next.has(block.id)) next.delete(block.id);
-                    else next.add(block.id);
-                    return next;
-                  })
-                }
-              >
-                {collapsedBlocks.has(block.id) || compact ? (
-                  <ChevronRight size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-              </button>
-              <input
-                className="block-title-input"
-                ref={(el) => {
-                  if (el) titleInputs.current.set(block.id, el);
-                  else titleInputs.current.delete(block.id);
-                }}
-                value={block.title}
-                aria-label={t("Titre du bloc", "Block title")}
-                maxLength={240}
-                readOnly={!editable}
-                onKeyDown={(e) => titleKey(e, block, index, siblings, listId)}
-                title={t(
-                  "Entrée : nouveau bloc · Alt + ↑↓ : déplacer · Ctrl/⌘ + D : dupliquer",
-                  "Enter: new block · Alt + ↑↓: move · Ctrl/⌘ + D: duplicate",
-                )}
-                onChange={(e) =>
-                  editBlock(block.id, {
-                    title: e.target.value,
-                  })
-                }
-              />
-              <button
-                className="expand-block"
-                title={t("Détails du bloc", "Block details")}
-                onClick={() => showDetail(block.id)}
-              >
-                <ArrowRight size={15} />
-              </button>
-              <button
-                className="block-comment-button"
-                title={t("Commenter ce bloc", "Comment on this block")}
-                onClick={() => {
-                  setCommentTarget({ blockId: block.id });
-                  setPanel("comments");
-                }}
-              >
-                <MessageSquare size={14} />
-                {commentCounts.blocks[block.id] > 0 && (
-                  <small>{commentCounts.blocks[block.id]}</small>
-                )}
-              </button>
-            </div>
-            {block.kind && block.kind !== "activity" && (
-              <button
-                className="block-kind"
-                onClick={() => showDetail(block.id)}
-              >
-                {block.kind === "group"
-                  ? `${t("Groupe", "Group")} · ${block.children?.length ?? 0} ${t("blocs", "blocks")}`
-                  : block.kind === "parallel"
-                    ? `${t("En parallèle", "Parallel")} · ${block.rooms?.length ?? 0} ${t("salles", "rooms")}`
-                    : t("Note sans durée", "Untimed note")}
-              </button>
-            )}
-            {showDescription && !compact && !collapsedBlocks.has(block.id) && (
-              <RichTextEditor
-                className="block-description"
-                ariaLabel={`${t("Description de", "Description of")} ${block.title}`}
-                placeholder={t(
-                  "Ajouter une description…",
-                  "Add a description…",
-                )}
-                value={block.description}
-                maxLength={30000}
-                disabled={!editable}
-                onChange={(value) =>
-                  editBlock(block.id, {
-                    description: value,
-                  })
-                }
-              />
-            )}
-            <select
-              className={`category-select category-text-${block.category}`}
-              style={{
-                backgroundColor: `${categoryColor(block.category, session.categories)}28`,
-                color: "#344d4c",
-              }}
-              value={block.category}
-              disabled={!editable}
-              aria-label={t("Catégorie", "Category")}
-              onChange={(e) =>
-                e.target.value === "__categories"
-                  ? setPanel("categories")
-                  : editBlock(block.id, {
-                      category: e.target.value as Category,
+            <div className="block-main">
+              <div className="block-title-row">
+                <button
+                  className="collapse-block"
+                  aria-expanded={!compact && !collapsedBlocks.has(block.id)}
+                  aria-label={t(
+                    "Développer ou replier le bloc",
+                    "Expand or collapse block",
+                  )}
+                  onClick={() =>
+                    setCollapsedBlocks((current) => {
+                      const next = new Set(current);
+                      if (next.has(block.id)) next.delete(block.id);
+                      else next.add(block.id);
+                      return next;
                     })
-              }
-            >
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {categoryLabel(c)}
-                </option>
-              ))}
-              <option value="__categories">
-                {t("Gérer les catégories…", "Manage categories…")}
-              </option>
-            </select>
-          </div>
-          {customColumns.map((c) => (
-            <div
-              key={c.id}
-              className={`block-column ${c.visibility === "team" ? "private-column" : ""}`}
-            >
-              {c.id === "facilitator" ? (
-                <AssigneePicker
-                  block={block}
-                  disabled={!editable}
-                  change={(patch) => editBlock(block.id, patch)}
+                  }
+                >
+                  {collapsedBlocks.has(block.id) || compact ? (
+                    <ChevronRight size={14} />
+                  ) : (
+                    <ChevronDown size={14} />
+                  )}
+                </button>
+                <input
+                  className="block-title-input"
+                  ref={(el) => {
+                    if (el) titleInputs.current.set(block.id, el);
+                    else titleInputs.current.delete(block.id);
+                  }}
+                  value={block.title}
+                  aria-label={t("Titre du bloc", "Block title")}
+                  maxLength={240}
+                  readOnly={!editable}
+                  onKeyDown={(e) => titleKey(e, block, index, siblings, listId)}
+                  title={t(
+                    "Entrée : nouveau bloc · Alt + ↑↓ : déplacer · Ctrl/⌘ + D : dupliquer",
+                    "Enter: new block · Alt + ↑↓: move · Ctrl/⌘ + D: duplicate",
+                  )}
+                  onChange={(e) =>
+                    editBlock(block.id, {
+                      title: e.target.value,
+                    })
+                  }
                 />
-              ) : (
+                <button
+                  className="expand-block"
+                  title={t("Détails du bloc", "Block details")}
+                  onClick={() => showDetail(block.id)}
+                >
+                  <ArrowRight size={15} />
+                </button>
+                <button
+                  className="block-comment-button"
+                  title={t("Commenter ce bloc", "Comment on this block")}
+                  onClick={() => {
+                    setCommentTarget({ blockId: block.id });
+                    setPanel("comments");
+                  }}
+                >
+                  <MessageSquare size={14} />
+                  {commentCounts.blocks[block.id] > 0 && (
+                    <small>{commentCounts.blocks[block.id]}</small>
+                  )}
+                </button>
+              </div>
+              {block.kind && block.kind !== "activity" && (
+                <button
+                  className="block-kind"
+                  onClick={() => showDetail(block.id)}
+                >
+                  {block.kind === "group"
+                    ? `${t("Groupe", "Group")} · ${block.children?.length ?? 0} ${t("blocs", "blocks")}`
+                    : block.kind === "parallel"
+                      ? `${t("En parallèle", "Parallel")} · ${block.rooms?.length ?? 0} ${t("salles", "rooms")}`
+                      : t("Note sans durée", "Untimed note")}
+                </button>
+              )}
+              {showDescription &&
+                !compact &&
                 !collapsedBlocks.has(block.id) && (
                   <RichTextEditor
-                    compact={compact}
-                    ariaLabel={`${c.label} · ${block.title}`}
-                    placeholder={
-                      c.visibility === "team"
-                        ? t(
-                            "Visible par l’équipe uniquement…",
-                            "Only visible to your team…",
-                          )
-                        : t("Ajouter du texte…", "Add text…")
-                    }
-                    value={
-                      c.id === "description"
-                        ? block.description
-                        : (block.fields[c.id] ?? "")
-                    }
+                    className="block-description"
+                    ariaLabel={`${t("Description de", "Description of")} ${block.title}`}
+                    placeholder={t(
+                      "Ajouter une description…",
+                      "Add a description…",
+                    )}
+                    value={block.description}
                     maxLength={30000}
                     disabled={!editable}
                     onChange={(value) =>
-                      editBlock(
-                        block.id,
-                        c.id === "description"
-                          ? { description: value }
-                          : {
-                              fields: {
-                                ...block.fields,
-                                [c.id]: value,
-                              },
-                            },
-                      )
+                      editBlock(block.id, {
+                        description: value,
+                      })
                     }
                   />
-                )
-              )}
-            </div>
-          ))}
-          <div className="row-actions">
-            {editable && (
-              <button
-                className="icon-button row-delete"
-                title={`${t("Supprimer", "Delete")} ${block.title}`}
-                aria-label={`${t("Supprimer", "Delete")} ${block.title}`}
-                disabled={containsActive(block)}
-                onClick={() => removeBlock(block.id)}
+                )}
+              <select
+                className={`category-select category-text-${block.category}`}
+                style={{
+                  backgroundColor: `${categoryColor(block.category, session.categories)}28`,
+                  color: "#344d4c",
+                }}
+                value={block.category}
+                disabled={!editable}
+                aria-label={t("Catégorie", "Category")}
+                onChange={(e) =>
+                  e.target.value === "__categories"
+                    ? setPanel("categories")
+                    : editBlock(block.id, {
+                        category: e.target.value as Category,
+                      })
+                }
               >
-                <Trash2 size={16} />
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
+                  </option>
+                ))}
+                <option value="__categories">
+                  {t("Gérer les catégories…", "Manage categories…")}
+                </option>
+              </select>
+            </div>
+            {customColumns.map((c) => (
+              <div
+                key={c.id}
+                className={`block-column ${c.visibility === "team" ? "private-column" : ""}`}
+              >
+                {c.id === "facilitator" ? (
+                  <AssigneePicker
+                    block={block}
+                    disabled={!editable}
+                    change={(patch) => editBlock(block.id, patch)}
+                  />
+                ) : (
+                  !collapsedBlocks.has(block.id) && (
+                    <RichTextEditor
+                      compact={compact}
+                      ariaLabel={`${c.label} · ${block.title}`}
+                      placeholder={
+                        c.visibility === "team"
+                          ? t(
+                              "Visible par l’équipe uniquement…",
+                              "Only visible to your team…",
+                            )
+                          : t("Ajouter du texte…", "Add text…")
+                      }
+                      value={
+                        c.id === "description"
+                          ? block.description
+                          : (block.fields[c.id] ?? "")
+                      }
+                      maxLength={30000}
+                      disabled={!editable}
+                      onChange={(value) =>
+                        editBlock(
+                          block.id,
+                          c.id === "description"
+                            ? { description: value }
+                            : {
+                                fields: {
+                                  ...block.fields,
+                                  [c.id]: value,
+                                },
+                              },
+                        )
+                      }
+                    />
+                  )
+                )}
+              </div>
+            ))}
+            <div className="row-actions">
+              {editable && (
+                <button
+                  className="icon-button row-delete"
+                  title={`${t("Supprimer", "Delete")} ${block.title}`}
+                  aria-label={`${t("Supprimer", "Delete")} ${block.title}`}
+                  disabled={containsActive(block)}
+                  onClick={() => removeBlock(block.id)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+              <button
+                className="icon-button"
+                title={t("Détails et actions", "Details and actions")}
+                onClick={() => showDetail(block.id)}
+              >
+                <MoreHorizontal size={17} />
               </button>
-            )}
-            <button
-              className="icon-button"
-              title={t("Détails et actions", "Details and actions")}
-              onClick={() => showDetail(block.id)}
-            >
-              <MoreHorizontal size={17} />
-            </button>
+            </div>
           </div>
-        </div>
+        )}
         {block.kind === "group" &&
           !collapsedBlocks.has(block.id) &&
           !collapsedSections.has(`${day.id}:${block.section}`) && (
@@ -1130,14 +1447,8 @@ export default function Editor({
           )}
         {block.kind === "parallel" &&
           !collapsedBlocks.has(block.id) &&
-          !compact &&
-          !collapsedSections.has(`${day.id}:${block.section}`) && (
-            <GroupOutline
-              block={block}
-              editable={editable}
-              actions={outlineActions}
-            />
-          )}
+          !collapsedSections.has(`${day.id}:${block.section}`) &&
+          roomsArea(block)}
       </div>
     );
   };

@@ -201,9 +201,15 @@ export function plannedStartCountdownLabel(
     ? `décompte jusqu’à ${when}`
     : `countdown until ${when}`;
 }
-function clock(seconds: number) {
+export function clock(seconds: number) {
   const n = Math.abs(Math.ceil(seconds));
-  return `${seconds < 0 ? "+" : ""}${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  // Past an hour (a long countdown or block), read h:mm:ss, not 577:38.
+  const body =
+    n >= 3600
+      ? `${Math.floor(n / 3600)}:${pad(Math.floor(n / 60) % 60)}:${pad(n % 60)}`
+      : `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
+  return `${seconds < 0 ? "+" : ""}${body}`;
 }
 
 export function TimerContent({

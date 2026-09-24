@@ -1255,20 +1255,15 @@
   position: relative;
 }
 .block-group.container-block {
-  border: 1px solid #cbdad0;
-  border-left: 4px solid var(--green);
-  border-radius: 10px;
-  background: #f2f7f3;
-  padding: 8px 8px 4px;
+  border: 1px solid #b9d3ec;
+  border-radius: 9px;
+  background: #eaf3fb;
+  padding: 0 8px 4px;
   margin-bottom: 12px;
 }
 .block-group.container-parallel {
-  border-left-color: #6d8fb3;
-  background: #f1f5f9;
-}
-.container-block > .agenda-row {
-  min-height: 0;
-  margin-bottom: 8px;
+  border-color: #f1c4a3;
+  background: #fff1e7;
 }
 .container-block > .group-outline,
 .container-block > .parallel-outline {
@@ -1494,13 +1489,166 @@
   }
 }
 /* A group is only a container: its blocks are ordinary agenda rows. */
-.container-group > .agenda-row {
-  min-height: 0;
-  background: #fbfdfb;
-}
-.group-children {
-  padding: 4px 0 0 18px;
+.group-children,
+.room-panel {
+  padding: 4px 0 0;
 }
 .group-children > .group-drop {
   margin: 0 0 8px;
+}
+/* Compact header of a group or parallel activities: time, computed
+   duration and title only. */
+.container-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 10px 6px 8px 22px;
+}
+.container-header .drag-handle {
+  top: 16px;
+}
+.container-header:hover .drag-handle,
+.container-header .drag-handle:focus {
+  opacity: 1;
+}
+.container-meta {
+  grid-column: 1 / 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.container-meta .start-time {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.container-meta .clock-field {
+  font-weight: 600;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  padding: 3px 0;
+  width: 46px;
+}
+.container-meta .lock-toggle {
+  position: static;
+}
+.container-duration {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.container-title-row {
+  grid-column: 1 / 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.container-title {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
+  font-size: 17px;
+  font-weight: 650;
+  padding: 3px 6px;
+  color: #33475b;
+}
+.container-title:hover,
+.container-title:focus {
+  border-color: var(--line);
+  background: #fff;
+}
+.container-header .row-delete {
+  grid-row: 1 / 3;
+  grid-column: 3;
+}
+.container-header:hover .row-delete,
+.container-header:focus-within .row-delete {
+  visibility: visible;
+}
+.container-header.drop-before::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  border-top: 3px solid var(--green);
+  border-radius: 2px;
+}
+.container-header.current-block {
+  outline: 2px solid #81ac79;
+  outline-offset: 2px;
+  border-radius: 7px;
+}
+/* Parallel rooms as tabs. */
+.room-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: 1px solid #f1c4a3;
+  margin: 0 -8px 6px;
+  padding: 0 8px;
+}
+.room-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: #5d4636;
+}
+.room-tabs button small {
+  color: #8d6f5a;
+}
+.room-tabs button.active {
+  background: #ffd9bf;
+  font-weight: 600;
+}
+.room-tabs .room-add {
+  margin-left: auto;
+  color: var(--green);
+  font-weight: 600;
+}
+.room-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.room-toolbar input {
+  max-width: 260px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 8px;
+}
+.container-parallel .parallel-outline {
+  margin: 0 0 6px;
+  background: transparent;
+  padding: 0;
+}
+/* Overlaps are stated plainly, like the SessionLab banner. */
+.schedule-overlap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 9px 14px;
+  border: 1px solid #f2b8b5;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #7a1f1a;
+  font-size: 13px;
+}
+.schedule-overlap svg {
+  flex-shrink: 0;
+  color: #d93a32;
 }

@@ -3606,3 +3606,14 @@ hr {
     color: #666;
   }
 }
+/* Before a scheduled start, the timer is a countdown in its own colour. */
+.timer-bar:has(.timer-content.waiting),
+.floating-window:has(.timer-content.waiting) {
+  background: #2d4f7c;
+}
+.timer-content.waiting .timer-kicker {
+  color: #ffd98a;
+}
+.timer-content.waiting .timer-clock strong {
+  color: #ffe7b3;
+}
