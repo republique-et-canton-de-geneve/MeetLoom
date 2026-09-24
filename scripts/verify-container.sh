@@ -3,9 +3,7 @@
 set -euo pipefail
 image=${1:?Usage: bash scripts/verify-container.sh IMAGE}
 container="meetloom-smoke-$$-$RANDOM"
-# shellcheck disable=SC2329 # invoked by the EXIT trap
-cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
+trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 export BOOTSTRAP_TOKEN
 BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
 docker run --detach --name "$container" --user 1000730000:0 \
