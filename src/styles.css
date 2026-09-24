@@ -2118,47 +2118,39 @@ hr {
 .floating-window .timer-track > span {
   height: 6px;
 }
-/* The always-on-top window scales with its own size and sheds details as it
-   shrinks, down to the clock alone. */
+/* The always-on-top window keeps its full content at its default size
+   (560 x 188) and larger. Shrinking it scales text down and sheds details
+   step by step; the remaining time and the progress bar always stay. */
 .floating-window {
   padding: clamp(6px, 3vmin, 20px);
 }
 .floating-window .timer-clock strong {
-  font-size: clamp(18px, min(16vw, 34vh), 140px);
-  line-height: 1;
+  font-size: clamp(18px, min(12vw, 26vh), 45px);
+  line-height: 1.1;
 }
 .floating-window .timer-current strong {
-  font-size: clamp(12px, min(5.5vw, 11vh), 40px);
+  font-size: clamp(12px, min(4vw, 12vh), 22px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 460px) {
-  .floating-window .timer-content {
-    grid-template-columns: 1fr;
-  }
-  .floating-window .timer-clock {
-    align-items: flex-start;
-  }
+@media (max-height: 150px) {
   .floating-window .timer-position,
   .floating-window .timer-delta {
-    display: none;
-  }
-}
-@media (max-height: 200px) {
-  .floating-window .timer-kicker,
-  .floating-window .timer-position,
-  .floating-window .timer-delta,
-  .floating-window .timer-clock span {
     display: none;
   }
   .floating-window .timer-track {
     margin-top: 6px;
   }
 }
-@media (max-height: 120px), (max-width: 260px) {
-  .floating-window .timer-current,
-  .floating-window .timer-track {
+@media (max-height: 110px) {
+  .floating-window .timer-kicker,
+  .floating-window .timer-clock span {
+    display: none;
+  }
+}
+@media (max-height: 80px) {
+  .floating-window .timer-current {
     display: none;
   }
   .floating-window .timer-content {
@@ -2167,6 +2159,32 @@ hr {
   }
   .floating-window .timer-clock {
     align-items: center;
+  }
+  .floating-window .timer-track {
+    width: 100%;
+    margin-top: 4px;
+  }
+}
+@media (max-width: 380px) {
+  .floating-window .timer-position,
+  .floating-window .timer-delta {
+    display: none;
+  }
+}
+@media (max-width: 260px) {
+  .floating-window .timer-current,
+  .floating-window .timer-clock span {
+    display: none;
+  }
+  .floating-window .timer-content {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .floating-window .timer-clock {
+    align-items: center;
+  }
+  .floating-window .timer-track {
+    width: 100%;
   }
 }
 .modal {

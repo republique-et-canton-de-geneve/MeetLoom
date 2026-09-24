@@ -58,14 +58,21 @@ export default function InsertMenu({
     ],
   ];
   return (
-    <div className={`insert-slot ${open ? "open" : ""}`} ref={root}>
+    <div
+      className={`insert-slot ${open ? "open" : ""}`}
+      ref={root}
+      title={open ? undefined : t("Insérer ici", "Insert here")}
+      // The whole line opens the menu, not only its "+" button.
+      onClick={(event) => {
+        if (!(event.target as Element).closest(".insert-menu"))
+          setOpen((current) => !current);
+      }}
+    >
       <button
         type="button"
         className="insert-slot-button"
         aria-expanded={open}
         aria-label={t("Insérer ici", "Insert here")}
-        title={t("Insérer ici", "Insert here")}
-        onClick={() => setOpen(!open)}
       >
         <Plus size={14} />
       </button>
