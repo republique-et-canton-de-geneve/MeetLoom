@@ -9,7 +9,9 @@ case "$target" in
 esac
 image=${2:-}
 mode=${3:-bundled}
-if [[ ! "$project" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$ ]] || [[ "$mode" != bundled && "$mode" != external ]]; then
+# Optional: pull PostgreSQL through an internal registry (for example a Nexus proxy) instead of quay.io.
+database_image=${MEETLOOM_DATABASE_IMAGE:-quay.io/sclorg/postgresql-16-c9s:latest}
+if [[ ! "$project" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$ ]] || [[ ! "$database_image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$ ]] || [[ "$mode" != bundled && "$mode" != external ]]; then
   printf '%s\n' 'Usage: bash scripts/deploy-openshift.sh development|production|PROJECT IMAGE [bundled|external]' >&2
   exit 1
 fi
@@ -94,7 +96,8 @@ fi
 rendered=$(oc kustomize "$repo_root/k8s/overlays/$overlay")
 [[ "$rendered" == *'docker.io/your-account/meetloom:0.1.0'* ]] || { echo 'Application image marker missing from the manifests.' >&2; exit 1; }
 printf '%s\n' "$rendered" |
-  sed "s|docker\\.io/your-account/meetloom:0\\.1\\.0|$image|g" |
+  sed -e "s|docker\\.io/your-account/meetloom:0\\.1\\.0|$image|g" \
+    -e "s|quay\\.io/sclorg/postgresql-16-c9s:latest|$database_image|g" |
   oc -n "$project" apply -f -
 if [[ "$mode" == bundled ]]; then oc -n "$project" rollout status deployment/meetloom-postgresql --timeout=300s; fi
 oc -n "$project" rollout status deployment/meetloom --timeout=300s

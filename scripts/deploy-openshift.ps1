@@ -5,7 +5,9 @@ param(
     [ValidateSet('development', 'production')][string]$Environment = 'development',
     [ValidatePattern('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')][string]$Project = $env:MEETLOOM_NAMESPACE,
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$')][string]$Image,
-    [switch]$ExternalDatabase
+    [switch]$ExternalDatabase,
+    # Pull PostgreSQL through an internal registry (for example a Nexus proxy) instead of quay.io.
+    [ValidatePattern('^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$')][string]$DatabaseImage = $env:MEETLOOM_DATABASE_IMAGE
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Project) {
@@ -89,7 +91,9 @@ $overlay = if ($ExternalDatabase) { 'k8s/overlays/openshift-external-db' }
     else { "k8s/overlays/$Environment" }
 $rendered = (Invoke-Oc kustomize (Join-Path $repoRoot $overlay)) -join "`n"
 if (-not $rendered.Contains('docker.io/your-account/meetloom:0.1.0')) { throw 'Application image marker missing from the manifests.' }
-$rendered.Replace('docker.io/your-account/meetloom:0.1.0', $Image) | & oc -n $Project apply -f -
+$rendered = $rendered.Replace('docker.io/your-account/meetloom:0.1.0', $Image)
+if ($DatabaseImage) { $rendered = $rendered.Replace('quay.io/sclorg/postgresql-16-c9s:latest', $DatabaseImage) }
+$rendered | & oc -n $Project apply -f -
 if ($LASTEXITCODE -ne 0) { throw 'Manifest application failed.' }
 if (-not $ExternalDatabase) { Invoke-Oc -n $Project rollout status deployment/meetloom-postgresql --timeout=300s }
 Invoke-Oc -n $Project rollout status deployment/meetloom --timeout=300s
