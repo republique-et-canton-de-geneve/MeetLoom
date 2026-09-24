@@ -409,8 +409,8 @@ function AuthScreen({
               />
               <small>
                 {t(
-                  "Fournie par la personne qui a installé MeetLoom.",
-                  "Provided by the person who installed MeetLoom.",
+                  "Demandée une seule fois, pour ce premier compte administrateur : c’est la valeur BOOTSTRAP_TOKEN de la configuration du serveur (sur Render : onglet Environment du service).",
+                  "Asked only once, for this first administrator account: it is the BOOTSTRAP_TOKEN value from the server configuration (on Render: the service’s Environment tab).",
                 )}
               </small>
             </label>
