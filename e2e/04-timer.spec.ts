@@ -47,3 +47,27 @@ test("facilitating: start, move on, come back where the block was, visitors foll
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
 });
+
+test("a finished session shows no countdown, position or schedule estimate", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.getByText("Atelier E2E").first().click();
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  const bar = page.locator(".timer-bar");
+  await expect(bar).toContainText("Accueil");
+  for (const next of ["Idées", "Décision"]) {
+    await page.getByTitle("Bloc suivant").click();
+    await expect(bar).toContainText(next);
+  }
+  await page.getByTitle("Bloc suivant").click();
+  await expect(bar).toContainText("SÉANCE TERMINÉE");
+  await expect(bar).not.toContainText("restantes");
+  await expect(bar).not.toContainText("Fin prévue");
+  await expect(bar).not.toContainText("Dans le temps prévu");
+  await expect(bar).not.toContainText(" / 3");
+  await page.getByTitle("Réinitialiser").click();
+  await expect(
+    page.getByRole("button", { name: /Animer la séance/ }),
+  ).toBeVisible();
+});

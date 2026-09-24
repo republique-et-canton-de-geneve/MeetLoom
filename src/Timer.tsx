@@ -227,10 +227,11 @@ export function TimerContent({
   const view = timerView(session, now);
   const block = view.block,
     remaining = view.remainingSeconds;
-  const progress = view.progress * 100;
+  const finished = session.run.status === "finished";
+  const progress = finished ? 100 : view.progress * 100;
   const delta = view.deltaSeconds;
   const waiting = view.startsInSeconds > 0;
-  const isOver = remaining < 0;
+  const isOver = !finished && remaining < 0;
   const visual = timerVisualState(remaining, (block?.duration ?? 0) * 60);
   return (
     <div
@@ -253,26 +254,28 @@ export function TimerContent({
         </span>
         <strong>{block?.title ?? session.title}</strong>
         <span className="timer-position">
-          {day
-            ? `${Math.max(1, playable.findIndex((b) => b.id === block?.id) + 1)} / ${playable.length} · ${day.title}`
-            : ""}
+          {day && finished
+            ? day.title
+            : day
+              ? `${Math.max(1, playable.findIndex((b) => b.id === block?.id) + 1)} / ${playable.length} · ${day.title}`
+              : ""}
         </span>
       </div>
       <div className="timer-clock">
         <strong>
-          {session.run.status === "finished"
-            ? "✓"
-            : clock(waiting ? view.startsInSeconds : remaining)}
+          {finished ? "✓" : clock(waiting ? view.startsInSeconds : remaining)}
         </strong>
         <span>
-          {waiting
-            ? t(
-                `avant le début · ${clock(remaining)} prévues`,
-                `until start · ${clock(remaining)} planned`,
-              )
-            : isOver
-              ? t("de dépassement", "over time")
-              : t("restantes", "remaining")}
+          {finished
+            ? ""
+            : waiting
+              ? t(
+                  `avant le début · ${clock(remaining)} prévues`,
+                  `until start · ${clock(remaining)} planned`,
+                )
+              : isOver
+                ? t("de dépassement", "over time")
+                : t("restantes", "remaining")}
         </span>
       </div>
       <div className="timer-track">
@@ -282,17 +285,19 @@ export function TimerContent({
         />
       </div>
       <span className="timer-delta">
-        {Math.abs(delta) < 30
-          ? t("Dans le temps prévu", "Right on schedule")
-          : delta > 0
-            ? t(
-                `Fin prévue avec ${Math.ceil(delta / 60)} min de retard`,
-                `Expected to end ${Math.ceil(delta / 60)} min late`,
-              )
-            : t(
-                `Fin prévue avec ${Math.ceil(-delta / 60)} min d’avance`,
-                `Expected to end ${Math.ceil(-delta / 60)} min early`,
-              )}
+        {finished
+          ? ""
+          : Math.abs(delta) < 30
+            ? t("Dans le temps prévu", "Right on schedule")
+            : delta > 0
+              ? t(
+                  `Fin prévue avec ${Math.ceil(delta / 60)} min de retard`,
+                  `Expected to end ${Math.ceil(delta / 60)} min late`,
+                )
+              : t(
+                  `Fin prévue avec ${Math.ceil(-delta / 60)} min d’avance`,
+                  `Expected to end ${Math.ceil(-delta / 60)} min early`,
+                )}
       </span>
     </div>
   );
