@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   Maximize2,
+  PictureInPicture2,
   Printer,
   WifiOff,
 } from "lucide-react";
@@ -24,7 +25,8 @@ import {
   Loading,
   durationLabel,
 } from "./ui";
-import { TimerContent } from "./Timer";
+import { TimerContent, useFloatingWindow } from "./Timer";
+import { createPortal } from "react-dom";
 import { columnValue, exportSessionCsv } from "./export";
 import { download } from "./api";
 import { RichText } from "./RichText";
@@ -147,10 +149,13 @@ export default function PublicAgenda({ token }: { token: string }) {
     };
   }, [token, reload]);
 
+  const { floating, openFloating, floatingNotice } = useFloatingWindow();
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(interval);
-  }, []);
+    // The always-on-top window keeps ticking while this tab is hidden.
+    const owner = floating && !floating.closed ? floating : window;
+    const interval = owner.setInterval(() => setNow(Date.now()), 500);
+    return () => owner.clearInterval(interval);
+  }, [floating]);
 
   const day =
     session?.days.find((candidate) => candidate.id === selectedDay) ??
@@ -275,6 +280,23 @@ export default function PublicAgenda({ token }: { token: string }) {
                 aria-label={t("Déroulement en direct", "Live session progress")}
               >
                 <TimerContent session={session} now={now} />
+                <button
+                  className="public-floating-button"
+                  onClick={() => void openFloating()}
+                  title={t("Fenêtre au premier plan", "Always-on-top window")}
+                  aria-label={t(
+                    "Fenêtre au premier plan",
+                    "Always-on-top window",
+                  )}
+                >
+                  <PictureInPicture2 size={18} />
+                </button>
+                {floatingNotice && <p className="notice">{floatingNotice}</p>}
+                {floating &&
+                  createPortal(
+                    <TimerContent session={session} now={now} compact />,
+                    floating.document.body,
+                  )}
               </section>
             )}
             {navigation.length > 1 && (

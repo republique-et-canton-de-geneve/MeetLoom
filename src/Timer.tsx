@@ -298,79 +298,18 @@ export function TimerContent({
   );
 }
 
-export default function Timer({
-  session,
-  dayId,
-  canRun,
-  action,
-}: {
-  session: Session;
-  dayId: string;
-  canRun: boolean;
-  action: (action: string, input?: Record<string, unknown>) => Promise<void>;
-}) {
-  const { t, locale } = useI18n();
-  const [now, setNow] = useState(Date.now());
-  const [sound, setSound] = useState(false);
-  const [startMode, setStartMode] = useState<"now" | "planned">("now");
+/** The always-on-top progress window (Document Picture-in-Picture, or a
+ * popup where unavailable), shared by facilitators and visitors. */
+export function useFloatingWindow() {
+  const { t } = useI18n();
   const [floating, setFloating] = useState<Window | null>(null);
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
-  const previous = useRef<AudioFrame | null>(null);
-  useEffect(() => {
-    const owner = floating && !floating.closed ? floating : window;
-    const timer = owner.setInterval(() => setNow(Date.now()), 250);
-    return () => owner.clearInterval(timer);
-  }, [floating]);
+  const [floatingNotice, setNotice] = useState("");
   useEffect(
     () => () => {
       floating?.close();
     },
     [floating],
   );
-  const run = session.run;
-  const previousAutomaticBlock =
-    run.autoAdvance && run.lastAutoAdvance
-      ? runnableBlocks(
-          session.days.find((day) => day.id === run.dayId)?.blocks ?? [],
-        ).find((block) => block.id === run.lastAutoAdvance!.blockId)
-      : undefined;
-  const running = run.status !== "idle";
-  const selectedBlocks =
-    session.days.find((day) => day.id === dayId)?.blocks ?? [];
-  const plannedStart = useMemo(() => {
-    try {
-      return plannedStartTimestamp(session, dayId);
-    } catch {
-      return null; /* Invalid local drafts stay editable. */
-    }
-  }, [session.days, session.timezone, dayId]);
-  const plannedUnavailable = runnableBlocks(selectedBlocks).length
-    ? plannedStartUnavailableReason(plannedStart, now, locale)
-    : t("ajoutez d’abord un bloc", "add a block first");
-  const plannedLabel =
-    plannedStart !== null && plannedStart > now
-      ? plannedStartCountdownLabel(plannedStart, now, session.timezone, locale)
-      : null;
-  const canStartPlanned = plannedUnavailable === null;
-  useEffect(() => {
-    const result = timerAudioStep(previous.current, session, Date.now(), sound);
-    previous.current = result.frame;
-    if (result.end) void chime(session.sound, true);
-    else if (result.warning) void chime(session.sound);
-  }, [now, session, sound, run]);
-  const runAction = async (name: string, input?: Record<string, unknown>) => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    try {
-      await action(name, input);
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
-  };
   const openFloating = async () => {
     setNotice("");
     if (floating && !floating.closed) {
@@ -421,6 +360,76 @@ export default function Timer({
           "The floating window is unavailable. Try Chrome or Edge on a desktop.",
         ),
       );
+    }
+  };
+  return { floating, openFloating, floatingNotice };
+}
+
+export default function Timer({
+  session,
+  dayId,
+  canRun,
+  action,
+}: {
+  session: Session;
+  dayId: string;
+  canRun: boolean;
+  action: (action: string, input?: Record<string, unknown>) => Promise<void>;
+}) {
+  const { t, locale } = useI18n();
+  const [now, setNow] = useState(Date.now());
+  const [sound, setSound] = useState(false);
+  const [startMode, setStartMode] = useState<"now" | "planned">("now");
+  const { floating, openFloating, floatingNotice } = useFloatingWindow();
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const previous = useRef<AudioFrame | null>(null);
+  useEffect(() => {
+    const owner = floating && !floating.closed ? floating : window;
+    const timer = owner.setInterval(() => setNow(Date.now()), 250);
+    return () => owner.clearInterval(timer);
+  }, [floating]);
+  const run = session.run;
+  const previousAutomaticBlock =
+    run.autoAdvance && run.lastAutoAdvance
+      ? runnableBlocks(
+          session.days.find((day) => day.id === run.dayId)?.blocks ?? [],
+        ).find((block) => block.id === run.lastAutoAdvance!.blockId)
+      : undefined;
+  const running = run.status !== "idle";
+  const selectedBlocks =
+    session.days.find((day) => day.id === dayId)?.blocks ?? [];
+  const plannedStart = useMemo(() => {
+    try {
+      return plannedStartTimestamp(session, dayId);
+    } catch {
+      return null; /* Invalid local drafts stay editable. */
+    }
+  }, [session.days, session.timezone, dayId]);
+  const plannedUnavailable = runnableBlocks(selectedBlocks).length
+    ? plannedStartUnavailableReason(plannedStart, now, locale)
+    : t("ajoutez d’abord un bloc", "add a block first");
+  const plannedLabel =
+    plannedStart !== null && plannedStart > now
+      ? plannedStartCountdownLabel(plannedStart, now, session.timezone, locale)
+      : null;
+  const canStartPlanned = plannedUnavailable === null;
+  useEffect(() => {
+    const result = timerAudioStep(previous.current, session, Date.now(), sound);
+    previous.current = result.frame;
+    if (result.end) void chime(session.sound, true);
+    else if (result.warning) void chime(session.sound);
+  }, [now, session, sound, run]);
+  const runAction = async (name: string, input?: Record<string, unknown>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await action(name, input);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   };
   if (!running)
@@ -675,7 +684,9 @@ export default function Timer({
           </small>
         </div>
       )}
-      {notice && <p className="notice">{notice}</p>}
+      {(notice || floatingNotice) && (
+        <p className="notice">{notice || floatingNotice}</p>
+      )}
       {floating &&
         createPortal(
           <TimerContent session={session} now={now} compact />,

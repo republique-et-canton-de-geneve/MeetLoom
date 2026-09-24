@@ -66,6 +66,7 @@
   flex-shrink: 0;
 }
 .public-live {
+  position: relative;
   background: #123e31;
   color: white;
   border-radius: 14px;
@@ -73,8 +74,28 @@
   overflow: hidden;
   padding: 20px;
 }
+/* Visitors can also keep the progress above other windows. */
+.public-floating-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  border: 1px solid #ffffff40;
+  border-radius: 7px;
+  background: #ffffff14;
+  color: #fff;
+  padding: 6px;
+}
+.public-floating-button:hover {
+  background: #ffffff2e;
+}
+.public-live .notice {
+  margin: 10px 0 0;
+  color: #fff;
+}
 .public-live .timer-content {
   min-height: 104px;
+  padding-right: 44px;
 }
 .public-days {
   display: flex;

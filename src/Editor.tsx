@@ -778,6 +778,11 @@ export default function Editor({
         </button>
         <input
           className="container-title"
+          ref={(el) => {
+            // Registered like block titles so the minimap can jump here.
+            if (el) titleInputs.current.set(block.id, el);
+            else titleInputs.current.delete(block.id);
+          }}
           value={block.title}
           maxLength={240}
           readOnly={!editable}
