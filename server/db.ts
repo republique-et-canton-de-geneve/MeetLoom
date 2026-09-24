@@ -100,8 +100,11 @@ export async function openDatabase(
         }
       },
       async close() {
-        await releaseStartupLock();
-        await pool.end();
+        try {
+          await releaseStartupLock();
+        } finally {
+          await pool.end();
+        }
       },
     };
   } else {

@@ -471,8 +471,8 @@ export async function registerSharing(
             );
           input.blockId = parent.block_id;
         }
-        // The link row is locked above (session version touch), so the count
-        // cannot be raced past the quota by parallel posts.
+        // The session row is locked above (version touch), so parallel posts
+        // cannot race past the quota.
         const [stored] = await sql.all<{ count: number | string }>(
           "SELECT COUNT(*) AS count FROM visitor_comments WHERE share_id=$1",
           [link.id],

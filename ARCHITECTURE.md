@@ -18,7 +18,8 @@ flowchart LR
 | ---------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Model and domain logic | `shared/`                                                     | Block trees, scheduling, timer, validation, merging, public projection, rich documents, and content |
 | API assembly           | `server/app.ts`                                               | Identity, effective authorization, sessions, and transactional writes with version checks           |
-| Storage                | `server/db.ts`                                                | Shared parameterized SQL, PostgreSQL transactions, and SQLite serialization                         |
+| Storage                | `server/db.ts`                                                | Shared parameterized SQL, PostgreSQL transactions, SQLite serialization, startup schema lock        |
+| Protection             | `security.ts`, `quotas.ts`, `audit.ts`                        | Hashing, rate limits and request budgets, public-link storage quotas, administrator audit trail     |
 | Accounts and services  | `accounts.ts`, `oidc.ts`, `mailer.ts`                         | Profiles, recovery, revocation, organizational sign-in, and optional messages                       |
 | Organization           | `workspaces.ts`, `folders.ts`, `activity.ts`                  | Members and guests, settings, persistent folders, and read markers                                  |
 | Collaboration          | `participants.ts`, `comments.ts`, `presence.ts`, `sharing.ts` | Invitations, mentions, internal/public discussions, and scoped links                                |
