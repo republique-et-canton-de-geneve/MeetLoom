@@ -1,0 +1,15 @@
+# Optional: copy and edit before applying. Credentials belong in the Secret
+# named meetloom-services, never in this ConfigMap. See docs/services-auth-mail.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meetloom-services
+data:
+  OIDC_ISSUER: https://identity.internal.example.org/realms/organisation
+  OIDC_CLIENT_ID: meetloom
+  OIDC_ACCOUNT_POLICY: existing
+  SMTP_HOST: smtp.internal.example.org
+  SMTP_PORT: "587"
+  SMTP_SECURE: "false"
+  SMTP_FROM: meetloom@example.org
+  SMTP_SCHEDULED: "true"

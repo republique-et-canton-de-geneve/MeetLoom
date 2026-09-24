@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.tools/
+.env
+.env.*
+!.env.example
+data/
+*.log
+.DS_Store
+.gstack/
+test-results/
+playwright-report/
+.e2e/

@@ -1,0 +1,191 @@
+name: Release GitHub and Docker Hub
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      push_latest:
+        description: Also publish the optional latest tag (deploy versioned tags)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: meetloom-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    # No OpenShift credentials, commands or network access are required here.
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: meetloom
+          POSTGRES_PASSWORD: ci-only-disposable-database
+          POSTGRES_DB: meetloom_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U meetloom -d meetloom_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Resolve version and Docker Hub repository
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY || secrets.DOCKERHUB_REPOSITORY }}
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'package.json must contain a stable X.Y.Z version.' >&2; exit 1
+          fi
+          if [[ -n "$RELEASE_TAG" && "$RELEASE_TAG" != "v$VERSION" ]]; then
+            # A release candidate (vX.Y.Z-rc.N, published as a pre-release) lets operators
+            # try an image before the version is released, for example from a pull request branch.
+            if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ && "${RELEASE_TAG%-rc.*}" == "v$VERSION" ]]; then
+              if [[ "$PRERELEASE" != true ]]; then
+                echo 'Publish release candidates with "Set as a pre-release" checked.' >&2; exit 1
+              fi
+              VERSION=${RELEASE_TAG#v}
+            else
+              echo 'The GitHub release tag must match the checked-out package.json version (or vX.Y.Z-rc.N).' >&2; exit 1
+            fi
+          fi
+          IMAGE=${DOCKERHUB_REPOSITORY#docker.io/}
+          if [[ ! "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo 'Set the DOCKERHUB_REPOSITORY GitHub variable to account/meetloom.' >&2; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=${RELEASE_TAG:-v$VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Validate Docker Hub credentials are configured
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+            echo 'Configure DOCKERHUB_USERNAME and DOCKERHUB_TOKEN as GitHub Actions secrets.' >&2; exit 1
+          fi
+      - name: Refuse reuse of a published version on manual dispatch
+        id: existing-release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          node --input-type=module <<'JS'
+          const url = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${process.env.RELEASE_TAG}`;
+          const headers = {Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json'};
+          const response = await fetch(url, {headers});
+          if (response.status === 200) {
+            if (Number(process.env.GITHUB_RUN_ATTEMPT) <= 1) throw new Error('This release already exists. Bump the version for new code, or rerun its original failed workflow.');
+            const commit = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.RELEASE_TAG}`, {headers});
+            if (!commit.ok || (await commit.json()).sha !== process.env.GITHUB_SHA) throw new Error('The existing release does not point at this exact commit.');
+            const {appendFileSync} = await import('node:fs');
+            appendFileSync(process.env.GITHUB_OUTPUT, 'exists=true\n');
+            process.exit(0);
+          }
+          if (response.status !== 404) throw new Error(`Could not verify release availability: HTTP ${response.status}`);
+          const tag = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.RELEASE_TAG}`, {headers});
+          if (tag.ok && (await tag.json()).sha !== process.env.GITHUB_SHA) throw new Error('The existing tag points at another commit. Choose a new version.');
+          if (!tag.ok && tag.status !== 404) throw new Error(`Could not verify the existing tag: HTTP ${tag.status}`);
+          JS
+      - run: npm ci
+      - run: npm run check
+      - name: Recheck PostgreSQL for this exact commit
+        env:
+          TEST_DATABASE_URL: postgresql://meetloom:ci-only-disposable-database@127.0.0.1:${{ job.services.postgres.ports[5432] }}/meetloom_test
+        run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Run the nominal end-to-end journeys on this exact commit
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - name: Build this version from the tested commit
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          docker build --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:sha-$GITHUB_SHA" .
+      - name: Verify the release image with an arbitrary UID and read-only root
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: bash scripts/verify-container.sh "$IMAGE:$VERSION"
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Generate the production SBOM and installation archive
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          npm sbom --omit=dev --sbom-format=cyclonedx > "meetloom-$VERSION-sbom.cdx.json"
+          tar -czf "meetloom-$VERSION-openshift.tar.gz" k8s scripts/deploy-openshift.ps1 scripts/deploy-openshift.sh README.md ARCHITECTURE.md docs
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish the tested image to Docker Hub
+        id: image
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PUSH_LATEST: ${{ inputs.push_latest }}
+        run: |
+          docker push "$IMAGE:$VERSION" | tee /tmp/meetloom-push.log
+          DIGEST=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' /tmp/meetloom-push.log | tail -1)
+          test -n "$DIGEST"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
+          if [[ "$PUSH_LATEST" == true ]]; then
+            docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Write release image coordinates
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          node --input-type=module <<'JS'
+          import {writeFileSync} from 'node:fs';
+          const {IMAGE, VERSION, DIGEST, GITHUB_SHA} = process.env;
+          writeFileSync('meetloom-image.json', JSON.stringify({image: `docker.io/${IMAGE}:${VERSION}`, digest: `docker.io/${IMAGE}@${DIGEST}`, commit: GITHUB_SHA, version: VERSION}, null, 2));
+          writeFileSync('meetloom-release-notes.md', `Docker Hub image: \`docker.io/${IMAGE}:${VERSION}\`\n\nDigest: \`docker.io/${IMAGE}@${DIGEST}\`\n\nCommit: \`${GITHUB_SHA}\`\n\nThe attached archives contain the OpenShift guide and SBOM. OpenShift deployment remains an operator action.\n`);
+          JS
+          cat meetloom-release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Create the GitHub release when dispatched manually
+        if: github.event_name == 'workflow_dispatch' && steps.existing-release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "MeetLoom $VERSION" --notes-file meetloom-release-notes.md
+      - name: Attach image coordinates, SBOM and OpenShift manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gh release upload "$RELEASE_TAG" "meetloom-$VERSION-sbom.cdx.json" "meetloom-$VERSION-openshift.tar.gz" meetloom-image.json --repo "$GITHUB_REPOSITORY" --clobber

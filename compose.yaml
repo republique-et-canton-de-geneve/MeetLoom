@@ -1,0 +1,56 @@
+name: meetloom
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: meetloom
+      POSTGRES_DB: meetloom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U meetloom -d meetloom"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+  app:
+    build: .
+    ports:
+      - 127.0.0.1:3000:3000
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: "0"
+      DATABASE_URL: postgresql://meetloom:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@database:5432/meetloom
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?Set a random BOOTSTRAP_TOKEN in .env}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_VISION_MODEL: ${LLM_VISION_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_ACCOUNT_POLICY: ${OIDC_ACCOUNT_POLICY:-existing}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SCHEDULED: ${SMTP_SCHEDULED:-true}
+    depends_on:
+      database:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp
+      - /app/data:uid=10001,gid=0,mode=0770
+    restart: unless-stopped
+volumes:
+  postgres-data:

@@ -1,0 +1,19 @@
+# Opt-in: first check existing namespace policies and test actual connectivity.
+# Kubernetes combines allows; another broad allow may make this ineffective.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: meetloom-database-from-app
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: meetloom-postgresql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: meetloom
+      ports:
+        - protocol: TCP
+          port: 5432

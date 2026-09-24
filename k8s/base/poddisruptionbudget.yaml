@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: meetloom
+spec:
+  # Node drains and cluster maintenance keep at least one application pod.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meetloom

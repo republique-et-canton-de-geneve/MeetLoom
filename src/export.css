@@ -1,0 +1,201 @@
+.export-panel {
+  display: grid;
+  gap: 1rem;
+}
+.export-panel label:not(.checkbox-row) {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+.export-panel input:not([type="checkbox"]),
+.export-panel select {
+  border: 1px solid var(--border, #d8e0db);
+  border-radius: 8px;
+  padding: 0.6rem;
+  font: inherit;
+  min-width: 0;
+}
+.export-panel fieldset {
+  border: 1px solid var(--border, #d8e0db);
+  border-radius: 9px;
+  padding: 0.8rem;
+}
+.export-panel .export-choices {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.export-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+.export-preview {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--border, #d8e0db);
+  border-radius: 9px;
+  background: #e7ebe9;
+  padding: 1rem;
+}
+.print-preview-document {
+  display: block !important;
+  background: white;
+  color: #172832;
+  padding: 25px;
+  max-width: 850px;
+  margin: auto;
+  box-shadow: 0 2px 12px #182d2212;
+}
+.print-preview-document header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7em;
+}
+.print-preview-document .print-block {
+  margin: 1rem 0;
+}
+.print-preview-document .print-block-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+.print-preview-document .print-field {
+  margin: 0.6rem 0;
+}
+.print-preview-document h4 {
+  margin: 0.3rem 0;
+}
+.print-layout-compact .print-block {
+  margin: 0.3rem 0 !important;
+}
+.print-layout-compact .print-field {
+  margin: 0.2rem 0 !important;
+}
+.print-layout-compact p {
+  margin: 0.15rem 0;
+}
+.print-layout-table .print-block {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(100px, 1fr));
+  gap: 0.6rem;
+  border-bottom: 1px solid #d7ded9;
+  padding-bottom: 0.6rem;
+}
+.print-layout-table .print-block-heading {
+  display: block;
+}
+.slide-outline {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 340px;
+  overflow: auto;
+}
+.slide-outline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border, #d8e0db);
+  border-radius: 6px;
+}
+.slide-outline-row input[type="text"] {
+  flex: 1;
+  width: 0;
+}
+.slide-outline-row small {
+  min-width: 50px;
+}
+.export-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.export-presets input,
+.export-presets select {
+  flex: 1;
+}
+.print-agenda .print-day {
+  break-before: auto;
+}
+.print-day-break .print-day + .print-day {
+  break-before: page;
+}
+@media print {
+  .print-agenda {
+    font-size: inherit;
+  }
+  .print-agenda .print-block {
+    break-inside: avoid;
+  }
+  .print-layout-table .print-field {
+    font-size: 0.9em;
+  }
+}
+@media (max-width: 600px) {
+  .print-layout-table .print-block {
+    display: block;
+  }
+  .export-preview {
+    padding: 0.3rem;
+  }
+  .slide-outline-row small {
+    display: none;
+  }
+}
+.print-layout-multiday .print-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.print-layout-multiday .print-day {
+  break-before: auto !important;
+  margin-top: 0;
+}
+.print-layout-multiday .print-block-heading {
+  display: block;
+}
+.print-layout-details .print-block-heading > span {
+  display: none;
+}
+.print-category-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em 1em;
+  margin: 1em 0;
+  font-size: 0.85em;
+}
+.print-category-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.print-category-legend i {
+  width: 0.7em;
+  height: 0.7em;
+  display: inline-block;
+  border-radius: 50%;
+  print-color-adjust: exact;
+}
+.print-explicit-break {
+  break-before: page;
+}
+.print-preview-document .print-explicit-break {
+  border-top: 2px dashed #98a0ad;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+.print-preview-document.print-day-break .print-day + .print-day {
+  border-top: 2px dashed #98a0ad;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+.print-layout-overview .print-block,
+.print-layout-multiday .print-block {
+  margin: 0.45rem 0;
+}
+.print-layout-overview .print-block-heading h4,
+.print-layout-multiday .print-block-heading h4 {
+  font-size: 1em;
+}

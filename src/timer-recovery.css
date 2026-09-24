@@ -1,0 +1,20 @@
+.timer-recovery {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: #eff6f2;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.timer-recovery > span {
+  flex: 1 1 230px;
+}
+.timer-recovery strong {
+  font-weight: 650;
+}
+.timer-recovery small {
+  width: 100%;
+  color: var(--muted);
+}

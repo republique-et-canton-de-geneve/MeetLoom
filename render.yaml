@@ -1,0 +1,27 @@
+# Free, disposable demonstration. See docs/render.md before storing any data.
+services:
+  - type: web
+    name: meetloom-demo
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # The server uses Render's RENDER_EXTERNAL_URL as APP_ORIGIN unless APP_ORIGIN is set.
+    healthCheckPath: /api/ready
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: SQLITE_PATH
+        value: /tmp/meetloom.sqlite
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: BOOTSTRAP_TOKEN
+        generateValue: true

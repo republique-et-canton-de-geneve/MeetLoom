@@ -1,0 +1,221 @@
+.ai-workbench {
+  padding: 0 2px 20px;
+}
+.ai-tabs {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dce5d7;
+  margin-bottom: 16px;
+}
+.ai-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 7px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #71806a;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ai-tabs button.active {
+  color: #36592b;
+  border-color: #466e3a;
+}
+.ai-conversation-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.ai-conversation-picker select {
+  flex: 1;
+  min-width: 0;
+}
+.ai-context {
+  border: 1px solid #dce5d5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  background: #fafbf6;
+}
+.ai-context summary {
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ai-context label:first-of-type {
+  margin-top: 12px;
+}
+.ai-context small {
+  display: block;
+  line-height: 1.6;
+  color: #738168;
+}
+.ai-context-list {
+  max-height: 160px;
+  overflow: auto;
+  padding: 5px 0 10px;
+}
+.ai-context-list label {
+  font-size: 12px;
+  margin: 7px 0;
+}
+.ai-message {
+  border: 1px solid #e2e7dc;
+  border-radius: 9px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.ai-message-user {
+  background: #f4f6ef;
+  margin-left: 22px;
+}
+.ai-message-assistant {
+  background: #fff;
+}
+.ai-message-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: #7c8b71;
+}
+.ai-message > p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ai-change-set {
+  border-top: 1px solid #e5eadd;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.ai-change-set > .button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.ai-operation {
+  padding: 10px 0;
+  border-bottom: 1px dashed #dce4d2;
+  font-size: 12px;
+}
+.ai-operation h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.ai-operation p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-operation-delete {
+  color: #a64739;
+}
+.ai-diff-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  margin: 8px 0;
+}
+.ai-diff-row del,
+.ai-diff-row ins {
+  display: block;
+  text-decoration: none;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.ai-diff-row del {
+  background: #fbede8;
+  color: #96564c;
+}
+.ai-diff-row ins {
+  background: #edf5e7;
+  color: #496b36;
+}
+.ai-new-block {
+  padding: 7px;
+  background: #f5f8f0;
+  border-radius: 5px;
+  margin-top: 7px;
+}
+.ai-new-block p {
+  margin: 5px 0 0;
+}
+.ai-decision {
+  display: block;
+  color: #637e4f;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.ai-quick-actions {
+  margin: 20px 0 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e7d6;
+}
+.ai-quick-actions > select {
+  width: 100%;
+  font-size: 12px;
+}
+.ai-quick-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.ai-quick-buttons button {
+  border: 1px solid #d8e3ce;
+  border-radius: 15px;
+  background: #fafcf7;
+  color: #668153;
+  padding: 5px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ai-prompt-form textarea {
+  font-size: 13px;
+}
+.ai-instruction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8da;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+.mcp-panel form {
+  display: grid;
+  gap: 1rem;
+}
+.mcp-panel fieldset {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border, #d8e0db);
+  border-radius: 8px;
+}
+.mcp-endpoint {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 0.6rem;
+  background: #edf4f0;
+  margin: 0.65rem 0;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.mcp-panel .check-row {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 400 !important;
+}
+.mcp-panel .check-row input {
+  width: auto !important;
+}

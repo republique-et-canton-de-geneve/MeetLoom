@@ -1,0 +1,70 @@
+{
+  "name": "meetloom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "dev:client": "vite --host 127.0.0.1",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "format": "prettier --write src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
+    "format:check": "prettier --check src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@tiptap/extension-highlight": "^3.31.3",
+    "@tiptap/extension-list": "^3.31.3",
+    "@tiptap/extension-text-style": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "@tiptap/static-renderer": "^3.31.3",
+    "csv-parse": "^7.0.2",
+    "docx": "^9.7.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.1.0",
+    "jszip": "^3.10.2",
+    "lucide-react": "^0.468.0",
+    "mammoth": "^1.12.3",
+    "nodemailer": "^10.0.10",
+    "openid-client": "^6.8.8",
+    "pdfjs-dist": "^6.3.289",
+    "pg": "^8.16.3",
+    "pptxgenjs": "^4.0.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "read-excel-file": "^9.3.10",
+    "saxes": "^6.0.0",
+    "zod": "^4.1.5"
+  },
+  "overrides": {
+    "pptxgenjs": {
+      "image-size": "^2.0.4"
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.15.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "prettier": "^3.9.9",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}

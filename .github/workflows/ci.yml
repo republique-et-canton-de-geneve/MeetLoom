@@ -1,0 +1,151 @@
+name: CI
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    name: Typecheck, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run format:check
+      - name: Check infrastructure formatting
+        run: npm exec prettier -- --check .github k8s render.yaml compose.yaml docs/deployment.md docs/operations.md docs/render.md
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-build
+          path: dist/
+          retention-days: 7
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Block high and critical production vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+      - name: Report all vulnerabilities
+        if: always()
+        run: npm audit --json > npm-audit.json
+        continue-on-error: true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: dependency-audit
+          path: npm-audit.json
+          retention-days: 14
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: meetloom
+          POSTGRES_PASSWORD: ci-only-disposable-database
+          POSTGRES_DB: meetloom_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U meetloom -d meetloom_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Run the API contracts against PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql://meetloom:ci-only-disposable-database@127.0.0.1:${{ job.services.postgres.ports[5432] }}/meetloom_test
+        run: npm test
+  manifests:
+    name: Deployment manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Render both deployment modes
+        run: |
+          kubectl kustomize k8s/overlays/development > /tmp/meetloom-dev.yaml
+          kubectl kustomize k8s/overlays/production > /tmp/meetloom-prod.yaml
+          kubectl kustomize k8s/overlays/openshift > /tmp/meetloom-bundled.yaml
+          kubectl kustomize k8s/overlays/openshift-external-db > /tmp/meetloom-external.yaml
+          bash -n scripts/deploy-openshift.sh
+          bash -n scripts/verify-container.sh
+      - name: Parse the PowerShell installer
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/deploy-openshift.ps1'), [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count) { $parseErrors | ForEach-Object { Write-Error $_ }; exit 1 }
+      - name: Validate the local PostgreSQL Compose profile
+        env:
+          POSTGRES_PASSWORD: ci-only-validation-value
+          BOOTSTRAP_TOKEN: ci-only-validation-value
+        run: docker compose config --quiet
+  e2e:
+    name: End-to-end journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Install the Chromium matching @playwright/test
+        run: npx playwright install --with-deps chromium
+      - name: Build and run the nominal journeys
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+  success:
+    name: CI Success
+    if: always()
+    needs: [check, audit, postgres, manifests, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs=JSON.parse(process.env.RESULTS);if(Object.values(jobs).some(job=>job.result!=="success"))process.exit(1)'

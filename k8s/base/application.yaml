@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meetloom
+  labels:
+    app.kubernetes.io/name: meetloom
+spec:
+  # Two pods and a rolling update: a new version replaces them one at a time,
+  # so the application stays available during updates. Shared state (sessions,
+  # timers, presence, mail leases) lives in PostgreSQL.
+  replicas: 2
+  minReadySeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meetloom
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meetloom
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      # Prefer different nodes, so one node going down leaves a pod running.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: meetloom
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # The installer replaces this placeholder with its required -Image argument.
+          image: docker.io/your-account/meetloom:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: HOST
+              value: 0.0.0.0
+            - name: SQLITE_PATH
+              value: /app/data/meetloom.sqlite
+            - name: COOKIE_SECURE
+              value: "true"
+            - name: TRUST_PROXY
+              value: "1"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: meetloom-database
+                  key: DATABASE_URL
+          envFrom:
+            - configMapRef:
+                name: meetloom-settings
+            - configMapRef:
+                name: meetloom-services
+                optional: true
+            - secretRef:
+                name: meetloom-auth
+            - secretRef:
+                name: meetloom-ai
+                optional: true
+            - secretRef:
+                name: meetloom-services
+                optional: true
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          lifecycle:
+            # Let the router stop sending requests before the server closes.
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          resources:
+            requests:
+              # Minimal CPU request, as on shared OpenShift projects whose quota allows
+              # only a few millicores of requests; no CPU limit, so the pod can burst.
+              cpu: 1m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: data
+          # PostgreSQL is mandatory in this overlay; this is not data persistence.
+          emptyDir:
+            sizeLimit: 64Mi

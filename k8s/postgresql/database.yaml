@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meetloom-postgresql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meetloom-postgresql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meetloom-postgresql
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: database
+          # Mirror and pin a digest in your own overlay for controlled releases.
+          image: quay.io/sclorg/postgresql-16-c9s:latest
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: meetloom-database
+                  key: POSTGRESQL_USER
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: meetloom-database
+                  key: POSTGRESQL_PASSWORD
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: meetloom-database
+                  key: POSTGRESQL_DATABASE
+          startupProbe:
+            exec:
+              command: [/bin/sh, -c, "pg_isready -h 127.0.0.1 -p 5432"]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [/bin/sh, -c, "pg_isready -h 127.0.0.1 -p 5432"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: [/bin/sh, -c, "pg_isready -h 127.0.0.1 -p 5432"]
+            periodSeconds: 30
+          resources:
+            requests:
+              # Same minimal CPU request as the application; no CPU limit.
+              cpu: 1m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: meetloom-postgresql
