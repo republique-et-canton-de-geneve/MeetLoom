@@ -39,8 +39,10 @@ test("API and application pages carry a self-only CSP and hardened headers", asy
     );
     assert.equal(response.headers.get("x-powered-by"), null);
   }
-  assert.equal(
-    (await fetch(`${h.base}/api/health`)).headers.get("cache-control"),
-    "no-store",
-  );
+  const before = Date.now();
+  const health = await fetch(`${h.base}/api/health`);
+  assert.equal(health.headers.get("cache-control"), "no-store");
+  // Browsers align their timers on this clock.
+  const serverTime = Number(health.headers.get("x-server-time"));
+  assert.ok(serverTime >= before && serverTime <= Date.now());
 });

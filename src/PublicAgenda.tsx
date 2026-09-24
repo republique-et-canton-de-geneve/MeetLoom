@@ -28,6 +28,7 @@ import {
 import { TimerContent, useFloatingWindow } from "./Timer";
 import { createPortal } from "react-dom";
 import { columnValue, exportSessionCsv } from "./export";
+import { recordServerTime, serverNow } from "./clock";
 import { download } from "./api";
 import { RichText } from "./RichText";
 import PublicDiscussion from "./PublicDiscussion";
@@ -56,7 +57,7 @@ export default function PublicAgenda({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<LoadError>(null);
   const [reload, setReload] = useState(0);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow);
   const retry = useCallback(() => setReload((value) => value + 1), []);
 
   useEffect(() => {
@@ -72,6 +73,7 @@ export default function PublicAgenda({ token }: { token: string }) {
     let firstLoad = true;
     const refresh = async () => {
       try {
+        const sentAt = Date.now();
         const response = await fetch(
           `/api/public/${encodeURIComponent(token)}`,
           {
@@ -82,6 +84,7 @@ export default function PublicAgenda({ token }: { token: string }) {
           },
         );
         if (!active) return;
+        recordServerTime(response, sentAt);
         if ([401, 403, 404, 410].includes(response.status)) {
           // A revoked or expired link must clear already-rendered content too.
           setSession(null);
@@ -153,7 +156,7 @@ export default function PublicAgenda({ token }: { token: string }) {
   useEffect(() => {
     // The always-on-top window keeps ticking while this tab is hidden.
     const owner = floating && !floating.closed ? floating : window;
-    const interval = owner.setInterval(() => setNow(Date.now()), 500);
+    const interval = owner.setInterval(() => setNow(serverNow()), 500);
     return () => owner.clearInterval(interval);
   }, [floating]);
 

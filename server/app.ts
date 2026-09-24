@@ -243,6 +243,8 @@ async function assembleWith(db: Database, config: AppConfig) {
   );
   app.use("/api", (_request, response, next) => {
     response.setHeader("Cache-Control", "no-store");
+    // Timers run on the server clock: browsers use this to correct their own.
+    response.setHeader("X-Server-Time", String(Date.now()));
     next();
   });
   app.get("/api/health", (_request, response) =>

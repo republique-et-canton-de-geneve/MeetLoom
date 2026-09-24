@@ -26,6 +26,7 @@ import {
 } from "../shared/domain";
 import { useI18n } from "./i18n";
 import { TIMER_COLORS, timerVisualState } from "../shared/timer-visual";
+import { serverNow } from "./clock";
 
 let audioContext: AudioContext | null = null;
 async function enableAudio() {
@@ -382,7 +383,7 @@ export default function Timer({
   action: (action: string, input?: Record<string, unknown>) => Promise<void>;
 }) {
   const { t, locale } = useI18n();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow);
   const [sound, setSound] = useState(false);
   const [startMode, setStartMode] = useState<"now" | "planned">("now");
   const { floating, openFloating, floatingNotice } = useFloatingWindow();
@@ -391,7 +392,7 @@ export default function Timer({
   const previous = useRef<AudioFrame | null>(null);
   useEffect(() => {
     const owner = floating && !floating.closed ? floating : window;
-    const timer = owner.setInterval(() => setNow(Date.now()), 250);
+    const timer = owner.setInterval(() => setNow(serverNow()), 250);
     return () => owner.clearInterval(timer);
   }, [floating]);
   const run = session.run;
@@ -420,7 +421,12 @@ export default function Timer({
       : null;
   const canStartPlanned = plannedUnavailable === null;
   useEffect(() => {
-    const result = timerAudioStep(previous.current, session, Date.now(), sound);
+    const result = timerAudioStep(
+      previous.current,
+      session,
+      serverNow(),
+      sound,
+    );
     previous.current = result.frame;
     if (result.end) void chime(session.sound, true);
     else if (result.warning) void chime(session.sound);
