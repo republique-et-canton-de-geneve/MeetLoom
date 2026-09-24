@@ -110,6 +110,37 @@ $encoded = oc -n meetloom-dev get secret meetloom-auth -o 'jsonpath={.data.BOOTS
 
 For production, replace the namespace with `meetloom-prod`. Keep this token in your secrets manager; it does not reset an existing account. The application asks for the first account's name, email address, and password, without a preinstalled demo account.
 
+Without the CLI, the OpenShift console shows it under **Workloads → Secrets → `meetloom-auth` → Reveal values**. Open the URL printed by the installer, enter the token in **Installation key** with your name, email address and password: that first account is the administrator. The key is never asked again; other people use normal sign-up.
+
+### If the installation waits or fails
+
+The installer waits up to five minutes for each Deployment, then stops with an error. It is idempotent: fix the cause and run the same command again. To see why a rollout waits, in another terminal:
+
+```powershell
+oc -n meetloom-dev get pods
+oc -n meetloom-dev get pvc
+oc -n meetloom-dev describe pod -l app.kubernetes.io/name=meetloom-postgresql
+oc -n meetloom-dev get events --sort-by=.lastTimestamp
+```
+
+| Symptom                                                              | Cause and fix                                                                                                                                                                            |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pod `ErrImagePull` / `ImagePullBackOff`                              | The cluster cannot reach the registry. Rerun with the mirrored names: `-Image <mirror-host>/…` and, for PostgreSQL, `-DatabaseImage <mirror-host>/sclorg/postgresql-16-c9s:latest`.      |
+| Pod `Pending`, PVC `Pending`                                         | No default storage class or quota. Ask for a storage class, or add `storageClassName` to the PVC in your overlay, delete the empty PVC (`oc delete pvc meetloom-postgresql`), and rerun. |
+| Pod `CrashLoopBackOff`                                               | Read `oc logs deployment/meetloom` (or `meetloom-postgresql`). A missing or wrong `APP_ORIGIN` or database secret is reported explicitly.                                                |
+| Pod created but events mention `SecurityContextConstraints` or quota | Your project's policy rejects the pod. The manifests run without root and without fixed UID; send the event text to your cluster administrators.                                         |
+
+### Try a release candidate before merging
+
+With a release candidate published from the pull request branch (see [Publish a version](#2-publish-a-version)), install it like any version, for example `-Image <mirror-host>/your-account/meetloom:0.1.0-rc.1`. After a fix, publish `v0.1.0-rc.2` the same way and switch the running image:
+
+```powershell
+oc -n meetloom-dev set image deployment/meetloom app=<mirror-host>/your-account/meetloom:0.1.0-rc.2
+oc -n meetloom-dev rollout status deployment/meetloom
+```
+
+Once validated, merge the pull request and publish the final `v0.1.0` from `main`.
+
 ## 4. Update after a new release
 
 After `0.1.1` has been published successfully, change **only the `app` container image in the `meetloom` Deployment** through the OpenShift console. CLI alternative, starting with development:
