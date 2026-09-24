@@ -144,23 +144,35 @@ Once validated, merge the pull request and publish the final `v0.1.0` from `main
 
 ## 4. Update after a new release
 
-After `0.1.1` has been published successfully, change **only the `app` container image in the `meetloom` Deployment** through the OpenShift console. CLI alternative, starting with development:
+**The simplest and always safe way: rerun the installer with the new image.** It is the same command as the first installation, only the image tag changes:
+
+```powershell
+pwsh ./scripts/deploy-openshift.ps1 -Environment development -Project meetloom-dev -Image docker.io/your-account/meetloom:0.1.1
+```
+
+Run it from the files of that version (`git pull` on its tag, or the `meetloom-<version>-openshift.tar.gz` archive attached to its release), so that manifest changes of the release are applied too. Rerunning the installer **never touches your data or settings**:
+
+| Resource                                                    | What the installer does when it already exists                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| PostgreSQL volume (PVC `meetloom-postgresql`)               | Kept as is: the data stays.                                                       |
+| Secrets `meetloom-database`, `meetloom-auth`, `meetloom-ai` | Kept: passwords and the installation key are never regenerated.                   |
+| ConfigMap `meetloom-settings`, optional `meetloom-services` | Kept: your URL, LLM, OIDC and SMTP settings stay.                                 |
+| Deployments, Services, Route, PodDisruptionBudget           | Updated to the manifests of the version you run it from, with the image you pass. |
+
+The installer refuses to continue if the volume exists but its database secret is missing, rather than generating a new password. Keep environment-specific settings in the ConfigMaps and Secrets above, not by editing the Deployments in the console: those edits are replaced when the manifests are applied again.
+
+**Without interruption.** The application runs **two pods** with a rolling update: OpenShift starts a pod of the new version, waits until `/api/ready` answers, then stops an old one, and repeats. Users keep working during the update; a request in flight on a stopping pod is allowed a few seconds to finish. PostgreSQL stays a **single pod** (with `Recreate`, as a database with one volume must): an application update does not restart it. Only a release that changes the PostgreSQL manifest restarts the database, with a short interruption; its release notes say so.
+
+**Image only (quicker).** When a release does not change the manifests, you can also change the image alone, in the console (**Deployment `meetloom` → Actions → Edit** the `app` container image) or with:
 
 ```bash
 oc -n meetloom-dev set image deployment/meetloom app=docker.io/your-account/meetloom:0.1.1
 oc -n meetloom-dev rollout status deployment/meetloom
 ```
 
-After validation, promote that exact image to production:
+After validation, promote that exact image to production the same way (`-Project meetloom-prod`, or `oc -n meetloom-prod set image …`).
 
-```bash
-oc -n meetloom-prod set image deployment/meetloom app=docker.io/your-account/meetloom:0.1.1
-oc -n meetloom-prod rollout status deployment/meetloom
-```
-
-An image update changes neither secrets, the PVC, nor the ConfigMap. A simple application update does not require restarting PostgreSQL. V1 uses one pod and the `Recreate` strategy, so allow for a short interruption. If a release changes manifests, read its notes and rerun its installer with the new image.
-
-A later raw `oc apply -k` would restore the image declared in the manifests. Use the installer with `-Image` or keep the chosen version in your operational overlay. The base value `docker.io/your-account/meetloom:0.1.0` is a placeholder, not a published image.
+A later raw `oc apply -k` would restore the placeholder image declared in the manifests. Use the installer with `-Image`, or keep the chosen version in your own overlay. The base value `docker.io/your-account/meetloom:0.1.0` is a placeholder, not a published image.
 
 ## 5. Roll back
 

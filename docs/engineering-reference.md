@@ -68,7 +68,7 @@ RetroGemini's guide requires several commands. MeetLoom provides an **idempotent
 5. waits for the database and application deployments;
 6. checks `/api/ready` and prints the URL and a private bootstrap-token retrieval command.
 
-The installer accepts existing external PostgreSQL. A bundled single-replica database is a simple installation, not a high-availability promise; backups and restoration are documented separately. Secrets and environment-specific configuration must survive updates. Rerunning the installer neither regenerates credentials nor resets data. MeetLoom currently uses one application pod with `Recreate`, so updates cause a short interruption.
+The installer accepts existing external PostgreSQL. A bundled single-replica database is a simple installation, not a high-availability promise; backups and restoration are documented separately. Secrets and environment-specific configuration must survive updates. Rerunning the installer neither regenerates credentials nor resets data. The application runs two pods with a rolling update (`maxUnavailable: 0`), a `preStop` pause and a PodDisruptionBudget, so updates cause no interruption; the bundled PostgreSQL stays one pod with `Recreate`. Pods starting together serialize schema creation with a PostgreSQL advisory lock. Schema changes must stay additive (old and new pods run side by side during an update).
 
 A new application image can start directly as an unprivileged user, with group permissions compatible with an arbitrary UID and explicit mounts for writable paths. This avoids copying RetroGemini's Docker entrypoint, which starts as root to repair `/data` permissions before dropping privileges. On OpenShift, that entrypoint also supports being launched directly under an arbitrary UID.
 

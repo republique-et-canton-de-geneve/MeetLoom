@@ -8,4 +8,4 @@ The client attempts at most two automatic rebases after a version conflict withi
 
 Presence comes from a signal sent every ten seconds by visible windows. A signal expires after thirty seconds; closing, navigating away, or moving to the background also requests its removal. Multiple windows belonging to one person are grouped. A connection error hides presence instead of implying activity. The server checks permissions on every call, then checks current membership before displaying names; member removal takes effect immediately. Email addresses and field contents are never sent through this API.
 
-Presence is temporary, held in memory, and limited to twenty windows per user and five thousand windows overall. This matches the currently planned single-replica deployment. A deployment with multiple replicas must share this state, for example through Redis, before claiming to reflect every collaborator's presence.
+Presence is temporary: heartbeats are kept in the database for 30 seconds, so every application pod shows the same collaborators, and are limited to twenty windows per user and five thousand windows overall. No activity history is kept.

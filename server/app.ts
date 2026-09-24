@@ -192,6 +192,16 @@ export async function createApp(config: AppConfig = {}) {
 
 async function assembleApp(config: AppConfig) {
   const db = config.database ?? (await openDatabase(config));
+  try {
+    return await assembleWith(db, config);
+  } catch (error) {
+    // Only close a database this function opened.
+    if (!config.database) await db.close();
+    throw error;
+  }
+}
+
+async function assembleWith(db: Database, config: AppConfig) {
   await initializeLifecycle(db);
   const app = express();
   const cookieOptions = {
@@ -1326,6 +1336,8 @@ async function assembleApp(config: AppConfig) {
       });
     },
   );
+  // Every module has created its tables: let other starting pods proceed.
+  await db.releaseStartupLock?.();
   return {
     app,
     db,

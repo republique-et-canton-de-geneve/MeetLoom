@@ -47,7 +47,7 @@ For local SQLite, stop the application before copying `meetloom.sqlite` and any 
 3. Change only the `app` container image in the `meetloom` Deployment, through the console or `oc set image`. Secrets, configuration, and the PVC are preserved. If the release changes manifests, rerun its installer with the new image.
 4. Check readiness, then sign-in, agenda opening, a visitor link, and the timer in a browser.
 
-If the version is incompatible, restore the previous image with `oc set image` or the console. An older image may not be able to read a migrated schema: data rollback then requires the backup and corresponding migration procedure. V1 uses `Recreate`; announce a short interruption to organizers before updating.
+If the version is incompatible, restore the previous image with `oc set image` or the console. An older image may not be able to read a migrated schema: data rollback then requires the backup and corresponding migration procedure. The application updates pod by pod without interruption; only a change to the PostgreSQL manifest restarts the database briefly (release notes say so).
 
 Editing the PostgreSQL password Secret is not a complete rotation. Change the password in PostgreSQL and then in `DATABASE_URL` as a coordinated operation. Secrets/ConfigMaps are injected as environment variables, so applying their changes is insufficient: restart affected pods. The installer never performs an implicit rotation.
 
@@ -80,7 +80,7 @@ Additional endpoint limits apply to recovery, AI, forms, and MCP. Exceeding a bu
 
 Set `TRUST_PROXY` to the actual trusted proxy hop count: the default is `0`, while the supplied OpenShift manifests use `1`. The trusted edge must replace client-supplied forwarding headers, and clients must not bypass that proxy path. An incorrect count or spoofable `X-Forwarded-For` can undermine IP-based limits.
 
-Restarting the application resets counters. These limits therefore assume one application process/pod; horizontal scaling requires a shared rate-limit store and verification of the proxy chain before adding replicas.
+Restarting the application resets counters. Counters are kept per pod: with the two application pods of the OpenShift manifests, a client spread across both can reach at most twice each limit (the router usually keeps a browser on one pod). A shared rate-limit store would be needed for exact limits across many replicas.
 
 ## Retention, closure, and optional services
 

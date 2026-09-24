@@ -5,10 +5,16 @@ metadata:
   labels:
     app.kubernetes.io/name: meetloom
 spec:
-  replicas: 1
-  # One application replica until concurrent multi-pod behavior is validated.
+  # Two pods and a rolling update: a new version replaces them one at a time,
+  # so the application stays available during updates. Shared state (sessions,
+  # timers, presence, mail leases) lives in PostgreSQL.
+  replicas: 2
+  minReadySeconds: 5
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: meetloom
@@ -19,6 +25,16 @@ spec:
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
+      # Prefer different nodes, so one node going down leaves a pod running.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: meetloom
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -86,6 +102,11 @@ spec:
               port: http
             periodSeconds: 5
             timeoutSeconds: 3
+          lifecycle:
+            # Let the router stop sending requests before the server closes.
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           resources:
             requests:
               # Minimal CPU request, as on shared OpenShift projects whose quota allows

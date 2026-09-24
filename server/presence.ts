@@ -1,6 +1,6 @@
 import { Router, type RequestHandler } from "express";
 import { z } from "zod";
-import type { Database } from "./db.js";
+import type { Database, Sql } from "./db.js";
 import type { Role, Session, User } from "../shared/model.js";
 import type {
   PresentParticipant,
@@ -17,58 +17,91 @@ type Heartbeat = {
   clientId: string;
   blockId: string | null;
   editing: boolean;
-  lastSeen: number;
 };
-/** Ephemeral state for the supported single application replica. No activity
- * history is persisted. Membership is checked again on every response. */
+type Row = {
+  user_id: string;
+  client_id: string;
+  block_id: string | null;
+  editing: number | boolean;
+  last_seen: number | string;
+};
+/** Ephemeral heartbeats, kept in the database (table created with the core
+ * schema) so that every application pod sees the same collaborators. Rows
+ * expire after the TTL; no activity history is kept. Membership is checked
+ * again on every response. */
 export class PresenceStore {
-  private entries = new Map<string, Heartbeat>();
   constructor(
+    private db: Sql,
     readonly ttlMs = 30_000,
     private now = Date.now,
     private limit = 5000,
   ) {}
-  private prune() {
-    const cutoff = this.now() - this.ttlMs;
-    for (const [key, entry] of this.entries)
-      if (entry.lastSeen <= cutoff) this.entries.delete(key);
+  private async prune() {
+    await this.db.run("DELETE FROM presence_heartbeats WHERE last_seen <= $1", [
+      this.now() - this.ttlMs,
+    ]);
   }
-  touch(value: Omit<Heartbeat, "lastSeen">) {
-    this.prune();
-    const key = `${value.sessionId}:${value.userId}:${value.clientId}`;
-    if (
-      !this.entries.has(key) &&
-      (this.entries.size >= this.limit ||
-        [...this.entries.values()].filter(
-          (entry) => entry.userId === value.userId,
-        ).length >= 20)
-    )
-      fail(429, "PRESENCE_LIMIT", "Too many active presence windows.");
-    this.entries.set(key, { ...value, lastSeen: this.now() });
+  async touch(value: Heartbeat) {
+    await this.prune();
+    const existing = await this.db.all(
+      "SELECT 1 AS found FROM presence_heartbeats WHERE session_id=$1 AND user_id=$2 AND client_id=$3",
+      [value.sessionId, value.userId, value.clientId],
+    );
+    if (!existing.length) {
+      const [counts] = await this.db.all<{ total: number; mine: number }>(
+        "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN user_id=$1 THEN 1 ELSE 0 END),0) AS mine FROM presence_heartbeats",
+        [value.userId],
+      );
+      if (Number(counts.total) >= this.limit || Number(counts.mine) >= 20)
+        fail(429, "PRESENCE_LIMIT", "Too many active presence windows.");
+    }
+    await this.db.run(
+      "INSERT INTO presence_heartbeats(session_id,user_id,client_id,block_id,editing,last_seen) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(session_id,user_id,client_id) DO UPDATE SET block_id=excluded.block_id, editing=excluded.editing, last_seen=excluded.last_seen",
+      [
+        value.sessionId,
+        value.userId,
+        value.clientId,
+        value.blockId,
+        value.editing ? 1 : 0,
+        this.now(),
+      ],
+    );
   }
-  leave(sessionId: string, userId: string, clientId: string) {
-    this.entries.delete(`${sessionId}:${userId}:${clientId}`);
+  async leave(sessionId: string, userId: string, clientId: string) {
+    await this.prune();
+    await this.db.run(
+      "DELETE FROM presence_heartbeats WHERE session_id=$1 AND user_id=$2 AND client_id=$3",
+      [sessionId, userId, clientId],
+    );
   }
-  list(sessionId: string, members: Member[]): PresenceResponse {
-    this.prune();
+  async list(sessionId: string, members: Member[]): Promise<PresenceResponse> {
+    await this.prune();
     const allowed = new Map(members.map((member) => [member.userId, member])),
       users = new Map<string, PresentParticipant>();
-    for (const [key, entry] of this.entries) {
-      if (entry.sessionId !== sessionId) continue;
-      const member = allowed.get(entry.userId);
+    const rows = await this.db.all<Row>(
+      "SELECT user_id,client_id,block_id,editing,last_seen FROM presence_heartbeats WHERE session_id=$1",
+      [sessionId],
+    );
+    for (const row of rows) {
+      const member = allowed.get(row.user_id);
       if (!member) {
-        this.entries.delete(key);
+        await this.db.run(
+          "DELETE FROM presence_heartbeats WHERE session_id=$1 AND user_id=$2",
+          [sessionId, row.user_id],
+        );
         continue;
       }
-      const previous = users.get(entry.userId);
-      const latest = !previous || entry.lastSeen >= previous.lastSeen;
-      users.set(entry.userId, {
+      const lastSeen = Number(row.last_seen),
+        editing = Boolean(Number(row.editing));
+      const previous = users.get(row.user_id);
+      const latest = !previous || lastSeen >= previous.lastSeen;
+      users.set(row.user_id, {
         ...member,
-        blockId: latest ? entry.blockId : previous.blockId,
+        blockId: latest ? row.block_id : previous.blockId,
         editing:
           ["owner", "editor"].includes(member.role) &&
-          (latest ? entry.editing : previous.editing),
-        lastSeen: Math.max(previous?.lastSeen ?? 0, entry.lastSeen),
+          (latest ? editing : previous.editing),
+        lastSeen: Math.max(previous?.lastSeen ?? 0, lastSeen),
         devices: (previous?.devices ?? 0) + 1,
       });
     }
@@ -93,7 +126,7 @@ export function createPresenceRouter(dependencies: {
   store?: PresenceStore;
 }) {
   const router = Router(),
-    store = dependencies.store ?? new PresenceStore();
+    store = dependencies.store ?? new PresenceStore(dependencies.db);
   const path = "/sessions/:id/presence";
   router.use(path, dependencies.authenticated);
   const getId = (value: unknown) => z.string().min(1).max(80).parse(value);
@@ -105,7 +138,7 @@ export function createPresenceRouter(dependencies: {
     const id = getId(request.params.id),
       user = response.locals.user as User;
     await dependencies.accessible(id, user.id);
-    response.json(store.list(id, await members(id)));
+    response.json(await store.list(id, await members(id)));
   });
   router.post(path, async (request, response) => {
     const id = getId(request.params.id),
@@ -126,21 +159,21 @@ export function createPresenceRouter(dependencies: {
       )
     )
       return fail(400, "INVALID_BLOCK", "This block does not exist.");
-    store.touch({
+    await store.touch({
       sessionId: id,
       userId: user.id,
       clientId: input.clientId,
       blockId: input.blockId,
       editing: input.editing && ["owner", "editor"].includes(role),
     });
-    response.json(store.list(id, await members(id)));
+    response.json(await store.list(id, await members(id)));
   });
   router.delete(path, async (request, response) => {
     const id = getId(request.params.id),
       user = response.locals.user as User;
     await dependencies.accessible(id, user.id);
     const input = z.object({ clientId: z.uuid() }).strict().parse(request.body);
-    store.leave(id, user.id, input.clientId);
+    await store.leave(id, user.id, input.clientId);
     response.status(204).end();
   });
   return router;

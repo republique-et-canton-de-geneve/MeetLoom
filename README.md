@@ -106,7 +106,7 @@ The [architecture](ARCHITECTURE.md) describes modules and trust boundaries. The 
 
 Visitors cannot access team columns, internal comments, accounts, or versions. A public discussion may be enabled separately on a link without exposing internal conversations. All authorized session members, including viewers, can read its team columns. Anyone possessing a visitor link can access its scope until expiration or revocation. Revocation stops future reads; it cannot retract information already read or exported.
 
-Saving uses version checks and merging by object identifier and field; conflicting edits to the same field require explicit resolution. Periodic refresh is not character-level CRDT editing. One application instance is supported. The timer runs a parallel block as one step lasting as long as its longest track. Actual deployment, your OIDC/SMTP provider, LLM endpoint, and the overlay above PowerPoint still need validation in your environment.
+Saving uses version checks and merging by object identifier and field; conflicting edits to the same field require explicit resolution. Periodic refresh is not character-level CRDT editing. With PostgreSQL, several application pods can run side by side (the OpenShift manifests run two, for updates without interruption); SQLite is for a single instance. The timer runs a parallel block as one step lasting as long as its longest track. Actual deployment, your OIDC/SMTP provider, LLM endpoint, and the overlay above PowerPoint still need validation in your environment.
 
 The explicitly excluded features remain absent: parking lot, block/session library, and attachments in blocks.
 

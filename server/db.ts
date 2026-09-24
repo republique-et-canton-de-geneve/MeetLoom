@@ -13,6 +13,10 @@ export interface Sql {
 export interface Database extends Sql {
   transaction<T>(fn: (sql: Sql) => Promise<T>): Promise<T>;
   close(): Promise<void>;
+  /** Ends startup schema creation. With PostgreSQL, several application pods
+   * may start at once: a lock taken in openDatabase serializes their
+   * CREATE ... IF NOT EXISTS statements until this is called. */
+  releaseStartupLock?(): Promise<void>;
 }
 
 const schema = [
@@ -26,6 +30,8 @@ const schema = [
   `CREATE TABLE IF NOT EXISTS shares (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, label TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, block_id TEXT, user_id TEXT NOT NULL REFERENCES users(id), text TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS versions (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, payload TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), label TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS presence_heartbeats (session_id TEXT NOT NULL, user_id TEXT NOT NULL, client_id TEXT NOT NULL, block_id TEXT, editing INTEGER NOT NULL, last_seen BIGINT NOT NULL, PRIMARY KEY (session_id, user_id, client_id))`,
+  `CREATE INDEX IF NOT EXISTS presence_heartbeats_seen_idx ON presence_heartbeats(last_seen)`,
   `CREATE INDEX IF NOT EXISTS sessions_owner_idx ON sessions(owner_id)`,
   `CREATE INDEX IF NOT EXISTS members_user_idx ON members(user_id)`,
   `CREATE INDEX IF NOT EXISTS shares_session_idx ON shares(session_id)`,
@@ -51,8 +57,32 @@ export async function openDatabase(
       run: async (text, values = []) =>
         (await client.query(text, values)).rowCount ?? 0,
     });
+    // Scoped to the schema, so separate schemas (tests) never wait on each other.
+    const startup = await pool.connect();
+    try {
+      await startup.query(
+        "SELECT pg_advisory_lock(hashtext(current_schema()))",
+      );
+    } catch (error) {
+      startup.release();
+      await pool.end();
+      throw error;
+    }
+    let locked = true;
+    const releaseStartupLock = async () => {
+      if (!locked) return;
+      locked = false;
+      try {
+        await startup.query(
+          "SELECT pg_advisory_unlock(hashtext(current_schema()))",
+        );
+      } finally {
+        startup.release();
+      }
+    };
     database = {
       ...executor(pool),
+      releaseStartupLock,
       async transaction(fn) {
         const client = await pool.connect();
         try {
@@ -68,6 +98,7 @@ export async function openDatabase(
         }
       },
       async close() {
+        await releaseStartupLock();
         await pool.end();
       },
     };
@@ -127,8 +158,13 @@ export async function openDatabase(
         }),
     };
   }
-  await database.transaction(async (sql) => {
-    for (const statement of schema) await sql.run(statement);
-  });
+  try {
+    await database.transaction(async (sql) => {
+      for (const statement of schema) await sql.run(statement);
+    });
+  } catch (error) {
+    await database.close();
+    throw error;
+  }
   return database;
 }
