@@ -29,7 +29,11 @@ test("extending the previous automatic block rewinds with its elapsed time and o
   assert.equal(resumed.run.blockId, first);
   assert.equal(timerView(resumed, 631000).elapsedSeconds, 630);
   assert.equal(timerView(resumed, 631000).remainingSeconds, 30);
-  assert.equal(timerView(resumed, 631000).deltaSeconds, 30);
+  assert.equal(
+    timerView(resumed, 631000).deltaSeconds,
+    60,
+    "the extra minute already shows in the projected end",
+  );
   assert.equal(resumed.run.plannedDurations?.[first], 600);
   assert.equal(resumed.run.actualDurations?.[first], 0);
   assert.equal(resumed.run.lastAutoAdvance, undefined);

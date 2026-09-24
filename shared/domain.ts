@@ -828,14 +828,31 @@ export function timerView(session: TimedSession, now = Date.now()) {
     : null;
   const active =
     session.run.status === "running" || session.run.status === "paused";
-  // Delta uses the immutable durations captured at the actual start, even when
-  // current durations are edited or extended. The scheduled clock/date and gaps
-  // between locked starts do not define the origin of the delivery clock.
+  // Delta is the projected end of the day against the immutable durations
+  // captured at the actual start: time already spent (pauses included), what
+  // is left of the current block and the current durations of the blocks still
+  // to come. Overruns, early moves and durations edited or extended during the
+  // run all show up. Blocks added during the run had no planned time. The
+  // scheduled clock/date and gaps between locked starts do not define the
+  // origin of the delivery clock.
+  const playable = runnableBlocks(day?.blocks ?? []);
+  const upcoming = block
+    ? playable.slice(playable.findIndex((value) => value.id === block.id) + 1)
+    : [];
+  const plannedUpcoming = (value: PublicBlock) =>
+    session.run.plannedDurations
+      ? (session.run.plannedDurations[value.id] ?? 0)
+      : value.duration * 60;
   const delta =
     active && session.run.runStartedAt !== null
       ? Math.max(0, now - session.run.runStartedAt) / 1000 -
-        session.run.completedDuration -
-        Math.min(elapsed, plannedBlockSeconds(session.run, block))
+        session.run.completedDuration +
+        Math.max(0, remaining) -
+        plannedBlockSeconds(session.run, block) +
+        upcoming.reduce(
+          (sum, value) => sum + value.duration * 60 - plannedUpcoming(value),
+          0,
+        )
       : 0;
   const waiting =
     session.run.status === "running" &&

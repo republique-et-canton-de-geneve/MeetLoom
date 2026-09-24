@@ -201,13 +201,17 @@ test("duration extensions and agenda edits preserve the original timing baseline
   assert.equal(timerView(session, 651_000).remainingSeconds, 70);
   assert.equal(
     timerView(session, 651_000).deltaSeconds,
-    50,
-    "extra time must not erase an existing delay",
+    120,
+    "extra time adds to the projected end instead of erasing the delay",
   );
   session.days[0].blocks[1].duration = 10;
   session = transitionRun(session, "next", {}, 721_000);
   assert.equal(session.run.completedDuration, 600);
-  assert.equal(timerView(session, 721_000).deltaSeconds, 120);
+  assert.equal(
+    timerView(session, 721_000).deltaSeconds,
+    420,
+    "a block lengthened during the run counts before it is played",
+  );
   assert.equal(
     session.run.plannedDurations?.[secondId],
     300,
@@ -522,4 +526,30 @@ test("validation bounds total blocks across days and field text size", () => {
   const longField = fixture();
   longField.days[0].blocks[0].fields.notes = "x".repeat(30_001);
   assert.equal(sessionInputSchema.safeParse(longField).success, false);
+});
+
+test("editing upcoming durations during a run moves the projected end at once", () => {
+  let session = transitionRun(fixture(), "start", {}, 1000);
+  const last = session.days[0].blocks.length - 1;
+  assert.equal(timerView(session, 61_000).deltaSeconds, 0);
+  session.days[0].blocks[last].duration += 2;
+  assert.equal(
+    timerView(session, 61_000).deltaSeconds,
+    120,
+    "two more minutes on the last block end the day two minutes later",
+  );
+  session.days[0].blocks[1].duration -= 3;
+  assert.equal(timerView(session, 61_000).deltaSeconds, -60);
+  session.days[0].blocks.push(newBlock("fr", { title: "Ajout", duration: 4 }));
+  assert.equal(
+    timerView(session, 61_000).deltaSeconds,
+    180,
+    "a block added during the run had no planned time",
+  );
+  session = transitionRun(session, "pause", {}, 61_000);
+  assert.equal(
+    timerView(session, 121_000).deltaSeconds,
+    240,
+    "a pause still delays the end",
+  );
 });

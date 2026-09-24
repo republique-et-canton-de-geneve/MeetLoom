@@ -286,12 +286,12 @@ export function TimerContent({
           ? t("Dans le temps prévu", "Right on schedule")
           : delta > 0
             ? t(
-                `${Math.ceil(delta / 60)} min de retard`,
-                `${Math.ceil(delta / 60)} min behind`,
+                `Fin prévue avec ${Math.ceil(delta / 60)} min de retard`,
+                `Expected to end ${Math.ceil(delta / 60)} min late`,
               )
             : t(
-                `${Math.ceil(-delta / 60)} min d’avance`,
-                `${Math.ceil(-delta / 60)} min ahead`,
+                `Fin prévue avec ${Math.ceil(-delta / 60)} min d’avance`,
+                `Expected to end ${Math.ceil(-delta / 60)} min early`,
               )}
       </span>
     </div>
