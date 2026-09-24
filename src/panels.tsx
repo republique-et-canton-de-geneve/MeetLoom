@@ -30,7 +30,7 @@ import {
   createPresetColumn,
   fieldPresetLabel,
 } from "../shared/field-presets";
-import { mapBlocks } from "../shared/domain";
+import { localDate, mapBlocks } from "../shared/domain";
 import { QRCode } from "./QRCode";
 import ParticipantInvitePanel from "./ParticipantInvitePanel";
 
@@ -666,7 +666,7 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                   value={expires}
                   onChange={(event) => setExpires(event.target.value)}
                   type="date"
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={localDate()}
                 />
               </label>
             </div>
@@ -773,7 +773,9 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                 onClick={() => {
                   setEditingShare(share.id);
                   setLinkLabel(share.label);
-                  setExpires(share.expiresAt?.slice(0, 10) ?? "");
+                  setExpires(
+                    share.expiresAt ? localDate(new Date(share.expiresAt)) : "",
+                  );
                   setShareMode(share.mode ?? "visitor");
                   setSharedDays(
                     share.dayIds ?? session.days.map((day) => day.id),

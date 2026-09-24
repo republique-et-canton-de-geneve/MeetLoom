@@ -216,17 +216,35 @@ export function newBlock(
   return block;
 }
 
+/** Calendar date (YYYY-MM-DD) of an instant in a timezone, or in the
+ * runtime's own timezone when none is given. `toISOString()` would give the
+ * UTC date, which is yesterday in Geneva until 01:00 or 02:00. */
+export function localDate(at: Date = new Date(), timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const part = (type: string) =>
+    parts.find((value) => value.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+const DEFAULT_TIMEZONE = "Europe/Zurich";
+
 export function createSession(
   userId: string,
   title: string,
   locale: Locale,
   demo = false,
+  at: Date = new Date(),
 ): Session {
   const fr = locale === "fr";
   const day: Day = {
     id: id(),
     title: fr ? "Jour 1" : "Day 1",
-    date: new Date().toISOString().slice(0, 10),
+    date: localDate(at, DEFAULT_TIMEZONE),
     startTime: "09:00",
     blocks: [],
   };
@@ -394,12 +412,12 @@ export function createSession(
         ];
     day.blocks = agenda.map((block) => newBlock(locale, block));
   }
-  const now = new Date().toISOString();
+  const now = at.toISOString();
   return {
     id: id(),
     title,
     description: "",
-    timezone: "Europe/Zurich",
+    timezone: DEFAULT_TIMEZONE,
     ownerId: userId,
     days: [day],
     columns,
