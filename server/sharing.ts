@@ -94,12 +94,17 @@ export async function registerSharing(
     if (!options.enabled)
       return fail(404, "NOT_FOUND", "This link is not available.");
     const session = JSON.parse(row.payload) as Session;
+    let projection: ReturnType<typeof sharedAgenda> | undefined;
     return {
       ...row,
       options,
       closed: !!lifecycle?.closed_at,
       session,
-      projection: sharedAgenda(session, options),
+      // Computed on demand: the visitor page projects the synchronized
+      // session itself, so projecting here too would double its cost.
+      get projection() {
+        return (projection ??= sharedAgenda(session, options));
+      },
     };
   };
   const comments = async (shareId: string, blockIds: Set<string>) => {

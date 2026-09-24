@@ -36,7 +36,12 @@ import {
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerSharing } from "./sharing.js";
-import { publicQuotas, type PublicQuotas } from "./quotas.js";
+import {
+  publicQuotas,
+  requestBudget,
+  type PublicQuotas,
+  type RequestBudget,
+} from "./quotas.js";
 import { installTransfersApi } from "./transfers.js";
 import { installAccountsApi, accountProfile } from "./accounts.js";
 import { cloneContent } from "../shared/content.js";
@@ -99,6 +104,8 @@ export interface AppConfig {
   mailTransport?: MailTransport;
   /** Caps on data stored through public links; defaults in quotas.ts. */
   quotas?: Partial<PublicQuotas>;
+  /** Requests per minute across the API; defaults in quotas.ts. */
+  requestBudget?: Partial<RequestBudget>;
 }
 type UserRow = {
   id: string;
@@ -240,7 +247,11 @@ async function assembleWith(db: Database, config: AppConfig) {
       response.status(503).json({ status: "unavailable" });
     }
   });
-  if (config.rateLimits !== false) app.use("/api", rateLimit(600, 60000));
+  const budget = requestBudget(config.requestBudget);
+  // A flood guard per address, high enough for a meeting room of visitors
+  // behind one NAT or proxy; signed-in users get their own budget below.
+  if (config.rateLimits !== false)
+    app.use("/api", rateLimit(budget.perAddress, 60000));
   app.use("/api", (request, _response, next) => {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
       if (request.get("Sec-Fetch-Site") === "cross-site")
@@ -295,6 +306,16 @@ async function assembleWith(db: Database, config: AppConfig) {
     }
     next();
   });
+  if (config.rateLimits !== false) {
+    const perUser = rateLimit(
+      budget.perUser,
+      60000,
+      (_request, response) => `user:${(response.locals.user as User).id}`,
+    );
+    app.use("/api", (request, response, next) =>
+      response.locals.user ? perUser(request, response, next) : next(),
+    );
+  }
   // Bodies are parsed after the session cookie is resolved, so the larger
   // import limit is only ever spent on signed-in users.
   app.use(

@@ -72,11 +72,12 @@ Rate limits use in-process memory, with independent budgets per middleware:
 
 | Scope                                                      | Budget                                                 | Key                                            |
 | ---------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------- |
-| `/api`, excluding health/readiness probes                  | 600 requests per minute                                | Client IP                                      |
+| `/api`, excluding health/readiness probes                  | 12,000 requests per minute (flood guard)               | Client IP                                      |
+| `/api` for signed-in users                                 | 1,200 requests per minute                              | Authenticated account, regardless of client IP |
 | Setup, sign-in, password change, and invitation acceptance | 20 requests per 15 minutes, shared across these routes | Client IP                                      |
 | Profile updates and account deletion                       | 20 requests per 15 minutes, shared across both routes  | Authenticated account, regardless of client IP |
 
-Additional endpoint limits apply to recovery, AI, forms, and MCP. Exceeding a budget returns HTTP 429 with `RATE_LIMITED`; honor `Retry-After` before retrying. IP-based keys group IPv6 addresses by `/56` subnet by default. Users behind the same public IP share IP-based budgets.
+Additional endpoint limits apply to recovery, AI, forms, and MCP. Public links also have storage quotas (`server/quotas.ts`): a published form keeps at most 5,000 responses and 100 MiB of answers and images (deleting responses frees room), and a visitor link at most 2,000 comments. Beyond them, the form answers `FORM_FULL` and comments `VISITOR_COMMENT_LIMIT`. Exceeding a budget returns HTTP 429 with `RATE_LIMITED`; honor `Retry-After` before retrying. IP-based keys group IPv6 addresses by `/56` subnet by default. Users behind the same public IP share IP-based budgets: the per-address ceiling leaves room for a meeting room of several hundred visitors polling a public link every three seconds (see [loadtest/README.md](../loadtest/README.md)), while signed-in users are counted per account.
 
 Set `TRUST_PROXY` to the actual trusted proxy hop count: the default is `0`, while the supplied OpenShift manifests use `1`. The trusted edge must replace client-supplied forwarding headers, and clients must not bypass that proxy path. An incorrect count or spoofable `X-Forwarded-For` can undermine IP-based limits.
 
