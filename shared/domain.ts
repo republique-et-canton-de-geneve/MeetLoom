@@ -82,6 +82,65 @@ export function runnableBlocks<T extends PublicBlock>(
   );
 }
 
+/** Whole-minute proportional scaling of the timed activities of a list
+ * (nested groups included) to a target total, using largest remainders so
+ * the result adds up exactly. */
+function scaleActivities<T extends PublicBlock>(
+  blocks: T[],
+  target: number,
+): T[] {
+  // Nested groups are walked; a nested parallel block keeps its own plan.
+  const walk = (items: readonly T[]): T[] =>
+    items.flatMap((block) =>
+      block.kind === "group"
+        ? walk((block.children ?? []) as T[])
+        : block.kind === "note" || block.kind === "parallel"
+          ? []
+          : [block],
+    );
+  const leaves = walk(blocks);
+  const total = leaves.reduce((sum, block) => sum + block.duration, 0);
+  if (!leaves.length || total <= 0) return blocks;
+  const raw = leaves.map((block) => (block.duration * target) / total);
+  const scaled = raw.map((value) => Math.floor(value + 1e-9));
+  let remainder = target - scaled.reduce((sum, value) => sum + value, 0);
+  raw
+    .map((value, index) => ({ index, fraction: value - scaled[index] }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
+    .forEach(({ index }) => {
+      if (remainder-- > 0) scaled[index]++;
+    });
+  const next = new Map(leaves.map((block, index) => [block.id, scaled[index]]));
+  return mapBlocks(blocks, (block) =>
+    next.has(block.id) ? { ...block, duration: next.get(block.id)! } : block,
+  );
+}
+
+/** Spreads a parallel block's actual time (whole minutes) over its rooms.
+ * All rooms ran at the same time: the longest room(s) take the actual time,
+ * their activities scaled proportionally; shorter rooms keep their plan,
+ * unless the actual time is shorter, which caps them. */
+export function spreadParallelActual<T extends PublicBlock>(
+  block: T,
+  minutes: number,
+): T {
+  const rooms = block.rooms ?? [];
+  const totals = rooms.map((room) =>
+    room.blocks.reduce((sum, child) => sum + blockDuration(child), 0),
+  );
+  const longest = Math.max(0, ...totals);
+  return {
+    ...block,
+    rooms: rooms.map((room, index) => {
+      const target =
+        totals[index] === longest ? minutes : Math.min(totals[index], minutes);
+      return target === totals[index]
+        ? room
+        : { ...room, blocks: scaleActivities(room.blocks as T[], target) };
+    }),
+  };
+}
+
 /** Adds time to a timed step. A parallel block's duration comes from its
  * rooms, so the time goes to the last activity of its longest room. */
 export function extendBlock<T extends PublicBlock>(
@@ -1008,8 +1067,15 @@ export function transitionRun(
       runStartedAt: start,
       completedDuration: 0,
       autoAdvance: input.autoAdvance ?? current.autoAdvance,
+      // Activities inside parallel rooms are captured too, so "restore plan"
+      // can undo the actual time spread over the rooms.
       plannedDurations: Object.fromEntries(
-        chosenBlocks.map((value) => [value.id, value.duration * 60]),
+        [
+          ...chosenBlocks,
+          ...chosenBlocks
+            .filter((value) => value.kind === "parallel")
+            .flatMap((value) => allBlocks([value]).slice(1)),
+        ].map((value) => [value.id, value.duration * 60]),
       ),
       actualDurations: {},
     });
@@ -1107,6 +1173,11 @@ export function transitionRun(
             ...value,
             blocks: mapBlocks(value.blocks, (value) => {
               if (!Object.hasOwn(durations, value.id)) return value;
+              if (action === "apply-actual" && value.kind === "parallel")
+                return spreadParallelActual(
+                  value,
+                  Math.floor(durations[value.id] / 60 + 1e-9),
+                );
               // Whole minutes, rounded down: the agenda never shows seconds.
               const duration =
                 action === "apply-actual"

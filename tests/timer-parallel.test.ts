@@ -146,3 +146,92 @@ test("a parallel day can start from its first room-free step directly", () => {
   );
   assert.equal(timerView(started, at(0)).block?.title, "Rooms");
 });
+
+/** Rooms A: [1], B: [2, 2]; the parallel block is planned at 4 min. */
+function roomsPlan() {
+  const s = createSession("owner", "Rooms", "en", false);
+  const block = newBlock("en", {
+    title: "Breakout",
+    kind: "parallel",
+    rooms: [
+      {
+        id: "a",
+        title: "A",
+        blocks: [newBlock("en", { title: "A1", duration: 1 })],
+      },
+      {
+        id: "b",
+        title: "B",
+        blocks: [
+          newBlock("en", { title: "B1", duration: 2 }),
+          newBlock("en", { title: "B2", duration: 2 }),
+        ],
+      },
+    ],
+  });
+  s.days[0].blocks = [block];
+  return s;
+}
+const roomDurations = (s: Session) =>
+  s.days[0].blocks[0].rooms!.map((room) =>
+    room.blocks.map((block) => block.duration),
+  );
+function finishAfter(seconds: number) {
+  let s = transitionRun(roomsPlan(), "start", {}, at(0));
+  s = transitionRun(s, "next", {}, at(seconds));
+  assert.equal(s.run.status, "finished");
+  return s;
+}
+
+test("actual time longer than planned goes to the longest room, proportionally", () => {
+  const s = transitionRun(finishAfter(300), "apply-actual", {}, at(400));
+  assert.deepEqual(roomDurations(s), [[1], [3, 2]]);
+  assert.equal(s.days[0].blocks[0].duration, 5);
+});
+
+test("actual time shorter than planned shortens the longest room and caps the others", () => {
+  let s = transitionRun(finishAfter(180), "apply-actual", {}, at(400));
+  assert.deepEqual(roomDurations(s), [[1], [2, 1]]);
+  assert.equal(s.days[0].blocks[0].duration, 3);
+  s = transitionRun(finishAfter(40), "apply-actual", {}, at(400));
+  assert.deepEqual(
+    roomDurations(s),
+    [[0], [0, 0]],
+    "under a minute rounds to 0",
+  );
+});
+
+test("rooms of equal length all take the actual time", () => {
+  let s = roomsPlan();
+  s.days[0].blocks[0].rooms![0].blocks[0].duration = 4;
+  s = transitionRun(s, "start", {}, at(0));
+  s = transitionRun(s, "next", {}, at(360));
+  s = transitionRun(s, "apply-actual", {}, at(400));
+  assert.deepEqual(roomDurations(s), [[6], [3, 3]]);
+});
+
+test("restoring the plan also restores the activities inside rooms", () => {
+  const applied = transitionRun(finishAfter(300), "apply-actual", {}, at(400));
+  const restored = transitionRun(applied, "restore-plan", {}, at(401));
+  assert.deepEqual(roomDurations(restored), [[1], [2, 2]]);
+  assert.equal(restored.days[0].blocks[0].duration, 4);
+  assert.equal(sessionInputSchema.safeParse(restored).success, true);
+});
+
+test("groups inside a room are scaled through their activities", () => {
+  let s = roomsPlan();
+  const [b1, b2] = s.days[0].blocks[0].rooms![1].blocks;
+  s.days[0].blocks[0].rooms![1].blocks = [
+    newBlock("en", { title: "G", kind: "group", children: [b1, b2] }),
+  ];
+  s = transitionRun(s, "start", {}, at(0));
+  s = transitionRun(s, "next", {}, at(480));
+  s = transitionRun(s, "apply-actual", {}, at(500));
+  const group = s.days[0].blocks[0].rooms![1].blocks[0];
+  assert.deepEqual(
+    group.children!.map((block) => block.duration),
+    [4, 4],
+  );
+  assert.equal(group.duration, 8);
+  assert.equal(s.days[0].blocks[0].duration, 8);
+});
