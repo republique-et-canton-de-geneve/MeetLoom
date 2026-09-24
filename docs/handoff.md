@@ -4,6 +4,14 @@ Last updated: September 24, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**State on September 24, 2026: version 0.1.0 is in production.** PR #1 (`codex/meetloom-v1`) is being merged into `main` with a squash merge; the branch is then finished. The user deployed release candidates (`v0.1.0-rc.N`, published from the PR branch as GitHub pre-releases) to OpenShift development and then production, from Windows, through their organization's registry mirror. Everything below the next heading is history.
+
+- **Delivery chain in place:** `main` is protected by a ruleset (pull request required, status check **CI Success** required, no force-push or deletion). CI Success covers TypeScript, SQLite and PostgreSQL tests, build, formatting, audit, manifests and the Playwright E2E journeys. Security (CodeQL, Trivy) runs too. Dependabot patch/dev-minor updates auto-merge once CI Success passes. Releases: GitHub Release `vX.Y.Z` (or `vX.Y.Z-rc.N` pre-release) → `.github/workflows/github-release.yml` tests the exact commit and publishes `DOCKERHUB_REPOSITORY:X.Y.Z` and `sha-<commit>` (no `latest` unless requested on a manual run). Secrets `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` and variable `DOCKERHUB_REPOSITORY` are configured by the user.
+- **OpenShift shape:** application Deployment with **two pods**, RollingUpdate (`maxSurge 1`, `maxUnavailable 0`), `preStop`, PDB, preferred anti-affinity; bundled PostgreSQL is **one pod** with `Recreate` and a 5 GiB PVC. CPU requests `1m` without CPU limits (projects with small CPU quotas). Updates: rerun `scripts/deploy-openshift.ps1` with the new `-Image` (keeps PVC, secrets and ConfigMaps) or `oc set image`; see `docs/deployment.md` sections 3–5, including troubleshooting.
+- **Multi-pod rules for future code:** all shared state must live in PostgreSQL (presence is in `presence_heartbeats`; mail uses DB leases). Startup schema creation runs under a PostgreSQL advisory lock released at the end of `createApp`; new tables go in `CREATE ... IF NOT EXISTS` at startup like the others. **Schema changes must be additive**, because old and new pods run side by side during an update. Rate-limit counters are per pod (documented).
+- **Public, generic repository:** it is used by anyone. Never write an organization's internal hostnames, registries, URLs, namespaces or people in it; use placeholders (`<mirror-host>`, `your-account`, `meetloom-dev`).
+- **AI settings are provider-neutral:** `LLM_BASE_URL`, `LLM_MODEL`, `LLM_VISION_MODEL`, `LLM_API_KEY` for any OpenAI-compatible Chat Completions server. The README states the project is developed with AI coding agents.
+
 **Acceptance round 6 (September 24, 2026).** The user accepted the parallel-room rule and asked for the E2E suite before merging to `main`:
 
 - **Accounts like SessionLab:** self-service sign-up is now **open by default** once the first administrator exists; each account manages its own sessions. Administrators can restrict it to email domains or close it in “Paramètres de l’installation”. The first account is still the setup/administrator account.
@@ -71,7 +79,7 @@ The previous continuation (merged through PR #2 into `codex/meetloom-v1`) releas
 
 The preceding Codex checkpoint remains valid: **validated code commit** `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8` passed [CI 35885304817](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) (SQLite/PostgreSQL, types, build, formatting, audit, manifests) and [Security 35885304655](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655) (exact image build, arbitrary-UID/read-only-root smoke test, Trivy, CodeQL), plus the separate CodeQL findings check `107264308348`. Its documentation-only follow-up `38d24c0` also passed every check on PR #1.
 
-The implementation is in [MeetLoom PR #1](https://github.com/republique-et-canton-de-geneve/MeetLoom/pull/1), on `codex/meetloom-v1`. The PR remains a draft for manual acceptance. The default branch still contains the original repository initialization until the PR is merged. Check out the implementation branch to run the app; README badges and the Render button on the default branch cannot represent this unmerged version yet.
+The first implementation was developed in [MeetLoom PR #1](https://github.com/republique-et-canton-de-geneve/MeetLoom/pull/1) on `codex/meetloom-v1` and squash-merged into `main`. Work from `main` now.
 
 `origin` is `https://github.com/republique-et-canton-de-geneve/MeetLoom.git`. The former personal remote is named `personal`; the user will archive that repository. Both initial Git histories were preserved with a normal merge. Never force-push or recreate the repository to simplify its history.
 
@@ -105,21 +113,20 @@ Earlier Trivy findings came from the base image's bundled global npm, not applic
 
 ## Resume procedure
 
-1. Run `git status --short`, `git branch --show-current`, and `git remote -v`. Preserve any user changes. Fetch `origin` and inspect PR #1's current head and checks before assuming this record is current. Work directly on `codex/meetloom-v1`, as the user requested.
-2. Read `AGENTS.md`, this file, `docs/status.md`, and the relevant parity/manual-QA sections. Current work is acceptance preparation, not a blank-slate implementation.
-3. With Node.js 24, run `npm ci`, `npm run check`, and `npm run format:check` when code changes require verification. CI also runs the same test suite against PostgreSQL, audit, and manifest checks. For local PostgreSQL tests use `TEST_DATABASE_URL` pointing only to a disposable test database; the harness creates and drops isolated schemas.
-4. For a local trial, run `npm run build` and `npm start`, open `http://127.0.0.1:3000`, and create the first account. Existing local databases may already contain an account: preserve them, or explicitly choose a separate `SQLITE_PATH`. Never delete a database just to reach the setup screen.
-5. Ask for the user's manual acceptance findings, then fix concrete defects and record actual evidence. Do not claim real LLM, OIDC, SMTP, audible playback, native Office, or PowerPoint validation from mocks or API tests.
-6. Update this handoff, status, and manual QA evidence before stopping. Record the exact commit/checks and any unfinished work; commit and push the authorized changes to the organization repository.
+1. Run `git status --short`, `git branch --show-current`, and `git remote -v`. Preserve any user changes. Fetch `origin` and start from the latest `main`: `codex/meetloom-v1` is merged and must not receive new work. Create one branch per change and open a pull request to `main`; `main` only accepts pull requests whose **CI Success** check is green.
+2. Read `AGENTS.md`, this file, `docs/status.md`, and the relevant parity/manual-QA sections before editing. Read `ARCHITECTURE.md` before changing cross-module contracts, and `docs/deployment.md` before touching `k8s/`, `scripts/` or the release workflow.
+3. With Node.js 24, run `npm ci`, `npm run check`, and `npm run format:check`. Run `npm run test:e2e` when a change touches the flows it covers. For PostgreSQL, set `TEST_DATABASE_URL` to a disposable test database; the harness creates and drops isolated schemas (the multi-pod startup test only runs there).
+4. For a local trial, run `npm run build` and `npm start`, open `http://127.0.0.1:3000`, and create the first account. Preserve existing local databases, or choose a separate `SQLITE_PATH`.
+5. Fix concrete defects the user reports, with a test that fails before the fix. Keep production in mind: schema changes additive, shared state in the database, no internal hostnames in the repository.
+6. To ship: merge the pull request, then the user publishes a GitHub Release `vX.Y.Z` (bump `package.json` first) and updates OpenShift. Before merging, a `vX.Y.Z-rc.N` pre-release from the pull request branch lets the user try the image.
+7. Update this handoff and `docs/status.md` before stopping; record the exact commit and checks.
 
 ## Remaining work, in order
 
-1. **User acceptance:** the user tests the first version over time. Compare the workflows they use with SessionLab, using `product-parity.md`; fix confirmed gaps and ergonomic issues. There is no user acceptance sign-off yet. Acceptance round 1 findings are fixed (see above); further annotated screenshots from the user are expected.
-2. **Environment checks:** connect the real internal LLM service when provided; validate configured OIDC/SMTP if used; test Office exports, audible alerts, and the floating timer above native PowerPoint on the intended workstation. Browser Document Picture-in-Picture cannot guarantee every OS/full-screen mode; a native companion is a possible future decision, not an existing feature.
-3. **After explicit acceptance:** add a small maintained nominal E2E suite covering the workflows used most often (roughly 80% of usage): account/sign-in, agenda editing and saving, private/public sharing, and timer delivery, with FR/EN coverage where valuable. Include privacy and persistence assertions; avoid an expensive exhaustive suite.
-4. Configure repository rules/required checks and narrowly scoped dependency auto-merge only after the E2E gate works. Dependabot is already configured; do not enable unconditional merging.
-5. Prepare the first release and Docker Hub credentials/settings with the user. Follow the existing publication workflow and deployment guides. Publish only the tested revision and retain its image digest, SBOM, and manifests.
-6. The operator installs/upgrades OpenShift development, validates, then production. Validate first installation, secret preservation, database backup/restore, and upgrade/rollback. No cluster action is part of this handoff.
+1. **User feedback in production:** fix confirmed defects and ergonomic gaps against SessionLab, using `product-parity.md`.
+2. **Environment checks still open:** connect the real internal LLM service when provided; validate OIDC/SMTP if configured; test Office exports, audible alerts and the floating timer above native PowerPoint on the intended workstation. Document real evidence in `manual-qa.md`; mocks and API tests are not validation of those services.
+3. **Operations:** have the operator test a PostgreSQL backup and restore (`docs/operations.md`) and an upgrade/rollback on development before relying on production data.
+4. **Next version:** bump `package.json` (for example `0.1.1`), release from `main`, and update development then production with the installer or `oc set image`.
 
 ## Tooling and local caveats
 
