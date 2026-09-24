@@ -97,7 +97,8 @@ $rendered | & oc -n $Project apply -f -
 if ($LASTEXITCODE -ne 0) { throw 'Manifest application failed.' }
 if (-not $ExternalDatabase) { Invoke-Oc -n $Project rollout status deployment/meetloom-postgresql --timeout=300s }
 Invoke-Oc -n $Project rollout status deployment/meetloom --timeout=300s
-Invoke-Oc -n $Project exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# PowerShell drops an unquoted -- when calling a function, so quote it for oc exec.
+Invoke-Oc -n $Project exec deployment/meetloom '--' node -e "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 Write-Host "MeetLoom: $origin"
 Write-Host 'Existing secrets and environment configuration were preserved.'
