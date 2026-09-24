@@ -26,6 +26,8 @@ At the requested stopping point, code commit `10b4f1a28e0b0d27429f0c541675263d2f
 
 A subsequent Claude Code continuation verified that checkpoint locally and added three small corrections on branch `claude/epic-pascal-3gk99i`, proposed to `codex/meetloom-v1` through its own pull request: application closure now releases rate-limiter stores, the dashboard workspace selector aligns with the sidebar, and `<html lang>` follows a restored English preference. Locally, 228 tests passed on SQLite and on PostgreSQL, with type checks, build, formatting, and audit. Hosted checks run once these commits reach `codex/meetloom-v1`. See the [agent handoff](handoff.md).
 
+User acceptance has started. The first round of findings (timer resuming a revisited block instead of restarting it, the unexplained scheduled-start option, the time display layout, and dashboard sidebar clean-up) is fixed on `codex/meetloom-v1` with 251 passing tests on SQLite and PostgreSQL; see the [agent handoff](handoff.md).
+
 ## Environment limits
 
 - The organization's Qwen endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.

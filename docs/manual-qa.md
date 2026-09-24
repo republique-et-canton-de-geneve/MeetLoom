@@ -59,6 +59,15 @@ Executed on September 23, 2026 against a production build (`npm run build`, `nod
 - Stored English as the interface language and reloaded: the UI was English but `<html lang>` remained `fr`. After the correction, the same reload reports `lang="en"`.
 - The dashboard caption “ESPACE DE TRAVAIL” appears twice in the sidebar. This wording question is left for the user's acceptance review.
 
+## Acceptance round 1 fixes (Claude Code, headless Chromium)
+
+Executed on September 24, 2026 against a production build with a new SQLite database in a scratch directory and fictional data, after the user's first acceptance findings. The SessionLab reference video supplied by the user was reviewed frame by frame: after “Next” at about 15 s, then about 13 s on block 2, returning to block 1 resumed it at −0:46 and block 2 showed as not started.
+
+- Created “Test séance” with two one-minute blocks (“bloc 1”, “bloc 2”) and started it with “Commencer maintenant”. After about 6 s the timer showed 00:55. “Bloc suivant” showed bloc 2 with 00:59. Changing bloc 1's duration to 2 in the agenda, then “Bloc précédent”, showed bloc 1 with **01:53 remaining** (2 min minus the time already spent) instead of 02:00. No page errors were reported.
+- The time display row reads on one line at 1600 px: “Affichage des horaires”, the timezone select and the “12 h” checkbox. At 390 px it wraps without horizontal page scrolling.
+- With no block, the start options read “Commencer maintenant” and “Depuis l’heure prévue (ajoutez d’abord un bloc)”, disabled; English shows “From scheduled time (add a block first)”. The explanation for a start time still ahead (“disponible dès 09:00”) is covered by unit tests, because the browser clock could not be moved before the scheduled time.
+- The dashboard sidebar shows a single “ESPACE DE TRAVAIL” caption, no longer shows the “Un espace qui vous appartient” card, and lists the folders above the account footer.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -80,3 +89,4 @@ Executed on September 23, 2026 against a production build (`npm run build`, `nod
 - Security checkpoint: local `npm run check` passed with 225 tests, both TypeScript projects, and the production build. Six additional HTTP/API tests exercise rate-limit responses and expiry, IPv6 aggregation, account isolation across IP changes, shared profile/deletion budgets, and the explicit test-only bypass. The dependency audit reported zero vulnerabilities. No new browser UI behavior was introduced by this correction; the manual browser evidence above remains separate from these automated checks.
 - Hosted verification of code commit `10b4f1a28e0b0d27429f0c541675263d2f9ea1e8`: [CI 35885304817](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304817) passed every job, including PostgreSQL. [Security 35885304655](https://github.com/republique-et-canton-de-geneve/MeetLoom/actions/runs/35885304655) passed the exact Docker build, arbitrary-UID/read-only-root runtime check, Trivy, and CodeQL. The separate CodeQL findings check `107264308348` also passed. The pause requested by the user follows this completed checkpoint; the final documentation-only follow-up records these results.
 - Continuation checkpoint (branch `claude/epic-pascal-3gk99i`): local `npm run check` passed with 228 tests, both TypeScript projects, and the production build. The same 228 tests passed on a disposable PostgreSQL 16 database. Formatting checks passed and the production dependency audit reported zero vulnerabilities. Three new tests cover rate-limiter store shutdown when an application closes or fails to assemble. Hosted CI does not run on a pull request targeting `codex/meetloom-v1`; hosted results for these commits are expected once they reach that branch.
+- Acceptance round 1 (`codex/meetloom-v1`): local `npm run check` passed with 251 tests, both TypeScript projects, and the production build. The same 251 tests passed on PostgreSQL 16, and formatting checks passed. Hosted checks run when these commits are pushed to `codex/meetloom-v1`.
