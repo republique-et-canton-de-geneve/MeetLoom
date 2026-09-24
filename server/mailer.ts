@@ -28,7 +28,7 @@ export interface MailTransport {
   send(message: MailMessage): Promise<void>;
   close?(): void;
 }
-export function createMailTransport(config: MailConfig): MailTransport {
+function createMailTransport(config: MailConfig): MailTransport {
   const transport = nodemailer.createTransport({
     host: config.host,
     port: config.port,

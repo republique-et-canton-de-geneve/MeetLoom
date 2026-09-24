@@ -31,7 +31,7 @@ async function canCreateAccount(sql: Sql, sessionId: string, userId: string) {
   );
   return !!allowed;
 }
-export async function sessionParticipants(
+async function sessionParticipants(
   sql: Sql,
   sessionId: string,
 ): Promise<Participant[]> {

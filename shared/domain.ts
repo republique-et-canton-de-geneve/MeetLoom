@@ -12,7 +12,7 @@ import type {
   SoundSettings,
 } from "./model.js";
 
-export const BUILTIN_COLUMNS = ["description", "facilitator"] as const;
+const BUILTIN_COLUMNS = ["description", "facilitator"] as const;
 const id = () => globalThis.crypto.randomUUID();
 
 export interface DurationNode {
@@ -120,7 +120,7 @@ function scaleActivities<T extends PublicBlock>(
  * All rooms ran at the same time: the longest room(s) take the actual time,
  * their activities scaled proportionally; shorter rooms keep their plan,
  * unless the actual time is shorter, which caps them. */
-export function spreadParallelActual<T extends PublicBlock>(
+function spreadParallelActual<T extends PublicBlock>(
   block: T,
   minutes: number,
 ): T {
@@ -143,7 +143,7 @@ export function spreadParallelActual<T extends PublicBlock>(
 
 /** Adds time to a timed step. A parallel block's duration comes from its
  * rooms, so the time goes to the last activity of its longest room. */
-export function extendBlock<T extends PublicBlock>(
+function extendBlock<T extends PublicBlock>(
   blocks: readonly T[],
   id: string,
   minutes: number,

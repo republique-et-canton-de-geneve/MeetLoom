@@ -195,4 +195,3 @@ export function PageEditor({
     </article>
   );
 }
-export default PageEditor;

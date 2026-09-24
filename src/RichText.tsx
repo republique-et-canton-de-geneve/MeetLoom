@@ -78,4 +78,3 @@ export const RichText = memo(function RichText({
   })({ content: doc });
   return <div className={`rich-text ${className}`}>{rendered}</div>;
 });
-export default RichText;

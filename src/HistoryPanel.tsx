@@ -39,7 +39,7 @@ type Restore = {
   targetDayId: string;
   mode: "replace" | "copy";
 };
-export function HistoryPanel({ session, editable, reload, close }: Props) {
+function HistoryPanel({ session, editable, reload, close }: Props) {
   const { t, locale } = useI18n();
   const [tab, setTab] = useState<"versions" | "journal" | "deleted">(
     "versions",

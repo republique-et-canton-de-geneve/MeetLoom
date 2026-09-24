@@ -2,7 +2,7 @@
 export const RICH_TEXT_PREFIX = "meetloom:richtext:v1:";
 export const RICH_TEXT_LIMIT = 30000;
 
-export interface RichMark {
+interface RichMark {
   type: string;
   attrs?: Record<string, string>;
 }
@@ -196,7 +196,7 @@ export function parseRichText(value: string): RichNode | null {
     return null;
   }
 }
-export function plainTextDocument(value: string): RichNode {
+function plainTextDocument(value: string): RichNode {
   return {
     type: "doc",
     content: value.split(/\r?\n/u).map((line) => ({
@@ -254,10 +254,6 @@ export function richTextMentions(value: string): string[] {
   };
   if (doc) walk(doc);
   return [...result];
-}
-
-export function completedTaskMentions(value: string): Set<string> {
-  return new Set(completedTaskMentionCounts(value).keys());
 }
 
 export function completedTaskMentionCounts(value: string): Map<string, number> {

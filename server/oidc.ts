@@ -40,7 +40,7 @@ export interface OidcAdapter {
 }
 /** All signature, issuer, audience, expiry, nonce and PKCE checks are delegated to
  * the maintained OpenID Connect library, never a hand-decoded JWT. */
-export function createOidcAdapter(config: OidcConfig): OidcAdapter {
+function createOidcAdapter(config: OidcConfig): OidcAdapter {
   let configuration: Promise<oidc.Configuration> | undefined;
   const get = () =>
     (configuration ??= oidc

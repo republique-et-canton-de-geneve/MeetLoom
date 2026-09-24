@@ -93,7 +93,7 @@ import {
 } from "./TimeFields";
 import SessionOverview from "./SessionOverview";
 import ColumnResizer from "./ColumnResizer";
-import RichTextEditor from "./RichTextEditor";
+import { RichTextEditor } from "./RichTextEditor";
 import ExportPanel from "./ExportPanel";
 import type { PrintOptions } from "./export-options";
 import { TasksMaterialsPanel } from "./TasksMaterialsPanel";
@@ -137,7 +137,7 @@ import { mergeSessionDraft } from "./session-merge";
 import { flushSync } from "react-dom";
 import { registerNavigationGuard } from "./navigation";
 
-export function useCategoryLabel(overrides?: CategoryDefinition[]) {
+function useCategoryLabel(overrides?: CategoryDefinition[]) {
   const { locale } = useI18n();
   return (category: Category) =>
     categoriesFor(locale, overrides).find((c) => c.id === category)?.label ??

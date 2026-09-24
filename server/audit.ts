@@ -16,7 +16,7 @@ export const AUDIT_ACTIONS = [
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** Rows are kept this long, then pruned when new events are written. */
-export const AUDIT_RETENTION_DAYS = 400;
+const AUDIT_RETENTION_DAYS = 400;
 
 /**
  * Appends one audit row inside the caller's transaction, so the action and

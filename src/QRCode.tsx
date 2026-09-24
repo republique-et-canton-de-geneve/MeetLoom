@@ -53,4 +53,3 @@ export function QRCode({
     </figure>
   ) : null;
 }
-export default QRCode;

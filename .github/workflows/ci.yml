@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run deadcode
       - run: npm run check
       - run: npm run format:check
       - name: Check infrastructure formatting

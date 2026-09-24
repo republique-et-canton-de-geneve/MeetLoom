@@ -9,7 +9,7 @@ export interface PublicQuotas {
   /** Visitor comments kept per share link. */
   visitorComments: number;
 }
-export const DEFAULT_PUBLIC_QUOTAS: PublicQuotas = {
+const DEFAULT_PUBLIC_QUOTAS: PublicQuotas = {
   formResponses: 5000,
   formBytes: 100 * 1024 * 1024,
   visitorComments: 2000,
@@ -27,7 +27,7 @@ export interface RequestBudget {
   /** Every request of one signed-in account, whatever its address. */
   perUser: number;
 }
-export const DEFAULT_REQUEST_BUDGET: RequestBudget = {
+const DEFAULT_REQUEST_BUDGET: RequestBudget = {
   perAddress: 12000,
   perUser: 1200,
 };
