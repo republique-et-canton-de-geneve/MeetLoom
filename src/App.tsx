@@ -70,6 +70,7 @@ const PublicForm = lazy(() => import("./PublicForm"));
 const RecoverAccount = lazy(() => import("./RecoverAccount"));
 const ProfileSettings = lazy(() => import("./ProfileSettings"));
 const AdminAccounts = lazy(() => import("./AdminAccounts"));
+const AdminSettings = lazy(() => import("./AdminSettings"));
 const WorkspacePanel = lazy(() => import("./WorkspacePanel"));
 const LifecyclePanel = lazy(() => import("./LifecyclePanel"));
 const ReportTrashPanel = lazy(() => import("./ReportTrashPanel"));
@@ -112,6 +113,8 @@ type AuthStatus = {
   requiresBootstrapToken?: boolean;
   oidcEnabled?: boolean;
   passwordResetEnabled?: boolean;
+  signupEnabled?: boolean;
+  signupDomains?: string[];
 };
 export default function App() {
   return (
@@ -239,7 +242,10 @@ function AuthScreen({
   const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const setup = auth.needsSetup || !!inviteToken;
+  const [signingUp, setSigningUp] = useState(false);
+  const signup = signingUp && !auth.needsSetup && !inviteToken;
+  // Every form that creates an account asks for a name and a new password.
+  const setup = auth.needsSetup || !!inviteToken || signup;
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -251,7 +257,9 @@ function AuthScreen({
           ? "/auth/accept-invite"
           : auth.needsSetup
             ? "/auth/setup"
-            : "/auth/login",
+            : signup
+              ? "/auth/signup"
+              : "/auth/login",
         { ...data, locale, token: inviteToken },
       );
       onSuccess();
@@ -334,10 +342,20 @@ function AuthScreen({
                     "Créez le premier compte pour commencer à préparer vos séances.",
                     "Create the first account to start planning your sessions.",
                   )
-                : t(
-                    "Connectez-vous pour retrouver vos séances et votre équipe.",
-                    "Sign in to find your sessions and your team.",
-                  )}
+                : signup
+                  ? auth.signupDomains?.length
+                    ? t(
+                        `Créez votre compte avec une adresse ${auth.signupDomains.map((d) => "@" + d).join(", ")}.`,
+                        `Create your account with an ${auth.signupDomains.map((d) => "@" + d).join(", ")} address.`,
+                      )
+                    : t(
+                        "Créez votre compte pour préparer vos séances.",
+                        "Create your account to plan your sessions.",
+                      )
+                  : t(
+                      "Connectez-vous pour retrouver vos séances et votre équipe.",
+                      "Sign in to find your sessions and your team.",
+                    )}
           </p>
           {error && <ErrorBanner message={error} />}
           {setup && (
@@ -412,18 +430,54 @@ function AuthScreen({
               "Hosted in your organization. No advertising.",
             )}
           </p>
-          {!setup && (
+          {!auth.needsSetup && !inviteToken && (
             <p className="auth-account-hint">
-              <strong>{t("Pas encore de compte ?", "No account yet?")}</strong>{" "}
-              {auth.oidcEnabled
-                ? t(
-                    "Utilisez la connexion de votre organisation ci-dessous, ou demandez une invitation à un administrateur MeetLoom.",
-                    "Use your organization's sign-in below, or ask a MeetLoom administrator for an invitation.",
-                  )
-                : t(
-                    "Les comptes sont créés sur invitation : demandez-en une à un administrateur MeetLoom de votre organisation. Vous recevrez un lien pour choisir votre mot de passe.",
-                    "Accounts are created by invitation: ask a MeetLoom administrator in your organization. You will receive a link to choose your password.",
-                  )}
+              {signup ? (
+                <>
+                  {t("Déjà un compte ?", "Already have an account?")}{" "}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => {
+                      setSigningUp(false);
+                      setError("");
+                    }}
+                  >
+                    {t("Se connecter", "Sign in")}
+                  </button>
+                </>
+              ) : auth.signupEnabled ? (
+                <>
+                  <strong>
+                    {t("Pas encore de compte ?", "No account yet?")}
+                  </strong>{" "}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => {
+                      setSigningUp(true);
+                      setError("");
+                    }}
+                  >
+                    {t("Créer un compte", "Create an account")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong>
+                    {t("Pas encore de compte ?", "No account yet?")}
+                  </strong>{" "}
+                  {auth.oidcEnabled
+                    ? t(
+                        "Utilisez la connexion de votre organisation ci-dessous, ou demandez une invitation à un administrateur MeetLoom.",
+                        "Use your organization's sign-in below, or ask a MeetLoom administrator for an invitation.",
+                      )
+                    : t(
+                        "Les comptes sont créés sur invitation : demandez-en une à un administrateur MeetLoom de votre organisation. Vous recevrez un lien pour choisir votre mot de passe.",
+                        "Accounts are created by invitation: ask a MeetLoom administrator in your organization. You will receive a link to choose your password.",
+                      )}
+                </>
+              )}
             </p>
           )}
         </form>
@@ -2131,6 +2185,7 @@ function Dashboard({
           <Suspense fallback={<Loading />}>
             <ProfileSettings user={user} onSaved={refreshUser} />
             <AdminAccounts user={user} />
+            <AdminSettings user={user} />
           </Suspense>
           <p className="muted">
             {t(

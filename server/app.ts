@@ -119,6 +119,23 @@ const email = z
   .transform((value) => value.toLowerCase().trim());
 const password = z.string().min(12).max(256);
 const name = z.string().trim().min(1).max(120);
+/** Self-service sign-up, off until an administrator enables it; optionally
+ * restricted to email domains. */
+const signupSchema = z.object({
+  enabled: z.boolean(),
+  domains: z
+    .array(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(
+          /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/,
+        ),
+    )
+    .max(20),
+});
+type SignupPolicy = z.infer<typeof signupSchema>;
 const idSchema = z.string().min(1).max(120);
 const publicUser = (row: UserRow): User => ({
   id: row.id,
@@ -354,10 +371,22 @@ async function assembleApp(config: AppConfig) {
   function setAuth(response: Response, raw: string) {
     response.cookie(authCookie, raw, { ...cookieOptions, maxAge: authTtl });
   }
+  async function signupPolicy(): Promise<SignupPolicy> {
+    const [row] = await db.all<{ payload: string }>(
+      "SELECT payload FROM app_settings WHERE id = $1",
+      ["signup"],
+    );
+    return row
+      ? signupSchema.parse(JSON.parse(row.payload))
+      : { enabled: false, domains: [] };
+  }
   app.get("/api/auth/status", async (_request, response) => {
     const initialized =
       (await db.all("SELECT id FROM bootstrap WHERE id = 1")).length > 0;
+    const signup = await signupPolicy();
     response.json({
+      signupEnabled: initialized && signup.enabled,
+      signupDomains: signup.enabled ? signup.domains : [],
       needsSetup: !initialized,
       user: response.locals.user ?? null,
       aiEnabled: !!config.ai?.baseUrl,
@@ -431,6 +460,94 @@ async function assembleApp(config: AppConfig) {
     }
     setAuth(response, raw);
     response.status(201).json({ user: publicUser(row) });
+  });
+  app.post("/api/auth/signup", authLimiter, async (request, response) => {
+    const input = z
+      .object({ name, email, password, locale: locale.default("fr") })
+      .parse(request.body);
+    const policy = await signupPolicy();
+    if (!policy.enabled)
+      return fail(
+        403,
+        "SIGNUP_DISABLED",
+        "Accounts are created by invitation on this installation.",
+      );
+    const domain = input.email.split("@").at(-1)!.toLowerCase();
+    if (policy.domains.length && !policy.domains.includes(domain))
+      return fail(
+        403,
+        "SIGNUP_DOMAIN",
+        "This email domain cannot create an account here.",
+      );
+    const encoded = await hashPassword(input.password);
+    const row: UserRow = {
+      id: randomUUID(),
+      name: input.name,
+      email: input.email,
+      locale: input.locale,
+      password: encoded,
+      is_admin: 0,
+    };
+    let raw: string;
+    try {
+      raw = await db.transaction(async (sql) => {
+        if (!(await sql.all("SELECT id FROM bootstrap WHERE id = 1")).length)
+          return fail(
+            409,
+            "SETUP_REQUIRED",
+            "The installation has no administrator yet.",
+          );
+        await sql.run(
+          "INSERT INTO users(id,name,email,locale,password,is_admin,created_at) VALUES($1,$2,$3,$4,$5,0,$6)",
+          [
+            row.id,
+            row.name,
+            row.email,
+            row.locale,
+            encoded,
+            new Date().toISOString(),
+          ],
+        );
+        return issueAuth(sql, row.id);
+      });
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      if (isUniqueViolation(error))
+        return fail(
+          409,
+          "ACCOUNT_EXISTS",
+          "An account already exists for this email.",
+        );
+      throw error;
+    }
+    setAuth(response, raw);
+    response.status(201).json({ user: publicUser(row) });
+  });
+  app.get("/api/admin/settings", admin, async (_request, response) => {
+    // Services are operator configuration (environment, ConfigMap, Secret):
+    // shown read-only here, never editable from the browser.
+    response.json({
+      signup: await signupPolicy(),
+      services: {
+        smtp: !!config.mail,
+        oidc: !!config.oidc,
+        ai: config.ai?.baseUrl
+          ? {
+              model: config.ai.model ?? null,
+              visionModel: config.ai.visionModel ?? null,
+            }
+          : null,
+      },
+    });
+  });
+  app.put("/api/admin/settings/signup", admin, async (request, response) => {
+    const signup = signupSchema.parse(request.body);
+    signup.domains = [...new Set(signup.domains)];
+    await db.run(
+      "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+      ["signup", JSON.stringify(signup)],
+    );
+    response.json({ signup });
   });
   app.post("/api/auth/login", authLimiter, async (request, response) => {
     const input = z

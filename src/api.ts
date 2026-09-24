@@ -302,6 +302,18 @@ const messages: Record<string, [string, string]> = {
     "L’adresse e-mail ou le mot de passe est incorrect.",
     "Email or password is incorrect.",
   ],
+  SIGNUP_DISABLED: [
+    "Les comptes sont créés sur invitation dans cette installation.",
+    "Accounts are created by invitation on this installation.",
+  ],
+  SIGNUP_DOMAIN: [
+    "Cette adresse e-mail ne peut pas créer de compte ici. Utilisez l’adresse de votre organisation.",
+    "This email address cannot create an account here. Use your organization's address.",
+  ],
+  SETUP_REQUIRED: [
+    "L’installation n’a pas encore d’administrateur.",
+    "The installation has no administrator yet.",
+  ],
   ACCOUNT_EXISTS: [
     "Un compte existe déjà pour cette adresse e-mail.",
     "An account already exists for this email.",

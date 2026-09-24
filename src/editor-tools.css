@@ -1652,3 +1652,16 @@
   flex-shrink: 0;
   color: #d93a32;
 }
+.admin-settings h4 {
+  margin: 16px 0 8px;
+  font-size: 13px;
+}
+.admin-settings label {
+  margin: 8px 0;
+}
+.admin-services {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.8;
+}
