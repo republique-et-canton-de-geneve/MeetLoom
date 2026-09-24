@@ -112,10 +112,15 @@ export function timerAudioStep(
         : null,
     status: run.status,
     revision: run.revision,
+    // Added time (an extension, or an edited block resumed later) re-arms an
+    // alert once the remaining time is back above its trigger point.
     warned: sameExecution
-      ? previous.warned
+      ? previous.warned &&
+        !(threshold !== null && view.remainingSeconds > threshold)
       : threshold !== null && view.remainingSeconds <= threshold,
-    ended: sameExecution ? previous.ended : view.remainingSeconds <= 0,
+    ended: sameExecution
+      ? previous.ended && view.remainingSeconds <= 0
+      : view.remainingSeconds <= 0,
   };
   let warning = false,
     end = false;

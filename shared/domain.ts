@@ -989,12 +989,20 @@ export function transitionRun(
     const nextIndex = index + (action === "next" ? 1 : -1);
     const next = playable[nextIndex];
     if (action === "previous" && !next) return session;
-    run.actualDurations = {
-      ...current.actualDurations,
-      [block.id]:
-        (current.actualDurations?.[block.id] ?? 0) +
-        elapsedSeconds(current, now),
-    };
+    const actualDurations = { ...current.actualDurations };
+    let resumed = 0;
+    if (action === "next")
+      actualDurations[block.id] =
+        (actualDurations[block.id] ?? 0) + elapsedSeconds(current, now);
+    else {
+      // Going back treats the advance as a mistake: the block being left
+      // becomes upcoming again, and the earlier block resumes from the time
+      // already spent on it, against its current (possibly edited) duration.
+      delete actualDurations[block.id];
+      resumed = actualDurations[next.id] ?? 0;
+      delete actualDurations[next.id];
+    }
+    run.actualDurations = actualDurations;
     run.completedDuration = Math.max(
       0,
       current.completedDuration +
@@ -1002,7 +1010,7 @@ export function transitionRun(
           ? plannedBlockSeconds(current, block)
           : -plannedBlockSeconds(current, next)),
     );
-    run.elapsedBeforePause = 0;
+    run.elapsedBeforePause = resumed;
     run.blockId = next?.id ?? null;
     run.status = next ? current.status : "finished";
     run.startedAt = next && current.status === "running" ? now : null;

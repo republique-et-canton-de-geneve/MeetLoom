@@ -422,18 +422,34 @@ function runningFixture() {
   session.sound = { ...session.sound, mode: "minutes", value: 1, atEnd: true };
   return transitionRun(session, "start", { autoAdvance: true }, 1000);
 }
-test("audio warnings fire once per execution, including a revisited block", () => {
+test("audio warnings fire once per block, and a revisited block warns when its resumed countdown crosses the threshold", () => {
+  const session = runningFixture();
+  let frame = timerAudioStep(null, session, 1000, true).frame;
+  // Leave the two-minute block after 30 seconds, before its one-minute warning.
+  const next = transitionRun(session, "next", {}, 31000);
+  frame = timerAudioStep(frame, next, 31000, true).frame;
+  const back = transitionRun(next, "previous", {}, 41000);
+  frame = timerAudioStep(frame, back, 41000, true).frame;
+  // Resumed at 30 s elapsed: 90 s remain, so the warning is due 30 s later.
+  const early = timerAudioStep(frame, back, 70000, true);
+  assert.equal(early.warning, false);
+  const warned = timerAudioStep(early.frame, back, 72000, true);
+  assert.equal(warned.warning, true);
+  assert.equal(timerAudioStep(warned.frame, back, 73000, true).warning, false);
+});
+
+test("revisiting a block already past its warning does not replay it", () => {
   const session = runningFixture();
   let frame = timerAudioStep(null, session, 1000, true).frame;
   const first = timerAudioStep(frame, session, 62000, true);
   assert.equal(first.warning, true);
   frame = first.frame;
-  assert.equal(timerAudioStep(frame, session, 63000, true).warning, false);
   const next = transitionRun(session, "next", {}, 65000);
   frame = timerAudioStep(frame, next, 65000, true).frame;
   const back = transitionRun(next, "previous", {}, 66000);
   frame = timerAudioStep(frame, back, 66000, true).frame;
-  assert.equal(timerAudioStep(frame, back, 127000, true).warning, true);
+  assert.equal(timerAudioStep(frame, back, 67000, true).warning, false);
+  assert.equal(timerAudioStep(frame, back, 90000, true).warning, false);
 });
 
 test("audio catches an auto-advance boundary that occurred between local ticks", () => {
@@ -445,18 +461,23 @@ test("audio catches an auto-advance boundary that occurred between local ticks",
   assert.equal(timerAudioStep(heard.frame, advanced, 121100, true).end, false);
 });
 
-test("a paused block revisited between observations gets a fresh warning", () => {
+test("a paused block extended before being revisited warns again at its new threshold", () => {
   const session = runningFixture();
   const initial = timerAudioStep(null, session, 1000, true).frame;
   let frame = timerAudioStep(initial, session, 62000, true).frame;
   const paused = transitionRun(session, "pause", {}, 65000);
   frame = timerAudioStep(frame, paused, 65000, true).frame;
   const next = transitionRun(paused, "next", {}, 66000);
-  const back = transitionRun(next, "previous", {}, 67000);
+  // The facilitator gives the first block one more minute, then returns to it.
+  const edited = structuredClone(next);
+  edited.days[0].blocks[0].duration = 3;
+  const back = transitionRun(edited, "previous", {}, 67000);
   frame = timerAudioStep(frame, back, 67000, true).frame;
   const resumed = transitionRun(back, "resume", {}, 68000);
   frame = timerAudioStep(frame, resumed, 68000, true).frame;
-  assert.equal(timerAudioStep(frame, resumed, 129000, true).warning, true);
+  // 64 s were spent: 116 s remain, and the one-minute warning is 56 s away.
+  assert.equal(timerAudioStep(frame, resumed, 123000, true).warning, false);
+  assert.equal(timerAudioStep(frame, resumed, 125000, true).warning, true);
 });
 
 test("pause/resume and device mute do not replay earlier alerts; session mute overrides device sound", () => {
