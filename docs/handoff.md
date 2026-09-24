@@ -4,6 +4,15 @@ Last updated: September 24, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**Acceptance round 4 (September 24, 2026).** Fixed on `codex/meetloom-v1`, modelled on the SessionLab screenshots the user supplied:
+
+- **Groups and parallel activities are logical containers:** a compact header (`containerHeader` in `src/Editor.tsx`) with only the start time and padlock, the duration computed from the activities (plain text, not a field), the actual duration once passed, a collapse arrow, the title, and delete. No description, category, assignee or columns. Groups are light blue, parallel activities light orange.
+- **Parallel rooms as tabs** (`roomsArea`): “Vue d’ensemble” (side by side), one tab per room with its duration and, once passed, the block's actual duration, and “Ajouter une salle”. A room tab shows its activities as ordinary rows, a rename field and a delete button (when more than one room). No side panel is needed.
+- **Overlaps:** a red banner states “N min de chevauchement entre A et B”. Sub-minute differences (fractional legacy durations, or a lock set at a displayed time) are neither gaps nor overlaps (`scheduleTreeDay`), which removes the false “overlaps the previous block” warning after locking/unlocking. Test in `tests/whole-minutes.test.ts`.
+- **Countdown before a scheduled start:** the timer bar and the always-on-top window turn blue with an amber “DÉBUT DANS”; clocks past an hour read h:mm:ss (`clock` in `src/Timer.tsx`).
+
+Local verification: `npm run check` passed with 275 tests, both TypeScript projects and the build; the same 275 tests passed on PostgreSQL 16; formatting checks passed. Browser evidence is in [manual-qa.md](manual-qa.md).
+
 **Acceptance round 3 (September 24, 2026).** Fixed on `codex/meetloom-v1`:
 
 - **Day start and first block:** the day's first block always starts at the day's start time and is shown locked (a non-toggleable padlock). Editing the day's start time moves it; editing the first block's time changes the day's start time and clears any stale lock on it. The scheduler no longer back-calculates the day from the first lock found (`scheduleTreeDay`); later locks create gaps or expose overlaps. This also fixes “start from scheduled time” beginning a minute early: a 1-minute first block followed by a block locked at the day's start used to move the day one minute earlier. Tests: `tests/domain.test.ts`, `tests/tree.test.ts`, `tests/planned-start.test.ts`.

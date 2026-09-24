@@ -90,6 +90,15 @@ Executed on September 24, 2026 against a production build with the same scratch 
 - After locking then unlocking a time, moving the pointer away hides the open padlock.
 - The timer content rendered as the floating window: at 560×188 kicker, title (22 px), position, clock (45 px), label, delta and progress bar are all visible; at 560×130 position and delta disappear; at 420×100 the kicker and label too; at 360×70 and 200×60 only the clock (18 px) and the progress bar remain.
 
+## Acceptance round 4 fixes (Claude Code, headless Chromium)
+
+Executed on September 24, 2026 against a production build with the same scratch database.
+
+- Added parallel activities from the agenda footer: the block shows a compact orange header (time, “(10 min)”, title) with tabs “Vue d’ensemble”, “Salle 1 (… min)”, “Salle 2 (… min)” and “Ajouter une salle”. Added an activity to a room from its tab, added a third room from the tab bar, and renamed it in place. The header has no description, category, assignee or duration field.
+- The group header is light blue with the time, “(0 min)” computed from its activities, the title and “Ajouter une activité au groupe”.
+- Locking a block one minute before the previous block ends shows “1 min de chevauchement entre bloc 1 et bloc 2”; locking it at its own time, then unlocking it, shows no banner.
+- Started “Depuis l’heure prévue” with the day at 23:30: the timer bar turned blue with “DÉBUT DANS” in amber and the countdown before the start.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational Qwen endpoint was provided.
@@ -114,3 +123,4 @@ Executed on September 24, 2026 against a production build with the same scratch 
 - Acceptance round 1 (`codex/meetloom-v1`): local `npm run check` passed with 251 tests, both TypeScript projects, and the production build. The same 251 tests passed on PostgreSQL 16, and formatting checks passed. Hosted checks run when these commits are pushed to `codex/meetloom-v1`.
 - Acceptance round 2 (`codex/meetloom-v1`): local `npm run check` passed with 272 tests, both TypeScript projects and the production build; the same 272 tests passed on PostgreSQL 16; formatting checks passed.
 - Acceptance round 3: local `npm run check` passed with 273 tests, both TypeScript projects and the build; the same 273 tests passed on PostgreSQL 16; formatting checks passed.
+- Acceptance round 4: local `npm run check` passed with 275 tests, both TypeScript projects and the build; the same 275 tests passed on PostgreSQL 16; formatting checks passed.
