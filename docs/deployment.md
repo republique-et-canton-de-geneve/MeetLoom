@@ -195,7 +195,37 @@ Keep the previous image reference and a backup before updating. If the new versi
 
 Environment-specific resources are not rewritten by `oc apply -k`. An initialized PostgreSQL password cannot be changed by editing the Secret alone: update the database and `DATABASE_URL` together. Changing a Secret/ConfigMap injected into the application requires restarting its Deployment.
 
-For the LLM, set `LLM_BASE_URL`, `LLM_MODEL`, and optionally `LLM_API_KEY` in the environment during initial installation, or edit the resources above afterward. Example endpoint: `https://internal-llm.example/v1`. To import documents using a compatible vision model, add `LLM_VISION_MODEL` to the ConfigMap; the text model is sufficient for agenda construction. Mount the internal CA and use `NODE_EXTRA_CA_CERTS` if needed; retain TLS verification.
+### Connect an LLM
+
+AI assistance is optional: without `LLM_BASE_URL` the AI features do not appear. Any server exposing the OpenAI-compatible Chat Completions API works; the base URL ends in `/v1` (the application adds `/chat/completions`) and the model is the exact identifier that server expects.
+
+At the first installation, set `LLM_BASE_URL`, `LLM_MODEL` and optionally `LLM_API_KEY` in the environment before running the installer. The installer never changes these resources once they exist, so on an installation already running, edit them and restart:
+
+```powershell
+oc -n meetloom-dev set data configmap/meetloom-settings LLM_BASE_URL=https://llm.example.org/v1 LLM_MODEL=exact-model-id
+oc -n meetloom-dev create secret generic meetloom-ai --from-literal=LLM_API_KEY=your-key
+oc -n meetloom-dev rollout restart deployment/meetloom
+oc -n meetloom-dev rollout status deployment/meetloom
+```
+
+Create the `meetloom-ai` Secret only if the server needs a key; to change it later, `oc -n meetloom-dev set data secret/meetloom-ai LLM_API_KEY=new-key`, then restart. To import scanned documents (OCR), also set `LLM_VISION_MODEL` to a vision model of the same server; the text model is enough to build agendas. The restart replaces pods one at a time, so it causes no interruption, and a pod that fails to start never replaces a running one (`oc -n meetloom-dev logs deployment/meetloom` shows why).
+
+To check: **Mon compte & équipe → Paramètres de l'installation** shows the AI as configured with its model names, and **Assistant IA** appears in the editor. If a network policy restricts egress, allow the LLM host.
+
+### Internal certificate authority
+
+If the LLM, the SMTP relay or the OIDC provider uses a certificate signed by an internal authority, calls fail with a certificate error. Give Node.js that authority; never disable TLS verification. With the authority in a PEM file:
+
+```powershell
+oc -n meetloom-dev create configmap meetloom-ca --from-file=ca.crt=internal-ca.pem
+oc -n meetloom-dev set volume deployment/meetloom --add --name=meetloom-ca --type=configmap --configmap-name=meetloom-ca --mount-path=/etc/meetloom-ca --read-only
+oc -n meetloom-dev set data configmap/meetloom-settings NODE_EXTRA_CA_CERTS=/etc/meetloom-ca/ca.crt
+oc -n meetloom-dev rollout restart deployment/meetloom
+```
+
+On OpenShift, a ConfigMap labelled `config.openshift.io/inject-trusted-cabundle=true` receives the cluster's trusted bundle under the key `ca-bundle.crt` instead: create it empty with that label, mount it the same way, and point `NODE_EXTRA_CA_CERTS` to `/etc/meetloom-ca/ca-bundle.crt`. Rerunning the installer keeps a volume added this way; check it after an update with `oc -n meetloom-dev set volume deployment/meetloom`.
+
+### Organizational sign-in and email
 
 OIDC sign-in, email password recovery, and email digests are optional. They require no mandatory public service. Follow the [OIDC and SMTP guide](services-auth-mail.md) to create the two `meetloom-services` resources, register the callback URL with your identity provider, and test SMTP delivery. Installation scripts neither generate nor replace their secrets. Local sign-in and in-app notifications remain available without this configuration.
 

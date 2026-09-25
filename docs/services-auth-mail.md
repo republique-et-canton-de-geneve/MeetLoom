@@ -41,7 +41,7 @@ The **Forgot password** link appears when SMTP is configured. Its response is id
 
 Each account explicitly chooses digests and/or reminders in its profile; both preferences are disabled by default. `SMTP_SCHEDULED=false` disables only the scheduler and leaves password recovery available.
 
-The built-in scheduler checks work every minute; a single application instance is recommended. Digests group unread notifications from completed hourly intervals as titles and links to sessions that remain accessible. They do not copy private comment text. The last processed interval is stored in the database; recovery after an interruption is limited to seven days.
+The built-in scheduler checks work every minute on every application pod. Each message has a persistent delivery key and is claimed in the database by one pod before sending, so running several pods sends it once. Digests group unread notifications from completed hourly intervals as titles and links to sessions that remain accessible. They do not copy private comment text. The last processed interval is stored in the database; recovery after an interruption is limited to seven days.
 
 Reminders are sent three calendar days before the session's first date, in its timezone. Only owners and editors receive them, including effective workspace roles. They summarize open tasks, materials, and the number of unresolved discussions; lists are limited to 30 items. They contain no secret public links. Archived sessions, revoked access, and disabled accounts are excluded.
 
@@ -49,7 +49,36 @@ A persistent delivery key and temporary lock prevent ordinary duplicate sends; f
 
 ## OpenShift / Kubernetes
 
-The Deployment optionally loads a ConfigMap and Secret, both named `meetloom-services`. The base installation works without them. Copy and adapt the [non-secret example](../k8s/optional/services-config.example.yaml), removing settings for any service you do not use. Store secrets in a local file excluded from Git, such as `.env.services-secrets`:
+The Deployment optionally loads a ConfigMap and a Secret, both named `meetloom-services`. The base installation works without them, and the installer never creates or changes them.
+
+### SMTP only
+
+The non-secret settings go into the ConfigMap:
+
+```powershell
+oc -n meetloom-dev create configmap meetloom-services --from-literal=SMTP_HOST=smtp.example.org --from-literal=SMTP_PORT=587 --from-literal=SMTP_SECURE=false --from-literal=SMTP_FROM=meetloom@example.org --from-literal=SMTP_SCHEDULED=true
+```
+
+If the relay requires authentication, put the credentials in a local file excluded from Git, such as `.env.smtp`:
+
+```dotenv
+SMTP_USER=service-account
+SMTP_PASSWORD=your-private-value
+```
+
+Then create the Secret and restart:
+
+```powershell
+oc -n meetloom-dev create secret generic meetloom-services --from-env-file=.env.smtp
+oc -n meetloom-dev rollout restart deployment/meetloom
+oc -n meetloom-dev rollout status deployment/meetloom
+```
+
+To change one value later: `oc -n meetloom-dev set data configmap/meetloom-services SMTP_FROM=new@example.org` (or `secret/meetloom-services` for credentials), then restart.
+
+### OIDC and SMTP
+
+Copy and adapt the [non-secret example](../k8s/optional/services-config.example.yaml). It contains both services: **remove the `OIDC_*` lines if you do not use organizational sign-in**, because an incomplete OIDC configuration stops the application from starting. Put the secrets in a local file excluded from Git, such as `.env.services-secrets`:
 
 ```dotenv
 OIDC_CLIENT_SECRET=your-private-value
@@ -57,7 +86,7 @@ SMTP_USER=service-account
 SMTP_PASSWORD=your-private-value
 ```
 
-After selecting the target project, apply the configuration and secret, then restart the Deployment:
+Apply both, then restart:
 
 ```sh
 oc apply -f path-to-your-services-config.yaml
@@ -66,7 +95,15 @@ oc rollout restart deployment/meetloom
 oc rollout status deployment/meetloom
 ```
 
-Keep these values in your usual secret manager. GitHub needs neither cluster access nor SMTP/OIDC credentials. If a network policy controls egress, allow internal DNS, the HTTPS OIDC provider, and the SMTP relay. Docker Compose passes the same variables; place an HTTPS proxy in front of the application and adjust `APP_ORIGIN`/`COOKIE_SECURE` before enabling these services in production.
+### Check and troubleshoot
+
+- **Mon compte & équipe → Paramètres de l'installation** shows SMTP and OIDC as configured.
+- The sign-in page shows **Mot de passe oublié ?** once SMTP is configured: sign out and request a link for your own address. Digests and reminders stay off until each person turns them on in their profile.
+- The restart replaces pods one at a time: a pod whose configuration is invalid (an `SMTP_FROM` that is not an address, `SMTP_USER` without `SMTP_PASSWORD`, an incomplete OIDC setup) never replaces a running one, so nothing is interrupted. `oc -n meetloom-dev logs deployment/meetloom` shows the reason.
+- If a network policy controls egress, allow internal DNS, the HTTPS OIDC provider and the SMTP relay. A relay or provider signed by an internal authority needs it installed as described in [Internal certificate authority](deployment.md#internal-certificate-authority); never disable TLS verification.
+- A development environment loaded with production data holds real addresses: leave SMTP unconfigured there, or set `SMTP_SCHEDULED=false`, so it sends no reminders to real people.
+
+Keep these values in your usual secret manager. GitHub needs neither cluster access nor SMTP/OIDC credentials. Docker Compose passes the same variables; place an HTTPS proxy in front of the application and adjust `APP_ORIGIN`/`COOKIE_SECURE` before enabling these services in production.
 
 ## Self-service sign-up
 
