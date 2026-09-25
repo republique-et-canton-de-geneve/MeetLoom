@@ -126,7 +126,6 @@ import HistoryPanel from "./HistoryPanel";
 import CommentsPanel from "./CommentsPanel";
 import NotificationBell from "./NotificationBell";
 import { MentionProvider } from "./MentionContext";
-import PublicDiscussion from "./PublicDiscussion";
 import {
   DisplayTimeProvider,
   DisplayTimeControl,
@@ -282,6 +281,11 @@ export default function Editor({
         .then(() => setPanelState(next))
         .catch((error) => data.setError(error.message));
     } else setPanelState(next);
+  };
+  const [historyTab, setHistoryTab] = useState<"versions" | "runs">("versions");
+  const openHistory = (tab: "versions" | "runs") => {
+    setHistoryTab(tab);
+    setPanel("history");
   };
   const [printAgenda, setPrintAgenda] = useState<{
     session: PublicSession;
@@ -1668,6 +1672,7 @@ export default function Editor({
                 </div>
                 <div className="topbar-actions">
                   <NotificationBell
+                    navigate={navigate}
                     onNavigate={(sessionId, blockId, commentId) => {
                       if (sessionId !== session.id)
                         navigate(
@@ -1872,6 +1877,11 @@ export default function Editor({
                     dayId={day.id}
                     canRun={runnable}
                     action={data.action}
+                    showRuns={() =>
+                      void data.save().then((saved) => {
+                        if (saved) openHistory("runs");
+                      })
+                    }
                   />
                 </div>
                 <div className="agenda-toolbar">
@@ -1940,7 +1950,7 @@ export default function Editor({
                     </button>
                     <button
                       className="icon-button comment-count-button"
-                      title={t("Commentaires", "Comments")}
+                      title={t("Discussion", "Discussion")}
                       onClick={() => {
                         setCommentTarget({});
                         setPanel("comments");
@@ -2028,12 +2038,12 @@ export default function Editor({
                               }}
                             >
                               <MessageSquare size={16} />
-                              {t("Commentaires", "Comments")}
+                              {t("Discussion", "Discussion")}
                             </button>
                             <button
                               onClick={() => {
                                 void data.save().then((saved) => {
-                                  if (saved) setPanel("history");
+                                  if (saved) openHistory("versions");
                                 });
                                 setMenu(false);
                               }}
@@ -2951,15 +2961,19 @@ export default function Editor({
             )}
             {panel === "history" && (
               <HistoryPanel
+                key={historyTab}
                 session={session}
                 editable={editable}
                 reload={data.load}
+                update={mutate}
+                initialTab={historyTab}
                 close={() => setPanel(null)}
               />
             )}
             {panel === "comments" && (
               <CommentsPanel
                 session={session}
+                role={role}
                 initialBlockId={commentTarget.blockId}
                 initialCommentId={commentTarget.commentId}
                 close={() => {
@@ -2973,13 +2987,7 @@ export default function Editor({
                   if (target) setSelectedDay(target.id);
                   showDetail(blockId);
                 }}
-              >
-                <PublicDiscussion
-                  session={session}
-                  role={role}
-                  readOnly={!!session.lifecycle?.closedAt}
-                />
-              </CommentsPanel>
+              />
             )}
             {panel === "import" && (
               <ImportPanel

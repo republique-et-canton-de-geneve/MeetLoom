@@ -443,3 +443,7 @@
   vertical-align: middle;
   box-shadow: 0 0 0 3px var(--green-pale);
 }
+/* After the sessions, the welcome banner needs room above it. */
+.dashboard-shell .welcome-banner {
+  margin-top: 36px;
+}

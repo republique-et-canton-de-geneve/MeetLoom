@@ -49,6 +49,66 @@ test("Escape closes the actions menu and side panels, and returns focus", async 
   await page.keyboard.press("Escape");
   await expect(page.locator(".editor-inspector")).toHaveCount(0);
   await expect(page.locator("button.expand-block").first()).toBeFocused();
+  // The facilitator picker closes on a click anywhere else.
+  const picker = page.locator(".assignee-picker").first();
+  await picker.locator("summary").click();
+  await expect(picker.locator(".assignee-menu")).toBeVisible();
+  await page.locator(".agenda-summary").click();
+  await expect(picker.locator(".assignee-menu")).toBeHidden();
+});
+
+test("a day is deleted from the overview, but never the last one", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Atelier deux jours");
+  await addActivities(page, ["Ouverture"]);
+  await page.getByRole("button", { name: "Autres actions" }).click();
+  await page.getByRole("button", { name: "Dupliquer ce jour" }).click();
+  await page.getByRole("button", { name: "Vue d’ensemble" }).first().click();
+  const days = page.locator(".overview-day");
+  await expect(days).toHaveCount(2);
+  page.once("dialog", (dialog) => dialog.accept());
+  await days
+    .nth(1)
+    .getByRole("button", { name: /^Supprimer / })
+    .click();
+  await expect(days).toHaveCount(1);
+  await expect(
+    days.first().getByRole("button", { name: /^Supprimer / }),
+  ).toBeDisabled();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+});
+
+test("agenda contents show they can be reordered, and where a dragged item lands", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Atelier ordre");
+  await page.getByRole("button", { name: "Page", exact: true }).click();
+  const rows = page.locator(".session-navigation .content-nav-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1).locator(".content-nav-grip")).toHaveCount(1);
+  // Drop on the top half of the day: the page goes before it.
+  const day = rows.nth(0).locator(".nav-item");
+  const box = (await day.boundingBox())!;
+  await rows
+    .nth(1)
+    .locator(".nav-item")
+    .dragTo(day, { targetPosition: { x: box.width / 2, y: 3 } });
+  await expect(rows.nth(0)).toContainText("Nouvelle page");
+  await expect(rows.nth(1)).toContainText("Jour 1");
+  await expect(page.locator(".content-nav-row.drop-before")).toHaveCount(0);
+
+  // A session feedback form (ROTI + comment) is one click away.
+  await page.getByRole("button", { name: "Feedback (ROTI)" }).click();
+  await expect(rows.nth(2)).toContainText("Feedback de la séance");
+  await expect(
+    page.locator(
+      'input[value="Ce temps passé ensemble en valait-il la peine ? (ROTI)"]',
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
 });
 
 test("on a phone the editor fits the screen and days keep their names", async ({

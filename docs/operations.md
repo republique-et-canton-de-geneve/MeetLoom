@@ -139,6 +139,8 @@ The announcement banner is stored with the installation settings; changing it is
 
 User reports (**Report a problem**) are stored in the `feedback` table and exported with the data. The server never calls GitHub: **Create a GitHub issue** opens a draft in the administrator's own browser. `FEEDBACK_ISSUES_URL` sets where that draft goes (default: this project's GitHub issues, `https://github.com/<owner>/<repo>/issues/new` format); set it empty to show only **Copy**.
 
+Past runs (`session_runs`, one row per finished run with its starting plan and actual durations) and grouped notifications (`app_notifications`, visitor comments and problem reports) are exported with the data and removed with their session or account. Nothing to configure.
+
 ## Retention, closure, and optional services
 
 Archiving organizes the dashboard without removing existing access. Closing makes the agenda read-only and closes public contributions; deleting immediately removes visitor and collaborator access while retaining a recoverable session for 30 days. Deleted agenda items remain recoverable for 72 hours. Expired sessions are purged in bounded batches when the trash is viewed or used; this is not a precisely scheduled background purge. Copies in backups follow their own retention policy. See the [workspace, history, and lifecycle guide](workspaces-and-lifecycle.md).

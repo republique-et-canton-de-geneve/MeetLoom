@@ -1,7 +1,16 @@
-import { CalendarDays, FileText, ListChecks, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+  CalendarDays,
+  FileText,
+  GripVertical,
+  ListChecks,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import type { Session } from "../shared/model";
 import {
   newPage,
+  newFeedbackForm,
   newForm,
   orderedContent,
   type ContentItem,
@@ -23,6 +32,20 @@ export default function SessionNavigation({
 }) {
   const { t, locale } = useI18n(),
     items = orderedContent(session);
+  // While dragging: the item moved, and where it would land if dropped now.
+  const [dragging, setDragging] = useState<string | null>(null),
+    [target, setTarget] = useState<{
+      index: number;
+      side: "before" | "after";
+    } | null>(null);
+  const side = (event: React.DragEvent<HTMLElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return event.clientY < box.top + box.height / 2 ? "before" : "after";
+  };
+  const stopDragging = () => {
+    setDragging(null);
+    setTarget(null);
+  };
   const move = (from: number, to: number) => {
     if (
       from < 0 ||
@@ -43,8 +66,13 @@ export default function SessionNavigation({
         .map((item) => current.days.find((day) => day.id === item.id)!),
     }));
   };
-  const add = (kind: "page" | "form") => {
-    const content = kind === "page" ? newPage(locale) : newForm(locale);
+  const add = (kind: "page" | "form", feedback = false) => {
+    const content =
+      kind === "page"
+        ? newPage(locale)
+        : feedback
+          ? newFeedbackForm(locale)
+          : newForm(locale);
     update((current) => ({
       ...current,
       ...(kind === "page"
@@ -75,11 +103,36 @@ export default function SessionNavigation({
                 ? session.pages?.find((page) => page.id === item.id)
                 : session.forms?.find((form) => form.id === item.id);
           return (
-            <div className="content-nav-row" key={item.id}>
+            <div
+              className={[
+                "content-nav-row",
+                dragging === item.id ? "dragging" : "",
+                target?.index === index && dragging !== item.id
+                  ? `drop-${target.side}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              key={item.id}
+            >
+              {editable && (
+                <GripVertical
+                  size={13}
+                  className="content-nav-grip"
+                  aria-hidden="true"
+                />
+              )}
               <button
                 className={`nav-item ${selected?.id === item.id ? "active" : ""}`}
                 draggable={editable}
-                title={t("Alt + ↑↓ pour déplacer", "Alt + ↑↓ to move")}
+                title={
+                  editable
+                    ? t(
+                        "Glissez pour réordonner (ou Alt + ↑↓)",
+                        "Drag to reorder (or Alt + ↑↓)",
+                      )
+                    : undefined
+                }
                 onClick={() => onSelect(item)}
                 onKeyDown={(event) => {
                   if (
@@ -97,29 +150,37 @@ export default function SessionNavigation({
                     item.id,
                   );
                   event.dataTransfer.effectAllowed = "move";
+                  setDragging(item.id);
                 }}
+                onDragEnd={stopDragging}
                 onDragOver={(event) => {
                   if (
                     editable &&
                     event.dataTransfer.types.includes(
                       "application/x-meetloom-content",
                     )
-                  )
+                  ) {
                     event.preventDefault();
+                    const next = side(event);
+                    if (target?.index !== index || target.side !== next)
+                      setTarget({ index, side: next });
+                  }
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  if (editable)
-                    move(
-                      items.findIndex(
-                        (item) =>
-                          item.id ===
-                          event.dataTransfer.getData(
-                            "application/x-meetloom-content",
-                          ),
+                  const from = items.findIndex(
+                    (value) =>
+                      value.id ===
+                      event.dataTransfer.getData(
+                        "application/x-meetloom-content",
                       ),
-                      index,
-                    );
+                  );
+                  // The slot before or after this row, once the dragged item
+                  // has left its own place.
+                  let to = side(event) === "after" ? index + 1 : index;
+                  if (from < to) to--;
+                  stopDragging();
+                  if (editable) move(from, to);
                 }}
               >
                 {item.kind === "day" ? (
@@ -182,6 +243,17 @@ export default function SessionNavigation({
           >
             <Plus size={13} />
             {t("Formulaire", "Form")}
+          </button>
+          <button
+            disabled={(session.forms?.length ?? 0) >= 30}
+            title={t(
+              "Formulaire prêt à l’emploi : note ROTI de 1 à 5 et commentaire libre",
+              "Ready-made form: ROTI rating from 1 to 5 and a free comment",
+            )}
+            onClick={() => add("form", true)}
+          >
+            <Plus size={13} />
+            {t("Feedback (ROTI)", "Feedback (ROTI)")}
           </button>
         </div>
       )}

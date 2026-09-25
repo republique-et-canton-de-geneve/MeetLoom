@@ -729,6 +729,9 @@ export function publicProjection(
       completedDuration: run.completedDuration,
       autoAdvance: run.autoAdvance,
       revision: run.revision,
+      ...(run.plannedTotal !== undefined
+        ? { plannedTotal: run.plannedTotal }
+        : {}),
       ...(run.plannedDurations
         ? {
             plannedDurations: Object.fromEntries(
@@ -830,6 +833,41 @@ const plannedBlockSeconds = (
     ? run.plannedDurations[block.id]
     : block.duration * 60;
 };
+/**
+ * A day's blocks with new durations (seconds per timed step, from a run):
+ * whole minutes rounded down when `actual`, and a parallel step spread over
+ * its longest room like the timer does. Blocks without a value keep theirs.
+ */
+export function withStepDurations<D extends { id: string; blocks: Block[] }>(
+  days: D[],
+  dayId: string,
+  durations: Record<string, number>,
+  actual = true,
+): D[] {
+  return days.map((day) =>
+    day.id !== dayId
+      ? day
+      : {
+          ...day,
+          blocks: mapBlocks(day.blocks, (block) => {
+            if (!Object.hasOwn(durations, block.id)) return block;
+            if (actual && block.kind === "parallel")
+              return spreadParallelActual(
+                block,
+                Math.floor(durations[block.id] / 60 + 1e-9),
+              );
+            // Whole minutes, rounded down: the agenda never shows seconds.
+            const duration = actual
+              ? Math.floor(durations[block.id] / 60 + 1e-9)
+              : durations[block.id] / 60;
+            if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
+              throw new Error("Actual duration exceeds agenda limit");
+            return { ...block, duration };
+          }),
+        },
+  );
+}
+
 export function timerView(session: TimedSession, now = Date.now()) {
   const day = session.days.find(
     (candidate) => candidate.id === session.run.dayId,
@@ -862,25 +900,46 @@ export function timerView(session: TimedSession, now = Date.now()) {
       ? (session.run.plannedDurations[value.id] ?? 0)
       : value.duration * 60;
   const delta =
-    active && session.run.runStartedAt !== null
-      ? Math.max(0, now - session.run.runStartedAt) / 1000 -
-        session.run.completedDuration +
-        Math.max(0, remaining) -
-        plannedBlockSeconds(session.run, block) +
-        upcoming.reduce(
-          (sum, value) => sum + value.duration * 60 - plannedUpcoming(value),
-          0,
-        )
-      : 0;
+    active &&
+    session.run.runStartedAt !== null &&
+    session.run.plannedTotal !== undefined
+      ? // Projected end against the day planned at the start: a block
+        // removed ahead saves its time, a block added costs its duration.
+        Math.max(0, now - session.run.runStartedAt) / 1000 +
+        Math.max(0, remaining) +
+        upcoming.reduce((sum, value) => sum + value.duration * 60, 0) -
+        session.run.plannedTotal
+      : active && session.run.runStartedAt !== null
+        ? Math.max(0, now - session.run.runStartedAt) / 1000 -
+          session.run.completedDuration +
+          Math.max(0, remaining) -
+          plannedBlockSeconds(session.run, block) +
+          upcoming.reduce(
+            (sum, value) => sum + value.duration * 60 - plannedUpcoming(value),
+            0,
+          )
+        : 0;
   const waiting =
     session.run.status === "running" &&
     session.run.startedAt !== null &&
     session.run.elapsedBeforePause === 0 &&
     session.run.startedAt > now;
+  const startsIn = waiting ? (session.run.startedAt! - now) / 1000 : 0;
+  // What is left of the whole day at the current durations: the rest of the
+  // current block (nothing once it overruns) and every block still to come.
+  const dayRemaining = block
+    ? startsIn +
+      Math.max(0, remaining) +
+      upcoming.reduce((sum, value) => sum + value.duration * 60, 0)
+    : 0;
   return {
     block,
     /** Seconds until a scheduled start that is still ahead, otherwise 0. */
-    startsInSeconds: waiting ? (session.run.startedAt! - now) / 1000 : 0,
+    startsInSeconds: startsIn,
+    /** Seconds left until the end of the day's last block. */
+    dayRemainingSeconds: dayRemaining,
+    /** When the day is expected to end (epoch milliseconds), or null. */
+    projectedEnd: active && block ? now + dayRemaining * 1000 : null,
     remainingSeconds: block ? remaining : 0,
     elapsedSeconds: elapsed,
     progress: duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0,
@@ -1065,6 +1124,7 @@ export function transitionRun(
       throw new Error("Unknown day");
     Object.assign(run, INITIAL_RUN, { dayId });
     delete run.plannedDurations;
+    delete run.plannedTotal;
     delete run.actualDurations;
   } else if (action === "start") {
     if (input.dayId && !days.some((candidate) => candidate.id === input.dayId))
@@ -1112,6 +1172,14 @@ export function transitionRun(
             .flatMap((value) => allBlocks([value]).slice(1)),
         ].map((value) => [value.id, value.duration * 60]),
       ),
+      plannedTotal: chosenBlocks
+        .slice(
+          Math.max(
+            0,
+            chosenBlocks.findIndex((value) => value.id === chosenBlock.id),
+          ),
+        )
+        .reduce((sum, value) => sum + value.duration * 60, 0),
       actualDurations: {},
     });
   } else if (action === "pause" && current.status === "running") {
@@ -1201,28 +1269,11 @@ export function transitionRun(
         ? current.plannedDurations
         : current.actualDurations;
     if (!durations) return session;
-    days = days.map((value) =>
-      value.id !== current.dayId
-        ? value
-        : {
-            ...value,
-            blocks: mapBlocks(value.blocks, (value) => {
-              if (!Object.hasOwn(durations, value.id)) return value;
-              if (action === "apply-actual" && value.kind === "parallel")
-                return spreadParallelActual(
-                  value,
-                  Math.floor(durations[value.id] / 60 + 1e-9),
-                );
-              // Whole minutes, rounded down: the agenda never shows seconds.
-              const duration =
-                action === "apply-actual"
-                  ? Math.floor(durations[value.id] / 60 + 1e-9)
-                  : durations[value.id] / 60;
-              if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
-                throw new Error("Actual duration exceeds agenda limit");
-              return { ...value, duration };
-            }),
-          },
+    days = withStepDurations(
+      days,
+      current.dayId,
+      durations,
+      action === "apply-actual",
     );
   } else if (action === "configure" && input.autoAdvance !== undefined)
     run.autoAdvance = input.autoAdvance;

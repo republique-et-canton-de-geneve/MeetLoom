@@ -34,8 +34,9 @@
   display: block;
   margin-bottom: 8px;
 }
-.assignee-menu > label {
+.assignee-menu > label:not(.assignee-free-label) {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 7px;
   padding: 6px 0;

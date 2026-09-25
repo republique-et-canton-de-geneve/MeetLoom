@@ -1114,6 +1114,7 @@ function Dashboard({
           </div>
           <div className="topbar-actions">
             <NotificationBell
+              navigate={navigate}
               onNavigate={(sid, bid, cid) => {
                 const search = new URLSearchParams();
                 if (bid) search.set("block", bid);
@@ -1121,10 +1122,6 @@ function Dashboard({
                 navigate(`/session/${sid}${search.size ? `?${search}` : ""}`);
               }}
             />
-            <span className="privacy-badge">
-              <span />
-              {t("Espace privé", "Private workspace")}
-            </span>
             <LanguageSwitch />
             <Avatar src={user.avatar} name={user.name} small />
           </div>
@@ -1171,75 +1168,6 @@ function Dashboard({
               <Check size={16} />
               {notice}
             </p>
-          )}
-          {!archived && folder === null && (
-            <div className="welcome-banner">
-              <div>
-                <span className="banner-tag">
-                  <Sparkles size={14} />
-                  {t("CHAQUE MINUTE A DU SENS", "MAKE EVERY MINUTE COUNT")}
-                </span>
-                <h2>
-                  {t(
-                    "Les bonnes séances se tissent ensemble.",
-                    "Great sessions come together.",
-                  )}
-                </h2>
-                <p>
-                  {t(
-                    "Composez un agenda clair, partagez les bons détails\net gardez le fil, du premier mot à la dernière décision.",
-                    "Build a clear agenda, share the right details,\nand keep everyone on track from start to finish.",
-                  )}
-                </p>
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    newSession(
-                      t("Atelier de lancement", "Kick-off workshop"),
-                      true,
-                    )
-                  }
-                  disabled={busy || !canCreate}
-                >
-                  {t("Explorer un exemple", "Explore an example")}
-                  <ArrowUpRight size={17} />
-                </button>
-              </div>
-              <div className="banner-illustration" aria-hidden="true">
-                <div className="illustration-orbit" />
-                <div className="illustration-card card-back">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <div className="illustration-card card-front">
-                  <div className="illustration-label">
-                    <span className="mini-dot green" />
-                    09:00 — 10:30
-                  </div>
-                  <div className="illustration-row">
-                    <span className="mini-dot green" />
-                    <span />
-                    <b>10′</b>
-                  </div>
-                  <div className="illustration-row">
-                    <span className="mini-dot purple" />
-                    <span />
-                    <b>25′</b>
-                  </div>
-                  <div className="illustration-row">
-                    <span className="mini-dot amber" />
-                    <span />
-                    <b>15′</b>
-                  </div>
-                  <div className="illustration-line" />
-                </div>
-                <span className="illustration-check">
-                  <Check size={20} />
-                </span>
-                <span className="illustration-star">✳</span>
-              </div>
-            </div>
           )}
           <div className="section-heading dashboard-section-heading">
             <div>
@@ -1745,6 +1673,76 @@ function Dashboard({
                   </button>
                 </div>
               )}
+            </div>
+          )}
+          {/* After the sessions: an invitation, not a wall to scroll past. */}
+          {!archived && folder === null && (
+            <div className="welcome-banner">
+              <div>
+                <span className="banner-tag">
+                  <Sparkles size={14} />
+                  {t("CHAQUE MINUTE A DU SENS", "MAKE EVERY MINUTE COUNT")}
+                </span>
+                <h2>
+                  {t(
+                    "Les bonnes séances se tissent ensemble.",
+                    "Great sessions come together.",
+                  )}
+                </h2>
+                <p>
+                  {t(
+                    "Composez un agenda clair, partagez les bons détails\net gardez le fil, du premier mot à la dernière décision.",
+                    "Build a clear agenda, share the right details,\nand keep everyone on track from start to finish.",
+                  )}
+                </p>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    newSession(
+                      t("Atelier de lancement", "Kick-off workshop"),
+                      true,
+                    )
+                  }
+                  disabled={busy || !canCreate}
+                >
+                  {t("Explorer un exemple", "Explore an example")}
+                  <ArrowUpRight size={17} />
+                </button>
+              </div>
+              <div className="banner-illustration" aria-hidden="true">
+                <div className="illustration-orbit" />
+                <div className="illustration-card card-back">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div className="illustration-card card-front">
+                  <div className="illustration-label">
+                    <span className="mini-dot green" />
+                    09:00 — 10:30
+                  </div>
+                  <div className="illustration-row">
+                    <span className="mini-dot green" />
+                    <span />
+                    <b>10′</b>
+                  </div>
+                  <div className="illustration-row">
+                    <span className="mini-dot purple" />
+                    <span />
+                    <b>25′</b>
+                  </div>
+                  <div className="illustration-row">
+                    <span className="mini-dot amber" />
+                    <span />
+                    <b>15′</b>
+                  </div>
+                  <div className="illustration-line" />
+                </div>
+                <span className="illustration-check">
+                  <Check size={20} />
+                </span>
+                <span className="illustration-star">✳</span>
+              </div>
             </div>
           )}
           <footer className="dashboard-footer">

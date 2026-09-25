@@ -57,9 +57,8 @@ test("an announcement reaches everyone, and a reported problem reaches the admin
   await colleague.getByRole("button", { name: "Envoyer" }).click();
   await expect(colleague.getByRole("status")).toContainText("Merci !");
   await expect(colleague.locator(".feedback-list")).toContainText("Reçu");
-  // Closing the banner hides this message in this browser.
-  await banner.getByRole("button", { name: "Masquer ce message" }).click();
-  await expect(banner).toHaveCount(0);
+  // The banner stays as long as the administrators keep it.
+  await expect(banner.getByRole("button")).toHaveCount(0);
 
   await page.goto("/account/feedback-inbox");
   const report = page.locator(".admin-feedback li", {

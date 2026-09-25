@@ -19,6 +19,7 @@ import {
 import { accountProfile } from "./accounts.js";
 import { sessionCollaborators } from "./collaborators.js";
 import { guardSessionLifecycle } from "./lifecycle.js";
+import { createAppNotifications } from "./app-notifications.js";
 
 type Dependencies = {
   db: Database;
@@ -185,6 +186,7 @@ export async function installCommentsApi(
   { db, accessible, authenticated }: Dependencies,
 ) {
   for (const statement of schema) await db.run(statement);
+  await createAppNotifications(db);
   // Add thread metadata to legacy comments without changing or deleting their content.
   await db.transaction(async (sql) => {
     await sql.run(
@@ -535,10 +537,32 @@ export async function installCommentsApi(
       `SELECT COUNT(*) AS count ${scope} AND n.read_at IS NULL`,
       [user.id],
     );
+    // Visitor comments and problem reports, grouped (app-notifications.ts):
+    // shown only while the account still has the access they concern.
+    const groupedScope = `FROM app_notifications n LEFT JOIN sessions s ON s.id=n.session_id LEFT JOIN members m ON m.session_id=s.id AND m.user_id=$1 LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN workspace_members wm ON wm.workspace_id=sw.workspace_id AND wm.user_id=$1 WHERE n.user_id=$1 AND (n.session_id IS NULL AND n.kind='feedback' AND EXISTS(SELECT 1 FROM users a WHERE a.id=$1 AND a.is_admin=1) OR n.session_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM session_lifecycle l WHERE l.session_id=s.id AND l.deleted_at IS NOT NULL) AND (s.owner_id=$1 OR m.user_id=$1 OR wm.user_id=$1))`;
+    const grouped = await db.all<Omit<TeamNotification, "sessionTitle">>(
+      `SELECT DISTINCT n.id,n.session_id AS "sessionId",NULL AS "blockId",n.target_id AS "commentId",n.kind,n.count,n.updated_at AS "createdAt",n.read_at AS "readAt",n.actor ${groupedScope} ORDER BY n.updated_at DESC LIMIT 50`,
+      [user.id],
+    );
+    const [{ count: groupedUnread }] = await db.all<{
+      count: string | number;
+    }>(
+      `SELECT COUNT(DISTINCT n.id) AS count ${groupedScope} AND n.read_at IS NULL`,
+      [user.id],
+    );
     // Read a potentially large agenda payload only once per distinct session,
     // rather than duplicating it on every notification row.
     const titles = new Map<string, string>();
-    for (const sessionId of new Set(rows.map((row) => row.sessionId))) {
+    const all = [...rows, ...grouped]
+      .map((row) => ({
+        ...row,
+        count: row.count ? Number(row.count) : undefined,
+      }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 100);
+    for (const sessionId of new Set(
+      all.map((row) => row.sessionId).filter((id): id is string => !!id),
+    )) {
       const [row] = await db.all<{ payload: string }>(
         "SELECT payload FROM sessions WHERE id=$1",
         [sessionId],
@@ -547,11 +571,13 @@ export async function installCommentsApi(
         titles.set(sessionId, (JSON.parse(row.payload) as Session).title);
     }
     response.json({
-      notifications: rows.map((notification) => ({
+      notifications: all.map((notification) => ({
         ...notification,
-        sessionTitle: titles.get(notification.sessionId) ?? "",
+        sessionTitle: notification.sessionId
+          ? (titles.get(notification.sessionId) ?? "")
+          : "",
       })),
-      unread: Number(count),
+      unread: Number(count) + Number(groupedUnread),
     });
   });
   app.post(
@@ -568,17 +594,18 @@ export async function installCommentsApi(
           .parse(request.body),
         user = actor(response),
         now = new Date().toISOString();
-      if (input.all)
-        await db.run(
-          "UPDATE notifications SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL",
-          [now, user.id],
-        );
-      else
-        for (const notificationId of input.ids!)
+      for (const table of ["notifications", "app_notifications"])
+        if (input.all)
           await db.run(
-            "UPDATE notifications SET read_at=$1 WHERE user_id=$2 AND id=$3 AND read_at IS NULL",
-            [now, user.id, notificationId],
+            `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL`,
+            [now, user.id],
           );
+        else
+          for (const notificationId of input.ids!)
+            await db.run(
+              `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND id=$3 AND read_at IS NULL`,
+              [now, user.id, notificationId],
+            );
       response.json({ ok: true });
     },
   );
