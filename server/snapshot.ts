@@ -45,6 +45,7 @@ export const SNAPSHOT_TABLES = [
   "versions",
   "version_metadata",
   "session_journal",
+  "session_runs",
   "deleted_elements",
   "comments",
   "comment_threads",

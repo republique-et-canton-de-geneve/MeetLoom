@@ -13,6 +13,7 @@ import {
   Check,
   FastForward,
   TriangleAlert,
+  History,
 } from "lucide-react";
 import type {
   Locale,
@@ -413,11 +414,14 @@ export default function Timer({
   dayId,
   canRun,
   action,
+  showRuns,
 }: {
   session: Session;
   dayId: string;
   canRun: boolean;
   action: (action: string, input?: Record<string, unknown>) => Promise<void>;
+  /** Opens the past runs, where every run's plan and actual times stay. */
+  showRuns?: () => void;
 }) {
   const { t, locale } = useI18n();
   const [now, setNow] = useState(serverNow);
@@ -673,8 +677,8 @@ export default function Timer({
         <div className="timer-start-row">
           <span>
             {t(
-              "Durées actuelles conservées. Vous pouvez aussi :",
-              "Current durations kept. You can also:",
+              "Déroulé terminé : son plan de départ et ses durées réelles restent dans l’historique. Vous pouvez aussi :",
+              "Run finished: its starting plan and actual durations stay in the history. You can also:",
             )}
           </span>
           <button
@@ -682,7 +686,7 @@ export default function Timer({
             disabled={busy || !run.plannedDurations}
             onClick={() => void runAction("restore-plan")}
           >
-            {t("Restaurer le plan initial", "Restore original plan")}
+            {t("Restaurer le plan de départ", "Restore the starting plan")}
           </button>
           <button
             className="button small"
@@ -691,6 +695,12 @@ export default function Timer({
           >
             {t("Utiliser les durées réelles", "Use actual durations")}
           </button>
+          {showRuns && (
+            <button className="text-button" onClick={showRuns}>
+              <History size={14} />
+              {t("Voir les déroulés", "See past runs")}
+            </button>
+          )}
         </div>
       )}
       {canRun && previousAutomaticBlock && (

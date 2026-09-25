@@ -830,6 +830,41 @@ const plannedBlockSeconds = (
     ? run.plannedDurations[block.id]
     : block.duration * 60;
 };
+/**
+ * A day's blocks with new durations (seconds per timed step, from a run):
+ * whole minutes rounded down when `actual`, and a parallel step spread over
+ * its longest room like the timer does. Blocks without a value keep theirs.
+ */
+export function withStepDurations<D extends { id: string; blocks: Block[] }>(
+  days: D[],
+  dayId: string,
+  durations: Record<string, number>,
+  actual = true,
+): D[] {
+  return days.map((day) =>
+    day.id !== dayId
+      ? day
+      : {
+          ...day,
+          blocks: mapBlocks(day.blocks, (block) => {
+            if (!Object.hasOwn(durations, block.id)) return block;
+            if (actual && block.kind === "parallel")
+              return spreadParallelActual(
+                block,
+                Math.floor(durations[block.id] / 60 + 1e-9),
+              );
+            // Whole minutes, rounded down: the agenda never shows seconds.
+            const duration = actual
+              ? Math.floor(durations[block.id] / 60 + 1e-9)
+              : durations[block.id] / 60;
+            if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
+              throw new Error("Actual duration exceeds agenda limit");
+            return { ...block, duration };
+          }),
+        },
+  );
+}
+
 export function timerView(session: TimedSession, now = Date.now()) {
   const day = session.days.find(
     (candidate) => candidate.id === session.run.dayId,
@@ -1213,28 +1248,11 @@ export function transitionRun(
         ? current.plannedDurations
         : current.actualDurations;
     if (!durations) return session;
-    days = days.map((value) =>
-      value.id !== current.dayId
-        ? value
-        : {
-            ...value,
-            blocks: mapBlocks(value.blocks, (value) => {
-              if (!Object.hasOwn(durations, value.id)) return value;
-              if (action === "apply-actual" && value.kind === "parallel")
-                return spreadParallelActual(
-                  value,
-                  Math.floor(durations[value.id] / 60 + 1e-9),
-                );
-              // Whole minutes, rounded down: the agenda never shows seconds.
-              const duration =
-                action === "apply-actual"
-                  ? Math.floor(durations[value.id] / 60 + 1e-9)
-                  : durations[value.id] / 60;
-              if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
-                throw new Error("Actual duration exceeds agenda limit");
-              return { ...value, duration };
-            }),
-          },
+    days = withStepDurations(
+      days,
+      current.dayId,
+      durations,
+      action === "apply-actual",
     );
   } else if (action === "configure" && input.autoAdvance !== undefined)
     run.autoAdvance = input.autoAdvance;

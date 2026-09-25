@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { member, signIn } from "./helpers";
+import { duration, member, signIn } from "./helpers";
 
 const remaining = async (page: import("@playwright/test").Page) => {
   const text = await page.locator(".timer-bar .timer-clock strong").innerText();
@@ -48,11 +48,12 @@ test("facilitating: start, move on, come back where the block was, visitors foll
   ).toBeVisible();
 });
 
-test("a finished session shows no countdown, position or schedule estimate", async ({
+test("a finished session shows no countdown, position or schedule estimate, and keeps its initial plan", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
   await page.getByText("Atelier E2E").first().click();
+  const planned = await duration(page, "Idées").inputValue();
   await page.getByRole("button", { name: /Animer la séance/ }).click();
   const bar = page.locator(".timer-bar");
   await expect(bar).toContainText("Accueil");
@@ -66,10 +67,30 @@ test("a finished session shows no countdown, position or schedule estimate", asy
   await expect(bar).not.toContainText("Fin prévue");
   await expect(bar).not.toContainText("Dans le temps prévu");
   await expect(bar).not.toContainText(" / 3");
+
+  // "Use actual durations" rewrites the agenda, but the run history keeps
+  // the initial plan, which can be put back at any time.
+  await page
+    .getByRole("button", { name: "Utiliser les durées réelles" })
+    .click();
+  await page.getByRole("button", { name: "Voir les déroulés" }).click();
+  const initial = page.locator(".history-run.is-initial");
+  await expect(initial).toContainText("Plan initial");
+  await initial.getByText("Détail par étape").click();
+  await expect(initial.locator("tr", { hasText: "Idées" })).toContainText(
+    `${planned} min`,
+  );
+  await initial
+    .getByRole("button", { name: "Rétablir le plan initial" })
+    .click();
+  await expect(page.getByText("Plan rétabli dans l’agenda")).toBeVisible();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  await page.getByRole("button", { name: "Fermer le panneau" }).click();
   await page.getByTitle("Réinitialiser").click();
   await expect(
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
+  await expect(duration(page, "Idées")).toHaveValue(planned);
 });
 
 test("a visitor whose clock is ten minutes fast still sees the right countdown", async ({

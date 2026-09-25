@@ -282,6 +282,11 @@ export default function Editor({
         .catch((error) => data.setError(error.message));
     } else setPanelState(next);
   };
+  const [historyTab, setHistoryTab] = useState<"versions" | "runs">("versions");
+  const openHistory = (tab: "versions" | "runs") => {
+    setHistoryTab(tab);
+    setPanel("history");
+  };
   const [printAgenda, setPrintAgenda] = useState<{
     session: PublicSession;
     privateAudience: boolean;
@@ -1872,6 +1877,11 @@ export default function Editor({
                     dayId={day.id}
                     canRun={runnable}
                     action={data.action}
+                    showRuns={() =>
+                      void data.save().then((saved) => {
+                        if (saved) openHistory("runs");
+                      })
+                    }
                   />
                 </div>
                 <div className="agenda-toolbar">
@@ -2033,7 +2043,7 @@ export default function Editor({
                             <button
                               onClick={() => {
                                 void data.save().then((saved) => {
-                                  if (saved) setPanel("history");
+                                  if (saved) openHistory("versions");
                                 });
                                 setMenu(false);
                               }}
@@ -2951,9 +2961,12 @@ export default function Editor({
             )}
             {panel === "history" && (
               <HistoryPanel
+                key={historyTab}
                 session={session}
                 editable={editable}
                 reload={data.load}
+                update={mutate}
+                initialTab={historyTab}
                 close={() => setPanel(null)}
               />
             )}

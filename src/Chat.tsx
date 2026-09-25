@@ -12,7 +12,7 @@ import { Avatar } from "./ui";
 import "./chat.css";
 
 /** "14:05" today, "12 sept. 14:05" before. */
-export function when(iso: string, locale: string) {
+function when(iso: string, locale: string) {
   const date = new Date(iso),
     today = new Date().toDateString() === date.toDateString();
   return date.toLocaleString(locale, {

@@ -37,3 +37,17 @@ export interface DeletedElement {
   location: string;
   originalDayId?: string;
 }
+/** One finished run of a day: the plan it started from and the time actually
+ * spent, in seconds. The first run of a day keeps the initial plan. */
+export interface RunRecord {
+  id: string;
+  dayId: string;
+  dayTitle: string;
+  startedAt: string;
+  finishedAt: string;
+  /** Timed steps in order. */
+  blocks: { id: string; title: string; planned: number; actual: number }[];
+  /** Planned seconds per block, activities inside parallel rooms included:
+   * what "restore this plan" puts back. */
+  plan: Record<string, number>;
+}
