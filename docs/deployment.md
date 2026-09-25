@@ -212,6 +212,22 @@ Run the `meetloom-ai` line only if the server needs a key. It creates the Secret
 
 To check: **Mon compte & équipe → Paramètres de l'installation** shows the AI as configured with its model names, and **Assistant IA** appears in the editor. If a network policy restricts egress, allow the LLM host.
 
+If an AI request ends with **La réponse de l'IA est inutilisable** or **L'IA n'a pas eu la place de terminer sa réponse**, the application logs why, without the text of the request or the answer:
+
+```powershell
+oc -n meetloom-dev logs deployment/meetloom --since=1h | Select-String "AI service answer"
+```
+
+| Log line                                   | Cause and fix                                                                                                                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HTTP 401`, `HTTP 404`, `HTTP 400`         | Wrong key, URL or model name: check `LLM_API_KEY`, `LLM_BASE_URL` and the exact `LLM_MODEL`.                                                                                                               |
+| `not JSON` (often `text/html`)             | `LLM_BASE_URL` points at a web page, not at the API: it usually ends with `/v1`.                                                                                                                           |
+| `finish_reason=length before any answer`   | A reasoning model (Qwen3, DeepSeek-R1, gpt-oss…) spent the whole budget thinking. Raise `LLM_MAX_TOKENS` (default 4000, for example to 16000), and `AI_TIMEOUT_MS` (default 30000) since thinking is slow. |
+| `larger than AI_MAX_RESPONSE_BYTES`        | The answer, reasoning included, exceeds 100,000 bytes: raise `AI_MAX_RESPONSE_BYTES`.                                                                                                                      |
+| `empty content` or `no choices[0].message` | The server does not answer in the Chat Completions format: check that it is OpenAI-compatible.                                                                                                             |
+
+Reasoning shown between `<think>` tags at the start of an answer is removed. These settings go into `meetloom-settings` like the others (`oc set data configmap/meetloom-settings LLM_MAX_TOKENS=16000 AI_TIMEOUT_MS=120000`), followed by a restart.
+
 ### Internal certificate authority
 
 If the LLM, the SMTP relay or the OIDC provider uses a certificate signed by an internal authority, calls fail with a certificate error. Give Node.js that authority; never disable TLS verification. With the authority in a PEM file:
