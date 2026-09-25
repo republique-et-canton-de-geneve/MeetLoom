@@ -445,7 +445,7 @@ export default function ImportPanel({
                 </label>
                 <button
                   className="button secondary"
-                  disabled={!enabled || !text.trim() || busy}
+                  disabled={!text.trim() || busy}
                   onClick={() => void ai()}
                 >
                   <Sparkles size={16} />
