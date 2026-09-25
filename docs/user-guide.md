@@ -84,7 +84,7 @@ When the API is unavailable, MeetLoom opens a separate window and explains that 
 
 **My account & team** (the dashboard menu, or your name at the bottom of the sidebar) is a page of its own: profile, password and **Report a problem**, plus, for administrators, current activity, accounts and invitations, installation settings (including the announcement), backups and data, user feedback and logs.
 
-- **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. Anyone can close it; it comes back when an administrator changes it. It is public: never put anything confidential in it.
+- **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. It stays until an administrator removes it; nobody can close it. It is public: never put anything confidential in it.
 - **Report a problem** (dashboard, the editor's More actions menu, or the account page): describe a problem or suggest an idea; the page concerned is filled in for you. You follow what became of your reports on the same page. No GitHub account is needed.
 - **User feedback** (administrators): triage reports (received, in progress, done, dismissed). **Create a GitHub issue** opens a draft in your own browser, without the author's name, for you to review; the server never contacts GitHub.
 - **Logs** (administrators): the server messages of every pod, by level and text, kept 14 days by default. They say what failed and why (a route, an SMTP or AI error code), never passwords, content or answers.

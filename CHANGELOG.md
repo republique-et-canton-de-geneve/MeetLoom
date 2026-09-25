@@ -4,6 +4,10 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+### Changed
+
+- The announcement banner can no longer be closed: it stays until an administrator removes it.
+
 ## [0.1.2] - 2026-09-25
 
 ### Added
