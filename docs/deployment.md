@@ -144,6 +144,8 @@ Once validated, merge the pull request and publish the final `v0.1.0` from `main
 
 ## 4. Update after a new release
 
+**Before updating, check who is using the application.** Signed in as an administrator, open **Mon compte & équipe → Activité en cours**. It shows the installed version and the sessions an update could disturb: timers running or paused, people in the editor, visitor links followed in the last three minutes. An update replaces pods one at a time, so nobody loses work, but a timer or a visitor page can freeze for a few seconds: prefer a moment when the list is empty. After the update, the same panel (and the bottom of **Mon compte & équipe**, for every account) shows the new version.
+
 **The simplest and always safe way: rerun the installer with the new image.** It is the same command as the first installation, only the image tag changes:
 
 ```powershell

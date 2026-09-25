@@ -21,6 +21,7 @@ flowchart LR
 | Storage                | `server/db.ts`                                                | Shared parameterized SQL, PostgreSQL transactions, SQLite serialization, startup schema lock        |
 | Protection             | `security.ts`, `quotas.ts`, `audit.ts`                        | Hashing, rate limits and request budgets, public-link storage quotas, administrator audit trail     |
 | Accounts and services  | `accounts.ts`, `oidc.ts`, `mailer.ts`                         | Profiles, recovery, revocation, organizational sign-in, and optional messages                       |
+| Operations             | `operations.ts`, `version.ts`                                 | Installed version, and sessions in progress an update could disturb (administrators)                |
 | Organization           | `workspaces.ts`, `folders.ts`, `activity.ts`                  | Members and guests, settings, persistent folders, and read markers                                  |
 | Collaboration          | `participants.ts`, `comments.ts`, `presence.ts`, `sharing.ts` | Invitations, mentions, internal/public discussions, and scoped links                                |
 | History and lifecycle  | `history.ts`, `lifecycle.ts`                                  | Versions, activity log, deleted items, closure, and session trash                                   |

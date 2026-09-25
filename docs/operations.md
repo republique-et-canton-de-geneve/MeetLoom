@@ -11,7 +11,7 @@ oc -n meetloom-dev logs deployment/meetloom --tail=100
 oc -n meetloom-dev exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:3000/api/ready').then(async r=>{console.log(r.status);process.exit(r.ok?0:1)})"
 ```
 
-`/api/health` confirms that the process responds. `/api/ready` checks database availability. Readiness must not depend on the optional LLM: an LLM outage must not remove the application from service. Do not use logs to store prompts or private meeting content.
+`/api/health` confirms that the process responds. The installed version is shown to signed-in accounts (`/api/about`) and in the administrators' **Activité en cours** panel (`/api/admin/activity`); release images carry it in `APP_VERSION` and `APP_REVISION`, set at build time, and other builds fall back to `package.json`. `/api/ready` checks database availability. Readiness must not depend on the optional LLM: an LLM outage must not remove the application from service. Do not use logs to store prompts or private meeting content.
 
 | Symptom                 | Check                                                                         |
 | ----------------------- | ----------------------------------------------------------------------------- |
@@ -42,10 +42,11 @@ For local SQLite, stop the application before copying `meetloom.sqlite` and any 
 
 ## Update and roll back
 
-1. Record the current image with `oc -n meetloom-dev get deployment meetloom -o jsonpath='{.spec.template.spec.containers[0].image}'`.
-2. Take a backup and read any migration instructions.
-3. Change only the `app` container image in the `meetloom` Deployment, through the console or `oc set image`. Secrets, configuration, and the PVC are preserved. If the release changes manifests, rerun its installer with the new image.
-4. Check readiness, then sign-in, agenda opening, a visitor link, and the timer in a browser.
+1. Check **Mon compte & équipe → Activité en cours** as an administrator: installed version and sessions in progress (timers, editors, visitor links followed in the last three minutes). Prefer a moment without a live session.
+2. Record the current image with `oc -n meetloom-dev get deployment meetloom -o jsonpath='{.spec.template.spec.containers[0].image}'`.
+3. Take a backup and read any migration instructions.
+4. Change only the `app` container image in the `meetloom` Deployment, through the console or `oc set image`. Secrets, configuration, and the PVC are preserved. If the release changes manifests, rerun its installer with the new image.
+5. Check readiness, the version shown in **Activité en cours**, then sign-in, agenda opening, a visitor link, and the timer in a browser.
 
 If the version is incompatible, restore the previous image with `oc set image` or the console. An older image may not be able to read a migrated schema: data rollback then requires the backup and corresponding migration procedure. The application updates pod by pod without interruption; only a change to the PostgreSQL manifest restarts the database briefly (release notes say so).
 

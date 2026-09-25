@@ -120,7 +120,9 @@ jobs:
           IMAGE: ${{ steps.release.outputs.image }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          docker build --label org.opencontainers.image.revision="$GITHUB_SHA" \
+          docker build --build-arg APP_VERSION="$VERSION" \
+            --build-arg APP_REVISION="$GITHUB_SHA" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
             --label org.opencontainers.image.version="$VERSION" \
             --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
             -t "$IMAGE:$VERSION" -t "$IMAGE:sha-$GITHUB_SHA" .

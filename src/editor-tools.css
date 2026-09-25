@@ -972,6 +972,28 @@
 .admin-account-row .button-row {
   flex-wrap: wrap;
 }
+.admin-activity-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+}
+.admin-activity-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-activity-list small,
+.admin-activity-list span {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.admin-activity .button-row {
+  align-items: center;
+}
+.app-version {
+  margin-top: 18px;
+  font-size: 12px;
+}
 .account-deletion {
   margin-top: 20px;
   color: #8f3737;

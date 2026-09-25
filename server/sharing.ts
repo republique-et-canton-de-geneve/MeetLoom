@@ -25,6 +25,8 @@ interface Dependencies {
   synchronized: (session: Session) => Promise<Session>;
   rateLimits?: boolean;
   quotas: PublicQuotas;
+  /** Records that a visitor link is being followed (admin activity). */
+  linkVisited?: (shareId: string) => Promise<void>;
 }
 const id = z.string().min(1).max(120),
   rawToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -37,7 +39,14 @@ const commentInput = z.object({
 });
 export async function registerSharing(
   app: Express,
-  { db, accessible, synchronized, rateLimits, quotas }: Dependencies,
+  {
+    db,
+    accessible,
+    synchronized,
+    rateLimits,
+    quotas,
+    linkVisited,
+  }: Dependencies,
 ) {
   await db.transaction(async (sql) => {
     await sql.run(
@@ -370,6 +379,7 @@ export async function registerSharing(
   });
   app.get("/api/public/:token", async (req, res) => {
     const link = await resolve(req.params.token);
+    await linkVisited?.(link.id);
     const projected = sharedAgenda(
       await synchronized(link.session),
       link.options,

@@ -18,6 +18,10 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit \
     && chgrp -R 0 /app/data \
     && chmod -R g=u /app/data
 COPY --from=build /app/dist ./dist
+# Set by the release workflow; shown to signed-in users and administrators.
+ARG APP_VERSION=""
+ARG APP_REVISION=""
+ENV APP_VERSION=$APP_VERSION APP_REVISION=$APP_REVISION
 USER 10001:0
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

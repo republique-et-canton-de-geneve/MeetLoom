@@ -35,6 +35,8 @@ import {
 } from "./security.js";
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
+import { registerOperations } from "./operations.js";
+import { appVersion, type AppVersion } from "./version.js";
 import { registerSharing } from "./sharing.js";
 import { audit } from "./audit.js";
 import {
@@ -88,6 +90,8 @@ import {
 import { installActivityApi, sessionReadMarkers } from "./activity.js";
 
 export interface AppConfig {
+  /** Defaults to the image's APP_VERSION/APP_REVISION or package.json. */
+  version?: AppVersion;
   databaseUrl?: string;
   sqlitePath?: string;
   database?: Database;
@@ -1190,12 +1194,19 @@ async function assembleWith(db: Database, config: AppConfig) {
       role,
     });
   });
+  const operations = await registerOperations(app, {
+    db,
+    authenticated,
+    admin,
+    version: config.version ?? appVersion(),
+  });
   await registerSharing(app, {
     db,
     accessible,
     synchronized,
     rateLimits: config.rateLimits,
     quotas: publicQuotas(config.quotas),
+    linkVisited: operations.linkVisited,
   });
   installTransfersApi(app, { db, accessible, save });
   app.get("/api/sessions/:id/members", async (request, response) => {
