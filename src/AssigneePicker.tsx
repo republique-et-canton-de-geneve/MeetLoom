@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserRoundPlus, X } from "lucide-react";
 import type { Block } from "../shared/model";
 import { participantSummary } from "../shared/participants";
@@ -19,7 +19,18 @@ export default function AssigneePicker({
   const { participants } = useParticipants(),
     { t } = useI18n(),
     ref = useRef<HTMLDetailsElement>(null),
+    [open, setOpen] = useState(false),
     selected = block.assignees ?? [];
+  // A click or a tap anywhere else closes the menu, like other menus.
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node))
+        ref.current.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
   const apply = (assignees: NonNullable<Block["assignees"]>) =>
     change({ assignees, facilitator: participantSummary(assignees) });
   const avatars = (
@@ -54,6 +65,7 @@ export default function AssigneePicker({
     <details
       ref={ref}
       className="assignee-picker"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();

@@ -49,6 +49,12 @@ test("Escape closes the actions menu and side panels, and returns focus", async 
   await page.keyboard.press("Escape");
   await expect(page.locator(".editor-inspector")).toHaveCount(0);
   await expect(page.locator("button.expand-block").first()).toBeFocused();
+  // The facilitator picker closes on a click anywhere else.
+  const picker = page.locator(".assignee-picker").first();
+  await picker.locator("summary").click();
+  await expect(picker.locator(".assignee-menu")).toBeVisible();
+  await page.locator(".agenda-summary").click();
+  await expect(picker.locator(".assignee-menu")).toBeHidden();
 });
 
 test("on a phone the editor fits the screen and days keep their names", async ({
