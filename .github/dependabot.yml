@@ -8,6 +8,11 @@ updates:
       timezone: Europe/Zurich
     open-pull-requests-limit: 5
     groups:
+      # @vitejs/plugin-react declares a peer on one Vite major: bumped one at a
+      # time, npm ci fails with ERESOLVE, so they move together, majors included.
+      vite:
+        patterns: ["vite", "@vitejs/*"]
+        update-types: [major, minor, patch]
       tiptap:
         patterns: ["@tiptap/*"]
       react:
@@ -21,6 +26,16 @@ updates:
         update-types: [minor, patch]
     commit-message:
       prefix: "deps"
+    ignore:
+      # Held on 6.x: typescript-eslint (lint) accepts TypeScript <6.1 only.
+      # .github/workflows/typescript7-readiness.yml opens an issue when that
+      # changes (https://github.com/typescript-eslint/typescript-eslint/issues/10940).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Types follow the Node.js the server runs (package.json engines,
+      # Dockerfile, CI), changed together by hand at the next LTS.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -36,5 +51,11 @@ updates:
       interval: weekly
     commit-message:
       prefix: "container"
+    ignore:
+      # Production runs a Node.js LTS line. A major change also moves
+      # package.json engines, CI and @types/node, so it is done by hand when
+      # the next even release enters LTS; odd releases never do.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 # Patch updates and development minor updates are auto-merged by
 # .github/workflows/dependabot-auto-merge.yml once required checks pass.

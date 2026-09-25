@@ -1,0 +1,60 @@
+name: TypeScript 7 readiness
+# TypeScript is held on 6.x (the ignore rule in .github/dependabot.yml)
+# because typescript-eslint accepts TypeScript <6.1 only. Nothing would say
+# when that changes, so this monthly job opens an issue once the latest
+# typescript-eslint accepts TypeScript 7.
+# Upstream: https://github.com/typescript-eslint/typescript-eslint/issues/10940
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { execSync } = require("child_process");
+            const range = execSync(
+              "npm view typescript-eslint peerDependencies.typescript",
+              { encoding: "utf8" },
+            ).trim();
+            core.info(`typescript-eslint accepts typescript "${range}"`);
+            let supported = true;
+            try {
+              execSync(`npx --yes semver -r "${range}" 7.0.0`, { stdio: "ignore" });
+            } catch {
+              supported = false;
+            }
+            if (!supported) return core.info("TypeScript 7 is not supported yet.");
+            const marker = "<!-- ts7-readiness -->";
+            const { owner, repo } = context.repo;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "open",
+              per_page: 100,
+            });
+            if (open.some((issue) => (issue.body || "").includes(marker)))
+              return core.info("The tracking issue is already open.");
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: "Adopt TypeScript 7: typescript-eslint now supports it",
+              body: [
+                marker,
+                `The latest typescript-eslint accepts typescript \`${range}\`, which includes TypeScript 7.`,
+                "",
+                "1. Remove the `typescript` major-update ignore rule from `.github/dependabot.yml`, or bump `typescript` in `package.json`.",
+                "2. Bump `typescript-eslint` to that release.",
+                "3. Run `npm run lint`, `npm run check`, `npm run test:e2e` and fix what TypeScript 7 reports.",
+                "",
+                "_Opened by the TypeScript 7 readiness workflow._",
+              ].join("\n"),
+            });
+            core.notice("Opened the TypeScript 7 adoption issue.");

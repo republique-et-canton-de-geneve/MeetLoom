@@ -12,7 +12,7 @@ Agenda writes use the central version check; related writes such as comments, re
 
 Interfaces include English and French labels, loading states, recoverable errors, and the account's actual permissions. Editor, administration, and form modules load according to the workflow; compare bundle sizes after substantial additions without hiding build warnings.
 
-Dependencies go through Dependabot and the same checks as application code. GitHub Actions remain pinned to their commit SHA. Patch updates and development minor updates are auto-merged once the required checks pass (`.github/workflows/dependabot-auto-merge.yml`); major and production minor updates wait for review. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
+Dependencies go through Dependabot and the same checks as application code. GitHub Actions remain pinned to their commit SHA. Patch updates and development minor updates are auto-merged once the required checks pass (`.github/workflows/dependabot-auto-merge.yml`); major and production minor updates wait for review. Some majors are held on purpose (`ignore` rules in `.github/dependabot.yml`, each with its reason): TypeScript stays on 6.x until typescript-eslint supports 7 (a monthly workflow opens an issue when it does), and Node.js with `@types/node` moves by hand, together with `engines` and CI, to the next LTS line. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
 
 Manifests are generic: keep installation-specific namespaces, domains, and registries in an operational overlay, outside distributed values. Prepare a release by updating the version in `package.json` and the lockfile together. The [publication procedure](docs/deployment.md) covers Docker Hub, artifacts, and manual deployment by the operator.
 
