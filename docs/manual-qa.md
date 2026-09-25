@@ -108,6 +108,21 @@ Executed on September 24, 2026 against a production build with the same scratch 
 - Clicking the parallel block in the minimap scrolled its header into view and focused its title.
 - A visitor link on a running session shows the always-on-top button beside the live timer; clicking it raised no error.
 
+## Exploratory QA before the large acceptance test (gstack `/qa`, September 25, 2026)
+
+Run by Claude Code on the production build (`NODE_ENV=production`, PostgreSQL 16, mock OpenAI-compatible LLM) in headless Chromium at 1440 px and 390 px, French and English, with fictional accounts (an administrator and a member) and a session "Atelier QA" with two days, groups, parallel rooms, a note, a Page and a published form. Every fix below has a test that fails without it, except the two layout ones, verified on screenshots.
+
+- **Verified working:** first-installation key (wrong key refused), sign-up, duplicate account, wrong password (the same message for a disabled account, so no enumeration), FR/EN switch with no untranslated interface text, every editor panel, form building and publishing, visitor link with comments and without private notes, anonymous form submission from the link (required question enforced, confirmation, anonymous identity), timer start, +1/+5, next through parallel rooms to the end with the projected end moving by the expected minutes, the visitor following on a phone, account administration (disable signs out and refuses sign-in, re-enable, recovery link, self-demotion blocked in the UI and by the server), closing and reopening a session (read-only banner), trash and restore, version history day restore, the AI panel's error message when the model returns an invalid proposal. No browser console error apart from the one fixed below.
+- **Fixed, timer on the device clock (medium):** countdowns compared server timestamps with each device's own clock; a visitor whose clock was ten minutes fast saw five minutes of overtime on a block that had just started. Responses now carry `X-Server-Time` and browsers correct their clock (`src/clock.ts`). E2E: a visitor with a skewed clock.
+- **Fixed, finished session (low):** the timer bar kept "1 / 6", "restantes" and "Dans le temps prévu" after the last block, even when the session ended an hour early. E2E.
+- **Fixed, date in UTC (low):** a session created between midnight and 02:00 in Geneva started on the previous day; the share dialog's expiry had the same shift. Unit test.
+- **Fixed, mobile editor (medium):** at 390 px the days/pages/forms strip widened the page by 28 px and a dashboard rule hid every day's name. E2E at 390 px.
+- **Fixed, keyboard (medium):** Escape did not close the "Autres actions" menu, nor the side panels until they were clicked. E2E.
+- **Fixed, checkbox labels (cosmetic):** checkboxes rendered centered above their label in the form editor, share dialog and AI panel.
+- **Fixed, presence after trash (low):** the closing editor tab got a 404 when leaving a trashed session. API test.
+- **Fixed, visitor notes (cosmetic):** notes showed "0 min" on visitor links.
+- **Seen, not changed:** in the editor a note still shows a 0 min field and a category (cosmetic); the invitation section tells an administrator that only the administrator can invite (wording). Not tested here: real LLM, OIDC, SMTP, Office rendering, audible alerts, the floating window above PowerPoint, native drag and drop.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational LLM endpoint was provided.

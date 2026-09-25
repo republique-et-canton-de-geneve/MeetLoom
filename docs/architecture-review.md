@@ -52,11 +52,11 @@ Review of `main` after the 0.1.0 release (September 24, 2026), prepared for an a
 | Check              | Before (gstack `/health`)              | After                                                                                                            |
 | ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | TypeScript         | 0 errors                               | 0 errors                                                                                                         |
-| Lint               | not configured                         | ESLint 10 (TypeScript, React hooks, jsx-a11y): 0 errors, 80 legacy warnings under a budget that may only go down |
-| Tests              | 287 passed (SQLite), 288 (PostgreSQL)  | 296 passed (SQLite, one PostgreSQL-only test skipped), 297 (PostgreSQL); 7 E2E journeys                          |
+| Lint               | not configured                         | ESLint 10 (TypeScript, React hooks, jsx-a11y): 0 errors, 77 legacy warnings under a budget that may only go down |
+| Tests              | 287 passed (SQLite), 288 (PostgreSQL)  | 298 passed (SQLite, one PostgreSQL-only test skipped), 299 (PostgreSQL); 11 E2E journeys                         |
 | Dead code (knip)   | 26 unused exports, 7 duplicate exports | 0                                                                                                                |
 | Shell (shellcheck) | 2 findings                             | 0                                                                                                                |
-| Composite          | 7.8 / 10 (lint not scored)             | 8.0 / 10 (lint scored strictly on its 80 budgeted warnings)                                                      |
+| Composite          | 7.8 / 10 (lint not scored)             | 8.0 / 10 (lint scored strictly on its 77 budgeted warnings)                                                      |
 
 CI now gates lint, dead code and shell scripts in addition to TypeScript, tests on both databases, build, formatting, audit, manifests and the E2E journeys.
 
@@ -83,5 +83,5 @@ CI now gates lint, dead code and shell scripts in addition to TypeScript, tests 
 1. Test a PostgreSQL backup and restore, and alert on database volume usage (the quotas bound anonymous growth, not signed-in growth).
 2. Validate OIDC, SMTP and the LLM against the real services in development.
 3. Add an axe accessibility audit of the main screens to the E2E suite and publish an accessibility statement (Geneva public-sector obligations).
-4. Reduce the 80 lint warnings when touching the related code, and lower the budget each time.
+4. Reduce the 77 lint warnings when touching the related code, and lower the budget each time.
 5. Rerun `/cso` with Docker available to use its qualified scanners, and `loadtest/run.mjs` against the development environment before large events.
