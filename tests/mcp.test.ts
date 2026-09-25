@@ -6,6 +6,7 @@ import { harness, origin } from "./support.js";
 import { request as httpRequest } from "node:http";
 import { newBlock } from "../shared/domain.js";
 import { newPage } from "../shared/content.js";
+import { appVersion } from "../server/version.js";
 // Node fetch normalizes Host to the test listener URL. Use native HTTP so the
 // configured public host can be exercised without changing DNS on the machine.
 const localFetch: typeof fetch = async (input, init) =>
@@ -71,6 +72,8 @@ test("MCP SDK client negotiates stateless transport and read tokens cannot leak 
   assert.equal(grant.status, 201, JSON.stringify(grant.body));
   const client = await connect(h.base, grant.body.token);
   t.after(() => client.close());
+  // Connectors see the installed version, not the one of the first release.
+  assert.equal(client.getServerVersion()?.version, appVersion().version);
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
     "get_session",

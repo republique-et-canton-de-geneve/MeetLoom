@@ -92,7 +92,7 @@ jobs:
           const headers = {Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json'};
           const response = await fetch(url, {headers});
           if (response.status === 200) {
-            if (Number(process.env.GITHUB_RUN_ATTEMPT) <= 1) throw new Error('This release already exists. Bump the version for new code, or rerun its original failed workflow.');
+            if (Number(process.env.GITHUB_RUN_ATTEMPT) <= 1) throw new Error(`Release ${process.env.RELEASE_TAG} already exists: package.json still holds this version. For new code, bump it in a pull request (npm version patch --no-git-tag-version), merge, then release again. To finish a failed release, rerun its original workflow.`);
             const commit = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.RELEASE_TAG}`, {headers});
             if (!commit.ok || (await commit.json()).sha !== process.env.GITHUB_SHA) throw new Error('The existing release does not point at this exact commit.');
             const {appendFileSync} = await import('node:fs');
