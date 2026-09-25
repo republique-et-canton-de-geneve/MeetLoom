@@ -10,6 +10,7 @@ import {
 import type { Session } from "../shared/model";
 import {
   newPage,
+  newFeedbackForm,
   newForm,
   orderedContent,
   type ContentItem,
@@ -65,8 +66,13 @@ export default function SessionNavigation({
         .map((item) => current.days.find((day) => day.id === item.id)!),
     }));
   };
-  const add = (kind: "page" | "form") => {
-    const content = kind === "page" ? newPage(locale) : newForm(locale);
+  const add = (kind: "page" | "form", feedback = false) => {
+    const content =
+      kind === "page"
+        ? newPage(locale)
+        : feedback
+          ? newFeedbackForm(locale)
+          : newForm(locale);
     update((current) => ({
       ...current,
       ...(kind === "page"
@@ -237,6 +243,17 @@ export default function SessionNavigation({
           >
             <Plus size={13} />
             {t("Formulaire", "Form")}
+          </button>
+          <button
+            disabled={(session.forms?.length ?? 0) >= 30}
+            title={t(
+              "Formulaire prêt à l’emploi : note ROTI de 1 à 5 et commentaire libre",
+              "Ready-made form: ROTI rating from 1 to 5 and a free comment",
+            )}
+            onClick={() => add("form", true)}
+          >
+            <Plus size={13} />
+            {t("Feedback (ROTI)", "Feedback (ROTI)")}
           </button>
         </div>
       )}

@@ -124,6 +124,43 @@ export function newForm(locale: Locale): SessionForm {
     questions: [],
   };
 }
+/** Ready-made end-of-session feedback: a ROTI (return on time invested)
+ * from 1 to 5 and an optional free comment. */
+export function newFeedbackForm(locale: Locale): SessionForm {
+  const fr = locale === "fr";
+  return {
+    ...newForm(locale),
+    title: fr ? "Feedback de la séance" : "Session feedback",
+    description: fr
+      ? "Deux minutes pour nous aider à améliorer nos prochaines séances."
+      : "Two minutes to help us improve our next sessions.",
+    identityMode: "optional",
+    questions: [
+      {
+        id: crypto.randomUUID(),
+        type: "scale",
+        title: fr
+          ? "Ce temps passé ensemble en valait-il la peine ? (ROTI)"
+          : "Was this time together worth it? (ROTI)",
+        description: fr
+          ? "1 : temps perdu · 5 : excellent investissement"
+          : "1: wasted time · 5: excellent investment",
+        required: true,
+        min: 1,
+        max: 5,
+        minLabel: fr ? "Temps perdu" : "Wasted time",
+        maxLabel: fr ? "Excellent investissement" : "Excellent investment",
+      },
+      {
+        id: crypto.randomUUID(),
+        type: "long",
+        title: fr ? "Un commentaire, une idée ?" : "Any comment or idea?",
+        description: "",
+        required: false,
+      },
+    ],
+  };
+}
 export function newQuestion(
   type: FormQuestion["type"],
   locale: Locale,

@@ -99,6 +99,16 @@ test("agenda contents show they can be reordered, and where a dragged item lands
   await expect(rows.nth(0)).toContainText("Nouvelle page");
   await expect(rows.nth(1)).toContainText("Jour 1");
   await expect(page.locator(".content-nav-row.drop-before")).toHaveCount(0);
+
+  // A session feedback form (ROTI + comment) is one click away.
+  await page.getByRole("button", { name: "Feedback (ROTI)" }).click();
+  await expect(rows.nth(2)).toContainText("Feedback de la séance");
+  await expect(
+    page.locator(
+      'input[value="Ce temps passé ensemble en valait-il la peine ? (ROTI)"]',
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
 });
 
 test("on a phone the editor fits the screen and days keep their names", async ({

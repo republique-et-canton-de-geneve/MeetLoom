@@ -912,7 +912,8 @@
 }
 .content-nav-add {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  column-gap: 10px;
   margin: 8px 10px;
 }
 .content-nav-add button {

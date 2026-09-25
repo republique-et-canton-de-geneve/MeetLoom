@@ -11,6 +11,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 - One Discussion per session, like a chat: conversations with a link's participants and private team conversations in a single list, each labelled with who can read it; replies go under the message they answer; resolved conversations stay visible, folded, for visitors too; organizers can start a conversation with a link's participants; visitors see the organizers' messages marked as the team's.
 - Notifications for new visitor comments (organizers) and new problem reports (administrators), grouped per session until read. A short chime announces new ones to signed-in team members (never to visitors); it can be turned off from the notifications panel.
 - Deleting a day from the overview.
+- **+ Feedback (ROTI)** in the session contents adds a ready-made feedback form: a 1 to 5 rating of the time invested and an optional comment.
 - Reordering agenda contents shows a grip and where the item will land.
 - Past runs: every finished run is kept with the plan it started from and the actual durations, step by step. A day's first run keeps its initial plan, even after "Use actual durations", and any run's plan or actual durations can be put back into the agenda (Versions & activity › Runs, or "See past runs" when the timer ends).
 - The timer shows the day's expected end time and the total time left, for facilitators and visitors, also in a thin always-on-top window.

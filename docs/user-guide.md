@@ -93,6 +93,8 @@ When the API is unavailable, MeetLoom opens a separate window and explains that 
 
 ## AI, exports and history
 
+**+ Feedback (ROTI)**, next to **+ Form** in the session contents, adds a ready-made end-of-session form: “Was this time together worth it?” rated 1 (wasted time) to 5 (excellent investment), and an optional comment. Edit or publish it like any form.
+
 Forms also offer an **Image** question. Respondents can select PNG, JPEG or WebP; the browser reduces the file and removes its metadata before upload. Received images are visible only in response details for owners and editors. They are not sent to AI summaries or included in CSV. In anonymous mode, avoid photos that identify their author. After resizing, limits are 256 KiB per image and 512 KiB per response.
 
 AI answers show their headings, lists and bold text as formatted text. A form's response summary is written in the interface language and answers your optional question first.
