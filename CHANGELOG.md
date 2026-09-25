@@ -4,6 +4,8 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-25
+
 ### Added
 
 - Backups for administrators (Mon compte & équipe → Sauvegardes et données): scheduled once or twice a day, manual restore points, recovery of one session as a copy, full restore after an automatic safety backup.
@@ -27,6 +29,9 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 - Escape closes the "More actions" menu and the side panels (AI assistant, block details, history) and returns focus to the button that opened them.
 - Checkboxes sit on the same line as their label in the form editor, share dialog and AI assistant.
 - Notes no longer show a 0 min duration on visitor links.
+- The AI assistant proposes the requested changes with an Apply button instead of asking in text whether to proceed.
+- An LLM that cannot be reached (network, DNS, unknown certificate authority) is reported as unavailable instead of "unusable answer", and the server log says why. `LLM_ALLOW_SELF_SIGNED` accepts an internally signed LLM certificate when its authority cannot be installed.
+- MCP connectors see the installed version.
 
 ## [0.1.0] - 2026-09-24
 
