@@ -71,6 +71,19 @@ test("participants and organizers talk in one conversation, answers marked as th
   // The name is remembered: no form to fill again.
   await expect(discussion).toContainText("Vous écrivez en tant que Toto");
 
+  // Back on their window, the organizers see the new comment on the bell
+  // without reloading the page.
+  await page.bringToFront();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator(".notification-count")).toBeVisible();
+  // Organizers can silence the chime that announces it.
+  await page.locator(".notification-bell").click();
+  const sound = page.getByRole("button", { name: /Son des notifications/ });
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await sound.click();
+  await expect(sound).toHaveText("Son des notifications coupé");
+  await page.keyboard.press("Escape");
+
   // The organizers answer right under the question.
   await page.getByTitle("Discussion", { exact: true }).click();
   const panel = page.locator(".discussion");

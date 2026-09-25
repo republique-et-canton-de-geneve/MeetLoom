@@ -9,7 +9,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 ### Added
 
 - One Discussion per session, like a chat: conversations with a link's participants and private team conversations in a single list, each labelled with who can read it; replies go under the message they answer; resolved conversations stay visible, folded, for visitors too; organizers can start a conversation with a link's participants; visitors see the organizers' messages marked as the team's.
-- Notifications for new visitor comments (organizers) and new problem reports (administrators), grouped per session until read.
+- Notifications for new visitor comments (organizers) and new problem reports (administrators), grouped per session until read. A short chime announces new ones to signed-in team members (never to visitors); it can be turned off from the notifications panel.
 - Deleting a day from the overview.
 - Reordering agenda contents shows a grip and where the item will land.
 - Past runs: every finished run is kept with the plan it started from and the actual durations, step by step. A day's first run keeps its initial plan, even after "Use actual durations", and any run's plan or actual durations can be put back into the agenda (Versions & activity › Runs, or "See past runs" when the timer ends).
@@ -24,6 +24,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 - Importing an agenda into a session fills its empty days instead of adding a duplicate "Jour 1" next to them.
 - The facilitator picker closes on a click elsewhere, and lists people on one line each.
+- The notification badge appears within seconds and as soon as you come back to the window, without reloading the page.
 - Editing the agenda after a finished run no longer resets the timer: the actual durations and "Restore the starting plan" / "Use actual durations" stay available.
 
 ## [0.1.2] - 2026-09-25

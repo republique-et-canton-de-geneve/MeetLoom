@@ -284,3 +284,9 @@
   font-size: 11px;
   color: var(--muted, #78847e);
 }
+.notifications-panel .notification-sound {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
