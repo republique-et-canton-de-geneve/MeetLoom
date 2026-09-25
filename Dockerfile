@@ -1,11 +1,11 @@
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json .npmrc ./
 RUN npm ci --no-audit
 COPY . .
 RUN npm run build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATA_DIR=/app/data SQLITE_PATH=/app/data/meetloom.sqlite
 WORKDIR /app
 COPY package*.json .npmrc ./
