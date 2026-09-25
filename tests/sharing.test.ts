@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { harness } from "./support.js";
+import { harness, password } from "./support.js";
+import { decompress, decrypt } from "../server/snapshot.js";
 import { newBlock } from "../shared/domain.js";
 
 test("share scopes and simple agendas are projected on server, including nested fields and run", async (t) => {
@@ -89,11 +90,11 @@ test("share scopes and simple agendas are projected on server, including nested 
     (await guest.request(`/public/${simple.token}/comments`)).status,
     403,
   );
-  assert.equal(
+  // Owners can copy an address again (sealed at rest, see the test below).
+  assert.ok(
     JSON.stringify(
       (await h.owner.request(`/sessions/${session.id}/shares`)).body,
     ).includes(link.token),
-    false,
   );
 });
 
@@ -257,4 +258,89 @@ test("a link initial content can be explicitly reset while omitted options are r
   const visitor = await h.client().request(`/public/${link.token}`);
   assert.equal(visitor.body.sharing.initialContentId, null);
   assert.equal(visitor.body.sharing.initialDayId, null);
+});
+
+test("owners can copy a visitor link again, and its address never leaves the installation", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session();
+  const created = (
+    await h.owner.request(`/sessions/${session.id}/shares`, "POST", {
+      label: "Room",
+    })
+  ).body.share;
+  const listed = async (client = h.owner) =>
+    (await client.request(`/sessions/${session.id}/shares`)).body.shares as {
+      id: string;
+      token: string | null;
+    }[];
+  assert.equal((await listed())[0].token, created.token);
+  // Stored sealed, not in clear.
+  const stored = JSON.stringify(await h.db.all("SELECT * FROM share_secrets"));
+  assert.equal(stored.includes(created.token), false);
+  // Editors cannot list links, so they cannot read addresses either.
+  const editor = await h.account("editor@example.test");
+  await h.owner.request(`/sessions/${session.id}/members`, "POST", {
+    email: "editor@example.test",
+    role: "editor",
+  });
+  assert.equal(
+    (await editor.client.request(`/sessions/${session.id}/shares`)).status,
+    403,
+  );
+
+  // An export carries the link but not a readable address.
+  const exported = await h.owner.raw("/admin/data/export", "POST", {
+    passphrase: "a long enough passphrase",
+    password,
+  });
+  const archive = Buffer.from(await exported.arrayBuffer());
+  const snapshot = decompress(
+    await decrypt(archive, "a long enough passphrase"),
+    64 * 1024 * 1024,
+  );
+  assert.equal(JSON.stringify(snapshot).includes(created.token), false);
+  const target = await harness(t);
+  await target.setup();
+  assert.equal(
+    (
+      await target.owner.request("/admin/data/import", "POST", {
+        archive: archive.toString("base64"),
+        passphrase: "a long enough passphrase",
+        password,
+        confirm: "REMPLACER",
+      })
+    ).status,
+    200,
+  );
+  const owner = target.client();
+  await owner.request("/auth/login", "POST", {
+    email: "owner@example.test",
+    password,
+  });
+  const moved = (
+    await owner.request(`/sessions/${session.id}/shares`)
+  ).body.shares[0];
+  assert.equal(moved.token, null);
+  // A new address replaces it; the old one stops working.
+  const renewed = await owner.request(
+    `/sessions/${session.id}/shares/${moved.id}/renew`,
+    "POST",
+    {},
+  );
+  assert.equal(renewed.status, 200, JSON.stringify(renewed.body));
+  assert.notEqual(renewed.body.token, created.token);
+  assert.equal(
+    (await target.client().request(`/public/${created.token}`)).status,
+    404,
+  );
+  assert.equal(
+    (await target.client().request(`/public/${renewed.body.token}`)).status,
+    200,
+  );
+  assert.equal(
+    (await owner.request(`/sessions/${session.id}/shares`)).body.shares[0]
+      .token,
+    renewed.body.token,
+  );
 });

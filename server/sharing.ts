@@ -14,6 +14,7 @@ import { guardSessionLifecycle } from "./lifecycle.js";
 import { accessibleSessionRows, mappedSession } from "./workspaces.js";
 import { fail, hashToken, rateLimit, token } from "./security.js";
 import type { PublicQuotas } from "./quotas.js";
+import { installationKey, seal, unseal } from "./sealing.js";
 
 interface Dependencies {
   db: Database;
@@ -58,7 +59,12 @@ export async function registerSharing(
     await sql.run(
       "CREATE INDEX IF NOT EXISTS visitor_comments_share_idx ON visitor_comments(share_id,created_at)",
     );
+    // The address of each link, sealed so owners can copy it again later.
+    await sql.run(
+      "CREATE TABLE IF NOT EXISTS share_secrets (share_id TEXT PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE, sealed TEXT NOT NULL)",
+    );
   });
+  const linkKey = await installationKey(db, "share-links");
   const lockAccess = async (
     sql: Sql,
     sessionId: string,
@@ -183,14 +189,18 @@ export async function registerSharing(
       expiresAt: string | null;
       createdAt: string;
       options: string | null;
+      sealed: string | null;
     }>(
-      'SELECT l.id,l.label,l.expires_at AS "expiresAt",l.created_at AS "createdAt",o.payload AS options FROM shares l LEFT JOIN share_options o ON o.share_id=l.id WHERE l.session_id=$1 ORDER BY l.created_at DESC',
+      'SELECT l.id,l.label,l.expires_at AS "expiresAt",l.created_at AS "createdAt",o.payload AS options,k.sealed FROM shares l LEFT JOIN share_options o ON o.share_id=l.id LEFT JOIN share_secrets k ON k.share_id=l.id WHERE l.session_id=$1 ORDER BY l.created_at DESC',
       [session.id],
     );
     res.json({
-      shares: rows.map(({ options, ...row }) => ({
+      shares: rows.map(({ options, sealed, ...row }) => ({
         ...row,
         ...sharingSchema.parse(options ? JSON.parse(options) : {}),
+        // Null for links created before addresses were kept, or imported
+        // from another installation: a new address replaces them.
+        token: sealed ? unseal(linkKey, sealed, row.id) : null,
       })),
     });
   });
@@ -276,8 +286,36 @@ export async function registerSharing(
         "INSERT INTO share_options(share_id,payload) VALUES($1,$2)",
         [share.id, JSON.stringify(options)],
       );
+      await sql.run(
+        "INSERT INTO share_secrets(share_id,sealed) VALUES($1,$2)",
+        [share.id, seal(linkKey, raw, share.id)],
+      );
     });
     res.status(201).json({ share });
+  });
+  // A new address for an existing link, keeping its scope and comments: the
+  // previous address stops working.
+  app.post("/api/sessions/:id/shares/:shareId/renew", async (req, res) => {
+    const { session } = await accessible(id.parse(req.params.id), who(res).id, [
+      "owner",
+    ]);
+    const shareId = id.parse(req.params.shareId),
+      raw = token();
+    await db.transaction(async (sql) => {
+      await lockAccess(sql, session.id, who(res).id, ["owner"]);
+      if (
+        !(await sql.run(
+          "UPDATE shares SET token_hash=$1 WHERE id=$2 AND session_id=$3",
+          [hashToken(raw), shareId, session.id],
+        ))
+      )
+        return fail(404, "NOT_FOUND", "This link does not exist.");
+      await sql.run(
+        "INSERT INTO share_secrets(share_id,sealed) VALUES($1,$2) ON CONFLICT(share_id) DO UPDATE SET sealed=excluded.sealed",
+        [shareId, seal(linkKey, raw, shareId)],
+      );
+    });
+    res.json({ token: raw });
   });
   app.delete("/api/sessions/:id/shares/:shareId", async (req, res) => {
     const { session } = await accessible(id.parse(req.params.id), who(res).id, [

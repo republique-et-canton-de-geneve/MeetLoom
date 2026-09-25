@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -12,6 +12,7 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
+  RefreshCw,
 } from "lucide-react";
 import type {
   Column,
@@ -335,6 +336,8 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
     [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState(""),
     [created, setCreated] = useState(""),
+    // The link whose address is shown: null for the one just generated.
+    [shownLabel, setShownLabel] = useState<string | null>(null),
     [copied, setCopied] = useState(false),
     [busy, setBusy] = useState(false);
   const load = async () => {
@@ -354,6 +357,15 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
   useEffect(() => {
     void load();
   }, [session.id]);
+  const result = useRef<HTMLDivElement>(null);
+  const show = (token: string, label: string | null) => {
+    setCreated(`${location.origin}/s/${token}`);
+    setShownLabel(label);
+    setCopied(false);
+    requestAnimationFrame(() =>
+      result.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+  };
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(created);
@@ -470,7 +482,7 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                     `/sessions/${session.id}/shares`,
                     payload,
                   );
-                  setCreated(`${location.origin}/s/${r.share.token}`);
+                  show(r.share.token!, null);
                 }
                 setCopied(false);
                 await load();
@@ -699,12 +711,16 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
             )}
           </form>
           {created && (
-            <div className="share-result">
-              <strong>{t("Votre lien est prêt", "Your link is ready")}</strong>
+            <div className="share-result" ref={result}>
+              <strong>
+                {shownLabel === null
+                  ? t("Votre lien est prêt", "Your link is ready")
+                  : t(`Lien « ${shownLabel} »`, `Link “${shownLabel}”`)}
+              </strong>
               <p>
                 {t(
-                  "Copiez-le maintenant : le jeton complet n’est pas conservé sur le serveur.",
-                  "Copy it now: the full token is not stored on the server.",
+                  "Vous le retrouverez à tout moment dans les liens existants.",
+                  "You can find it again at any time in the existing links.",
                 )}
               </p>
               <div className="button-row">
@@ -768,6 +784,47 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                     : t("Sans expiration", "No expiration")}
                 </small>
               </div>
+              {share.token ? (
+                <button
+                  className="button secondary small"
+                  onClick={() => show(share.token!, share.label)}
+                >
+                  <Link2 size={15} />
+                  {t("Afficher le lien", "Show link")}
+                </button>
+              ) : (
+                <button
+                  className="button secondary small"
+                  title={t(
+                    "Ce lien a été créé avant que les adresses soient conservées, ou importé d’une autre installation. Une nouvelle adresse garde sa portée et ses commentaires ; l’ancienne cesse de fonctionner.",
+                    "This link was created before addresses were kept, or imported from another installation. A new address keeps its scope and comments; the old one stops working.",
+                  )}
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        t(
+                          "L’adresse actuelle de ce lien cessera de fonctionner. Créer une nouvelle adresse ?",
+                          "The current address of this link will stop working. Create a new address?",
+                        ),
+                      )
+                    )
+                      return;
+                    try {
+                      const r = await post<{ token: string }>(
+                        `/sessions/${session.id}/shares/${share.id}/renew`,
+                        {},
+                      );
+                      await load();
+                      show(r.token, share.label);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  <RefreshCw size={15} />
+                  {t("Nouvelle adresse", "New address")}
+                </button>
+              )}
               <button
                 className="button secondary small"
                 onClick={() => {

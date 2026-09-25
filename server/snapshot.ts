@@ -41,6 +41,7 @@ export const SNAPSHOT_TABLES = [
   "members",
   "shares",
   "share_options",
+  "share_secrets",
   "versions",
   "version_metadata",
   "session_journal",
@@ -72,7 +73,11 @@ export const TRANSIENT_TABLES = [
   "mail_recovery_requests",
 ] as const;
 /** Kept across a restore or an import, so both can be undone. */
-export const PRESERVED_TABLES = ["app_backups", "backup_schedule"] as const;
+export const PRESERVED_TABLES = [
+  "app_backups",
+  "backup_schedule",
+  "installation_keys",
+] as const;
 
 export interface Snapshot {
   format: "meetloom-data";

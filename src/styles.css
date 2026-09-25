@@ -2417,13 +2417,15 @@ hr {
 }
 .list-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 15px 0;
   border-bottom: 1px solid #edf2e7;
 }
 .list-item > div {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .list-item strong {
   display: block;
