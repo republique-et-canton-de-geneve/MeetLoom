@@ -5,10 +5,13 @@ import { cloneContent, contentIds, orderedContent } from "./content.js";
 
 const builtins = ["description", "facilitator"] as const;
 
-/** Append a validated agenda without expanding the audience of imported data. */
+/** Append a validated agenda without expanding the audience of imported data.
+ * With `fillEmptyDays` (an import into a session), imported days first fill
+ * the destination's empty days; transfers always append. */
 export function mergeImportedAgenda(
   destination: Session,
   incoming: Session,
+  { fillEmptyDays = false } = {},
 ): Session {
   const base = sessionInputSchema.parse(destination);
   const source = sessionInputSchema.parse(incoming);
@@ -93,10 +96,12 @@ export function mergeImportedAgenda(
     throw new Error("Import exceeds the limit of 20 columns.");
   // Imported days first fill the destination's empty days (a new session
   // starts with one), in order; the rest are added after the existing days.
-  const emptyDays = base.days
-    .filter((day) => !day.blocks.length)
-    .map((day) => day.id)
-    .slice(0, source.days.length);
+  const emptyDays = fillEmptyDays
+    ? base.days
+        .filter((day) => !day.blocks.length)
+        .map((day) => day.id)
+        .slice(0, source.days.length)
+    : [];
   if (base.days.length + source.days.length - emptyDays.length > 30)
     throw new Error("Import exceeds the limit of 30 days.");
   if (

@@ -158,11 +158,10 @@ test("import refuses cumulative day, block and column limits without mutating th
   assert.throws(() => mergeImportedAgenda(columns, source), /20 columns/);
   assert.equal(JSON.stringify(columns), beforeColumns);
   const days = createSession("owner", "Destination", "fr");
-  // Full days: an empty one would be filled instead of adding a day.
   days.days = Array.from({ length: 30 }, (_, i) => ({
     ...days.days[0],
     id: `day-${i}`,
-    blocks: [newBlock("fr")],
+    blocks: [],
   }));
   days.run.dayId = days.days[0].id;
   assert.throws(() => mergeImportedAgenda(days, source), /30 days/);
@@ -258,13 +257,10 @@ test("import remaps pages, forms, questions and navigation and makes imported pa
     JSON.stringify(publicProjection(result)).includes("SECRET_IMPORTED_PAGE"),
     false,
   );
-  // The imported day filled the destination's empty day, which keeps its
-  // place; the imported page and form follow.
   assert.deepEqual(
     result.contentOrder?.map((item) => item.kind),
-    ["day", "page", "form"],
+    ["day", "page", "form", "day"],
   );
-  assert.equal(result.days[0].blocks[0].title, "Imported activity");
 });
 
 test("an import fills the session's empty days before adding new ones", () => {
@@ -280,7 +276,9 @@ test("an import fills the session's empty days before adding new ones", () => {
     title: "Jour 2",
     blocks: [newBlock("fr", { title: "Second day activity" })],
   });
-  const result = mergeImportedAgenda(destination, source);
+  const result = mergeImportedAgenda(destination, source, {
+    fillEmptyDays: true,
+  });
   assert.equal(result.days.length, 2);
   assert.equal(result.days[0].id, emptyDay);
   assert.equal(result.days[0].title, "Mardi");
@@ -296,7 +294,17 @@ test("an import fills the session's empty days before adding new ones", () => {
   // Days that already hold blocks are never touched.
   const filled = createSession("owner", "Filled", "fr");
   filled.days[0].blocks = [newBlock("fr", { title: "Existing" })];
-  const appended = mergeImportedAgenda(filled, incoming());
+  const appended = mergeImportedAgenda(filled, incoming(), {
+    fillEmptyDays: true,
+  });
   assert.equal(appended.days.length, 2);
   assert.equal(appended.days[0].blocks[0].title, "Existing");
+
+  // Transfers between sessions always append: they place the copied content
+  // themselves.
+  assert.equal(
+    mergeImportedAgenda(createSession("owner", "Other", "fr"), incoming()).days
+      .length,
+    2,
+  );
 });
