@@ -142,3 +142,64 @@ test("response AI summary is editor-only, excludes identities and public forms s
     "SESSION_CLOSED",
   );
 });
+
+test("the response summary is asked in the interface language, with the facilitator's question kept apart from the responses", async (t) => {
+  const requests: {
+    messages: { role: string; content: string }[];
+  }[] = [];
+  const provider = createServer(async (req, res) => {
+    let body = "";
+    for await (const part of req) body += part;
+    requests.push(JSON.parse(body));
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({ choices: [{ message: { content: "## Synthèse" } }] }),
+    );
+  });
+  const baseUrl = await listen(provider);
+  t.after(() => stop(provider));
+  const h = await harness(t, { ai: { baseUrl } });
+  await h.setup();
+  let session = await h.session();
+  const form = newForm("fr");
+  form.questions = [{ ...newQuestion("scale", "fr"), title: "Note" }];
+  session.forms = [form];
+  session = (
+    await h.owner.request(`/sessions/${session.id}`, "PUT", {
+      session,
+      version: session.version,
+    })
+  ).body.session;
+  const base = `/sessions/${session.id}/forms/${form.id}`;
+  const token = (
+    await h.owner.request(`${base}/publish`, "POST", {
+      version: session.version,
+    })
+  ).body.publication.token;
+  assert.equal(
+    (
+      await h.client().request(`/forms/${token}/responses`, "POST", {
+        revision: 1,
+        submissionId: randomUUID(),
+        answers: { [form.questions[0].id]: 4 },
+      })
+    ).status,
+    201,
+  );
+  const summary = await h.owner.request(`${base}/summary`, "POST", {
+    locale: "fr",
+    prompt: "la note moyenne sur 5 ?",
+  });
+  assert.equal(summary.status, 200, JSON.stringify(summary.body));
+  const [system, user] = requests[0].messages;
+  // The whole answer, headings included, in the interface language.
+  assert.match(system.content, /français/);
+  // Commentary on the data itself is what the model repeated back.
+  assert.doesNotMatch(system.content, /untrusted/i);
+  // The question is the facilitator's, not one of the form's questions.
+  const [question, data] = user.content.split("\n\n---\n\n");
+  assert.match(question, /la note moyenne sur 5 \?/);
+  const responses = JSON.parse(data);
+  assert.equal(responses.question, undefined);
+  assert.equal(JSON.stringify(responses).includes("la note moyenne"), false);
+});
