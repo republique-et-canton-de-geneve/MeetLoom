@@ -8,8 +8,11 @@ import "./comments.css";
 
 export default function NotificationBell({
   onNavigate,
+  navigate,
 }: {
   onNavigate: (sessionId: string, blockId?: string, commentId?: string) => void;
+  /** Opens a page, for notifications that do not concern a session. */
+  navigate: (url: string) => void;
 }) {
   const { t, locale } = useI18n(),
     [open, setOpen] = useState(false),
@@ -51,7 +54,52 @@ export default function NotificationBell({
       document.removeEventListener("visibilitychange", poll);
     };
   }, [load]);
-  const descriptions: Record<TeamNotification["kind"], string> = {
+  const describe = (notification: TeamNotification) => {
+    const count = notification.count ?? 1;
+    if (notification.kind === "visitor-comments")
+      return count > 1 ? (
+        <>
+          <strong>
+            {t(
+              `${count} nouveaux commentaires de visiteurs`,
+              `${count} new visitor comments`,
+            )}
+          </strong>{" "}
+          · {t("dernier :", "latest:")} {notification.actor}
+        </>
+      ) : (
+        <>
+          <strong>{notification.actor}</strong>{" "}
+          {t("a commenté via un lien visiteur", "commented on a visitor link")}
+        </>
+      );
+    if (notification.kind === "feedback")
+      return count > 1 ? (
+        <strong>
+          {t(
+            `${count} nouveaux retours d’utilisateurs`,
+            `${count} new user reports`,
+          )}
+        </strong>
+      ) : (
+        <>
+          <strong>{notification.actor}</strong>{" "}
+          {t(
+            "a signalé un problème ou une idée",
+            "reported a problem or an idea",
+          )}
+        </>
+      );
+    return (
+      <>
+        <strong>{notification.actor}</strong> {descriptions[notification.kind]}
+      </>
+    );
+  };
+  const descriptions: Record<
+    Exclude<TeamNotification["kind"], "visitor-comments" | "feedback">,
+    string
+  > = {
     comment: t("a ajouté un commentaire", "added a comment"),
     reply: t("a répondu dans une discussion", "replied to a thread"),
     mention: t(
@@ -131,21 +179,25 @@ export default function NotificationBell({
                       Math.max(0, value - (notification.readAt ? 0 : 1)),
                     );
                     setOpen(false);
-                    onNavigate(
-                      notification.sessionId,
-                      notification.blockId ?? undefined,
-                      notification.commentId ?? undefined,
-                    );
+                    if (notification.kind === "feedback")
+                      navigate("/account/feedback-inbox");
+                    else if (notification.sessionId)
+                      onNavigate(
+                        notification.sessionId,
+                        notification.blockId ?? undefined,
+                        notification.commentId ?? undefined,
+                      );
                   } catch (cause) {
                     setError((cause as Error).message);
                   }
                 }}
               >
-                <span>
-                  <strong>{notification.actor}</strong>{" "}
-                  {descriptions[notification.kind]}
-                </span>
-                <b>{notification.sessionTitle}</b>
+                <span>{describe(notification)}</span>
+                <b>
+                  {notification.kind === "feedback"
+                    ? t("Retours des utilisateurs", "User feedback")
+                    : notification.sessionTitle}
+                </b>
                 <time dateTime={notification.createdAt}>
                   {new Date(notification.createdAt).toLocaleString(locale)}
                 </time>

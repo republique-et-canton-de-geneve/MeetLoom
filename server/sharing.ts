@@ -15,6 +15,7 @@ import { accessibleSessionRows, mappedSession } from "./workspaces.js";
 import { fail, hashToken, rateLimit, token } from "./security.js";
 import type { PublicQuotas } from "./quotas.js";
 import { installationKey, seal, unseal } from "./sealing.js";
+import { notifyVisitorComment } from "./app-notifications.js";
 
 interface Dependencies {
   db: Database;
@@ -550,6 +551,10 @@ export async function registerSharing(
             comment.createdAt,
           ],
         );
+        await notifyVisitorComment(sql, link.session_id, {
+          id: comment.parentId ?? comment.id,
+          author: comment.author,
+        });
         return comment;
       });
       res.status(201).json({ comment });

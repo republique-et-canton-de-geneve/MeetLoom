@@ -30,12 +30,22 @@ export interface CommentsResponse {
 }
 export interface TeamNotification {
   id: string;
-  sessionId: string;
+  /** Null for problem reports, which concern the installation. */
+  sessionId: string | null;
   sessionTitle: string;
   blockId: string | null;
   commentId: string | null;
   actor: string;
-  kind: "comment" | "reply" | "mention" | "block-mention" | "task-completed";
+  kind:
+    | "comment"
+    | "reply"
+    | "mention"
+    | "block-mention"
+    | "task-completed"
+    | "visitor-comments"
+    | "feedback";
+  /** How many events a grouped notification stands for. */
+  count?: number;
   createdAt: string;
   readAt: string | null;
 }

@@ -50,6 +50,7 @@ export const SNAPSHOT_TABLES = [
   "comment_threads",
   "comment_context",
   "notifications",
+  "app_notifications",
   "visitor_comments",
   "form_publications",
   "form_publication_usage",

@@ -1114,6 +1114,7 @@ function Dashboard({
           </div>
           <div className="topbar-actions">
             <NotificationBell
+              navigate={navigate}
               onNavigate={(sid, bid, cid) => {
                 const search = new URLSearchParams();
                 if (bid) search.set("block", bid);

@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { User } from "../shared/model.js";
 import type { Database } from "./db.js";
 import { rateLimit } from "./security.js";
+import { notifyFeedback } from "./app-notifications.js";
 import type { AppVersion } from "./version.js";
 
 /** Where administrators forward a report, from their own browser. */
@@ -75,20 +76,23 @@ export async function registerFeedback(
         createdAt: now,
         updatedAt: now,
       };
-      await db.run(
-        "INSERT INTO feedback(id,user_id,kind,message,page,app_version,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-        [
-          item.id,
-          who(response).id,
-          item.kind,
-          item.message,
-          item.page,
-          item.appVersion,
-          item.status,
-          item.createdAt,
-          item.updatedAt,
-        ],
-      );
+      await db.transaction(async (sql) => {
+        await sql.run(
+          "INSERT INTO feedback(id,user_id,kind,message,page,app_version,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+          [
+            item.id,
+            who(response).id,
+            item.kind,
+            item.message,
+            item.page,
+            item.appVersion,
+            item.status,
+            item.createdAt,
+            item.updatedAt,
+          ],
+        );
+        await notifyFeedback(sql, who(response).id, who(response).name);
+      });
       response.status(201).json({ feedback: item });
     },
   );

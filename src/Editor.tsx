@@ -1668,6 +1668,7 @@ export default function Editor({
                 </div>
                 <div className="topbar-actions">
                   <NotificationBell
+                    navigate={navigate}
                     onNavigate={(sessionId, blockId, commentId) => {
                       if (sessionId !== session.id)
                         navigate(
