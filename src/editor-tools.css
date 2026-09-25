@@ -836,52 +836,6 @@
   display: inline-flex;
   margin: 5px 18px 5px 0;
 }
-.visitor-discussion {
-  margin-top: 24px;
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: white;
-}
-.visitor-discussion h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.visitor-discussion .comments-list {
-  max-height: 520px;
-  overflow: auto;
-}
-.discussion-thread {
-  border-bottom: 1px solid var(--line);
-  padding: 14px 0;
-}
-.discussion-thread.resolved {
-  opacity: 0.75;
-}
-.discussion-replies {
-  margin-left: 24px;
-  border-left: 2px solid #e4eee9;
-  padding-left: 12px;
-}
-.discussion-thread .comment p {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.visitor-discussion .form-grid {
-  align-items: end;
-}
-.visitor-discussion label {
-  margin-top: 10px;
-}
-.visitor-discussion .button-row {
-  margin: 8px 0;
-}
-.visitor-discussion input:not([type="checkbox"]),
-.visitor-discussion select,
-.visitor-discussion textarea {
-  width: 100%;
-}
 @media (max-width: 1000px) {
   .presence-bar > span.muted {
     display: none;

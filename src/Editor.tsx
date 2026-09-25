@@ -126,7 +126,6 @@ import HistoryPanel from "./HistoryPanel";
 import CommentsPanel from "./CommentsPanel";
 import NotificationBell from "./NotificationBell";
 import { MentionProvider } from "./MentionContext";
-import PublicDiscussion from "./PublicDiscussion";
 import {
   DisplayTimeProvider,
   DisplayTimeControl,
@@ -1941,7 +1940,7 @@ export default function Editor({
                     </button>
                     <button
                       className="icon-button comment-count-button"
-                      title={t("Commentaires", "Comments")}
+                      title={t("Discussion", "Discussion")}
                       onClick={() => {
                         setCommentTarget({});
                         setPanel("comments");
@@ -2029,7 +2028,7 @@ export default function Editor({
                               }}
                             >
                               <MessageSquare size={16} />
-                              {t("Commentaires", "Comments")}
+                              {t("Discussion", "Discussion")}
                             </button>
                             <button
                               onClick={() => {
@@ -2961,6 +2960,7 @@ export default function Editor({
             {panel === "comments" && (
               <CommentsPanel
                 session={session}
+                role={role}
                 initialBlockId={commentTarget.blockId}
                 initialCommentId={commentTarget.commentId}
                 close={() => {
@@ -2974,13 +2974,7 @@ export default function Editor({
                   if (target) setSelectedDay(target.id);
                   showDetail(blockId);
                 }}
-              >
-                <PublicDiscussion
-                  session={session}
-                  role={role}
-                  readOnly={!!session.lifecycle?.closedAt}
-                />
-              </CommentsPanel>
+              />
             )}
             {panel === "import" && (
               <ImportPanel

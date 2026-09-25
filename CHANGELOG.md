@@ -6,11 +6,22 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Added
 
+- One Discussion per session, like a chat: conversations with a link's participants and private team conversations in a single list, each labelled with who can read it; replies go under the message they answer; resolved conversations stay visible, folded, for visitors too; organizers can start a conversation with a link's participants; visitors see the organizers' messages marked as the team's.
+- Notifications for new visitor comments (organizers) and new problem reports (administrators), grouped per session until read.
+- Deleting a day from the overview.
+- Reordering agenda contents shows a grip and where the item will land.
+
 - The timer shows the day's expected end time and the total time left, for facilitators and visitors, also in a thin always-on-top window.
 
 ### Changed
 
 - The announcement banner can no longer be closed: it stays until an administrator removes it.
+- The dashboard lists the sessions first; the welcome banner moved below them, and the constant "Espace privé" label is gone.
+
+### Fixed
+
+- Importing an agenda into a session fills its empty days instead of adding a duplicate "Jour 1" next to them.
+- The facilitator picker closes on a click elsewhere, and lists people on one line each.
 
 ## [0.1.2] - 2026-09-25
 
