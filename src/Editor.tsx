@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  MessageSquareWarning,
   ArrowLeft,
   Plus,
   ChevronDown,
@@ -2048,6 +2049,15 @@ export default function Editor({
                             >
                               <Plug size={16} />
                               {t("Connecteurs IA (MCP)", "AI connectors (MCP)")}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMenu(false);
+                                navigate("/account/feedback");
+                              }}
+                            >
+                              <MessageSquareWarning size={16} />
+                              {t("Signaler un problème", "Report a problem")}
                             </button>
                             <hr />
                             <button

@@ -56,12 +56,6 @@ test("a finished session shows no countdown, position or schedule estimate", asy
   await page.getByRole("button", { name: /Animer la séance/ }).click();
   const bar = page.locator(".timer-bar");
   await expect(bar).toContainText("Accueil");
-  // Late or early stands out from "on schedule", not only by its wording.
-  const schedule = bar.locator(".timer-delta");
-  await expect(schedule).toHaveAttribute("data-schedule", "on-time");
-  await bar.getByTitle("Ajouter cinq minutes au bloc").click();
-  await expect(schedule).toHaveAttribute("data-schedule", "very-late");
-  await expect(schedule).toContainText("5 min de retard");
   for (const next of ["Idées", "Décision"]) {
     await page.getByTitle("Bloc suivant").click();
     await expect(bar).toContainText(next);
@@ -105,4 +99,26 @@ test("a visitor whose clock is ten minutes fast still sees the right countdown",
   await expect(
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
+});
+
+test("late and early stand out from on schedule, not only by their wording", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  // Its own session: adding time changes the plan of the block.
+  const created = await page.request.post("/api/sessions", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { title: "Retard E2E", demo: true },
+  });
+  const { session } = await created.json();
+  await page.goto(`/session/${session.id}`);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  const schedule = page.locator(".timer-bar .timer-delta");
+  await expect(schedule).toHaveAttribute("data-schedule", "on-time");
+  await page.getByTitle("Ajouter une minute au bloc").click();
+  await expect(schedule).toHaveAttribute("data-schedule", "late");
+  await page.getByTitle("Ajouter cinq minutes au bloc").click();
+  await expect(schedule).toHaveAttribute("data-schedule", "very-late");
+  await expect(schedule).toContainText("6 min de retard");
+  await page.getByTitle("Réinitialiser").click();
 });

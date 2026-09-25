@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  type ReactNode,
   useRef,
   useState,
   type FormEvent,
@@ -36,6 +37,7 @@ import {
   Trash2,
   FolderPlus,
   Pencil,
+  MessageSquareWarning,
 } from "lucide-react";
 import type {
   User,
@@ -69,6 +71,7 @@ const PublicAgenda = lazy(() => import("./PublicAgenda"));
 const PublicForm = lazy(() => import("./PublicForm"));
 const RecoverAccount = lazy(() => import("./RecoverAccount"));
 const AccountPage = lazy(() => import("./AccountPage"));
+import AnnouncementBanner from "./AnnouncementBanner";
 const WorkspacePanel = lazy(() => import("./WorkspacePanel"));
 const LifecyclePanel = lazy(() => import("./LifecyclePanel"));
 const ReportTrashPanel = lazy(() => import("./ReportTrashPanel"));
@@ -114,6 +117,17 @@ type AuthStatus = {
   signupEnabled?: boolean;
   signupDomains?: string[];
 };
+/** The last page outside the account pages, for problem reports. */
+let lastPage = location.pathname.startsWith("/account")
+  ? "/"
+  : location.pathname;
+/** Pages for accounts carry the administrators' announcement. */
+const withAnnouncement = (page: ReactNode) => (
+  <>
+    <AnnouncementBanner />
+    {page}
+  </>
+);
 export default function App() {
   return (
     <Suspense fallback={<Loading />}>
@@ -136,7 +150,9 @@ function AppRoutes() {
   useEffect(() => {
     refresh();
     const controller = browserNavigation((url) => {
-      setPath(new URL(url).pathname);
+      const next = new URL(url).pathname;
+      if (!next.startsWith("/account")) lastPage = next;
+      setPath(next);
       window.scrollTo(0, 0);
     });
     navigation.current = controller;
@@ -194,7 +210,7 @@ function AppRoutes() {
       </main>
     );
   if (!auth.user || inviteToken)
-    return (
+    return withAnnouncement(
       <AuthScreen
         auth={auth}
         inviteToken={inviteToken}
@@ -202,7 +218,7 @@ function AppRoutes() {
           navigate("/");
           refresh();
         }}
-      />
+      />,
     );
   const logout = async () => {
     await post("/auth/logout");
@@ -211,27 +227,30 @@ function AppRoutes() {
   };
   const accountSection = path.match(/^\/account(?:\/([a-z-]+))?\/?$/);
   if (accountSection)
-    return (
+    return withAnnouncement(
       <AccountPage
         user={auth.user}
         section={accountSection[1]}
+        from={lastPage}
         navigate={navigate}
         refreshUser={refresh}
         logout={logout}
-      />
+      />,
     );
   const id = path.match(/^\/session\/([^/]+)$/)?.[1];
   if (id)
-    return (
+    return withAnnouncement(
       <Editor
         key={id}
         id={id}
         user={auth.user}
         aiEnabled={auth.aiEnabled}
         navigate={navigate}
-      />
+      />,
     );
-  return <Dashboard user={auth.user} navigate={navigate} logout={logout} />;
+  return withAnnouncement(
+    <Dashboard user={auth.user} navigate={navigate} logout={logout} />,
+  );
 }
 
 function AuthScreen({
@@ -997,6 +1016,13 @@ function Dashboard({
           <button className="nav-item" onClick={() => navigate("/account")}>
             <Users size={18} />
             {t("Mon compte & équipe", "Account & team")}
+          </button>
+          <button
+            className="nav-item"
+            onClick={() => navigate("/account/feedback")}
+          >
+            <MessageSquareWarning size={18} />
+            {t("Signaler un problème", "Report a problem")}
           </button>
         </nav>
         <nav

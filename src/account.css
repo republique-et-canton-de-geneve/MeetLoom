@@ -195,3 +195,145 @@
     padding: 16px;
   }
 }
+.account-content .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+/* Problem reports and ideas. */
+.feedback-kinds {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.feedback-kinds legend {
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 8px;
+}
+.feedback-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.feedback-list li {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+}
+.feedback-list li:last-child {
+  border-bottom: 0;
+}
+.feedback-list p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feedback-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.feedback-meta small,
+.feedback-meta time {
+  color: var(--muted);
+}
+.feedback-kind.bug {
+  background: #fde4e3;
+  color: #7a2321;
+}
+.feedback-kind.idea {
+  background: #e6f0fb;
+  color: #173b5c;
+}
+.feedback-status.done {
+  background: var(--green-pale);
+  color: #2b7157;
+}
+.feedback-status.dismissed {
+  background: #eef0ee;
+  color: var(--muted);
+}
+.admin-feedback select {
+  width: auto;
+}
+/* Server logs. */
+.admin-logs-filters {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: none !important;
+}
+.admin-logs-filters label {
+  flex: 1 1 200px;
+}
+.admin-logs-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  font-size: 13px;
+}
+.admin-logs-list li {
+  display: grid;
+  grid-template-columns: 110px 170px minmax(0, 140px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-logs-list time,
+.log-pod {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-logs-list p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-logs-list code {
+  display: inline-block;
+  margin: 2px 0 0 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f2;
+  font-size: 12px;
+}
+.log-level {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eef0ee;
+  color: var(--muted);
+}
+.log-level.warn {
+  background: #fdf1d8;
+  color: #4b3405;
+}
+.log-level.error {
+  background: #fde4e3;
+  color: #7a2321;
+}
+@media (max-width: 760px) {
+  .admin-logs-list li {
+    grid-template-columns: auto 1fr;
+  }
+  .admin-logs-list p {
+    grid-column: 1 / -1;
+  }
+  .log-pod {
+    display: none;
+  }
+}

@@ -32,3 +32,55 @@ test("before an update the administrator sees the version and the sessions being
   await activity.getByRole("button", { name: "Actualiser" }).click();
   await expect(activity).not.toContainText("Animée en ce moment");
 });
+
+test("an announcement reaches everyone, and a reported problem reaches the administrators with its logs", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, admin);
+  await page.goto("/account/settings");
+  const announcement = page.locator(".admin-announcement");
+  await announcement
+    .getByLabel("Message", { exact: true })
+    .fill("Maintenance ce soir à 18 h.");
+  await announcement.getByLabel("Type").selectOption("warning");
+  await announcement.getByRole("button", { name: "Publier" }).click();
+  await expect(announcement).toContainText("Message publié.");
+
+  const colleague = await signIn(browser, member);
+  const banner = colleague.locator(".announcement-banner");
+  await expect(banner).toContainText("Maintenance ce soir à 18 h.");
+  await colleague.getByRole("button", { name: "Signaler un problème" }).click();
+  await expect(colleague).toHaveURL(/\/account\/feedback$/);
+  await colleague
+    .getByLabel("Que s’est-il passé ? Qu’attendiez-vous ?")
+    .fill("Le bouton Exporter ne répond pas.");
+  await colleague.getByRole("button", { name: "Envoyer" }).click();
+  await expect(colleague.getByRole("status")).toContainText("Merci !");
+  await expect(colleague.locator(".feedback-list")).toContainText("Reçu");
+  // Closing the banner hides this message in this browser.
+  await banner.getByRole("button", { name: "Masquer ce message" }).click();
+  await expect(banner).toHaveCount(0);
+
+  await page.goto("/account/feedback-inbox");
+  const report = page.locator(".admin-feedback li", {
+    hasText: "Le bouton Exporter ne répond pas.",
+  });
+  await expect(report).toContainText(member.name);
+  await expect(
+    report.getByRole("link", { name: "Créer une issue GitHub" }),
+  ).toHaveAttribute("href", /github\.com\/.*\/issues\/new\?title=/);
+  await report.getByLabel("Statut").selectOption("done");
+
+  await page.goto("/account/logs");
+  const logs = page.locator(".admin-logs");
+  await logs.getByLabel("Niveau").selectOption("info");
+  await expect(logs.locator(".admin-logs-list")).toContainText(
+    "MeetLoom listening",
+  );
+
+  await page.goto("/account/settings");
+  await announcement
+    .getByRole("button", { name: "Retirer le message" })
+    .click();
+  await expect(announcement).toContainText("Message retiré.");
+});

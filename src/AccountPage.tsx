@@ -3,8 +3,11 @@ import {
   Activity,
   ArrowLeft,
   DatabaseBackup,
+  Inbox,
   KeyRound,
   LogOut,
+  MessageSquareWarning,
+  ScrollText,
   Settings,
   UserRound,
   Users,
@@ -23,6 +26,10 @@ const AdminAccounts = lazy(() => import("./AdminAccounts"));
 const AdminActivity = lazy(() => import("./AdminActivity"));
 const AdminData = lazy(() => import("./AdminData"));
 const AdminSettings = lazy(() => import("./AdminSettings"));
+const AdminAnnouncement = lazy(() => import("./AdminAnnouncement"));
+const AdminFeedback = lazy(() => import("./AdminFeedback"));
+const AdminLogs = lazy(() => import("./AdminLogs"));
+const FeedbackForm = lazy(() => import("./FeedbackForm"));
 
 interface Section {
   id: string;
@@ -33,6 +40,11 @@ interface Section {
 export const ACCOUNT_SECTIONS: Section[] = [
   { id: "profile", icon: UserRound, label: ["Profil", "Profile"] },
   { id: "security", icon: KeyRound, label: ["Mot de passe", "Password"] },
+  {
+    id: "feedback",
+    icon: MessageSquareWarning,
+    label: ["Signaler un problème", "Report a problem"],
+  },
   {
     id: "activity",
     icon: Activity,
@@ -57,18 +69,33 @@ export const ACCOUNT_SECTIONS: Section[] = [
     label: ["Sauvegardes et données", "Backups and data"],
     admin: true,
   },
+  {
+    id: "feedback-inbox",
+    icon: Inbox,
+    label: ["Retours des utilisateurs", "User feedback"],
+    admin: true,
+  },
+  {
+    id: "logs",
+    icon: ScrollText,
+    label: ["Journaux", "Logs"],
+    admin: true,
+  },
 ];
 
 /** "Mon compte & équipe" as a page of its own: `/account/<section>`. */
 export default function AccountPage({
   user,
   section,
+  from,
   navigate,
   refreshUser,
   logout,
 }: {
   user: User;
   section?: string;
+  /** The page visited before, for problem reports. */
+  from?: string;
   navigate: (url: string) => void;
   refreshUser: () => void;
   logout: () => void;
@@ -148,8 +175,16 @@ export default function AccountPage({
               <AdminAccounts user={user} />
             </>
           )}
-          {current.id === "settings" && <AdminSettings user={user} />}
+          {current.id === "feedback" && <FeedbackForm page={from} />}
+          {current.id === "settings" && (
+            <>
+              <AdminAnnouncement user={user} />
+              <AdminSettings user={user} />
+            </>
+          )}
           {current.id === "data" && <AdminData user={user} />}
+          {current.id === "feedback-inbox" && <AdminFeedback user={user} />}
+          {current.id === "logs" && <AdminLogs user={user} />}
         </Suspense>
         <AppVersion />
       </main>
