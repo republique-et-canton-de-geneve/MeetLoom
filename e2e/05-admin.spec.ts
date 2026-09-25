@@ -10,17 +10,20 @@ test("before an update the administrator sees the version and the sessions being
   await expect(facilitator.locator(".timer-bar")).toContainText("Accueil");
 
   const page = await signIn(browser, admin);
+  // The account and administration live on their own page.
   await page.getByRole("button", { name: /Mon compte & équipe/ }).click();
-  const dialog = page.locator("dialog[open]");
-  await dialog.locator("summary", { hasText: "Activité en cours" }).click();
-  const activity = dialog.locator(".admin-activity");
+  await expect(page).toHaveURL(/\/account$/);
+  const account = page.locator(".account-page");
+  await account.getByRole("link", { name: "Activité en cours" }).click();
+  await expect(page).toHaveURL(/\/account\/activity$/);
+  const activity = account.locator(".admin-activity");
   await expect(activity).toContainText("Version installée");
   const row = activity.locator("li", { hasText: "Atelier E2E" });
   await expect(row).toContainText("Animée en ce moment");
   await expect(row).toContainText("Accueil");
   await expect(row).toContainText(member.name);
   // Everyone signed in can read the version.
-  await expect(dialog.locator(".app-version")).toContainText(/MeetLoom \d/);
+  await expect(account.locator(".app-version")).toContainText(/MeetLoom \d/);
 
   await facilitator.getByTitle("Réinitialiser").click();
   await expect(

@@ -233,8 +233,8 @@ export default function AdminData({ user }: { user: User }) {
   };
 
   return (
-    <details className="admin-accounts admin-data">
-      <summary>{t("Sauvegardes et données", "Backups and data")}</summary>
+    <section className="admin-accounts admin-data account-section">
+      <h2>{t("Sauvegardes et données", "Backups and data")}</h2>
       {error && <ErrorBanner message={error} />}
       {notice && <p role="status">{notice}</p>}
       {signedOut && (
@@ -701,6 +701,6 @@ export default function AdminData({ user }: { user: User }) {
           </button>
         </form>
       )}
-    </details>
+    </section>
   );
 }
