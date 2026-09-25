@@ -25,11 +25,11 @@ export default function AdminLogs({ user }: { user: User }) {
     [more, setMore] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const load = async (before?: string) => {
+  const load = async (before?: string, filter = level) => {
     setBusy(true);
     setError("");
     try {
-      const search = new URLSearchParams({ level });
+      const search = new URLSearchParams({ level: filter });
       if (query.trim()) search.set("q", query.trim());
       if (before) search.set("before", before);
       const result = await api<{ logs: LogLine[]; retentionDays: number }>(
@@ -47,8 +47,15 @@ export default function AdminLogs({ user }: { user: User }) {
     }
   };
   useEffect(() => {
-    if (user.isAdmin) void load();
-  }, [level, user.isAdmin]);
+    if (!user.isAdmin) return;
+    api<{ logs: LogLine[]; retentionDays: number }>("/admin/logs?level=warn")
+      .then((result) => {
+        setRetention(result.retentionDays);
+        setLines(result.logs);
+        setMore(result.logs.length === 300);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [user.isAdmin]);
   if (!user.isAdmin) return null;
   const levelLabel = (value: LogLine["level"]) =>
     value === "error"
@@ -77,9 +84,11 @@ export default function AdminLogs({ user }: { user: User }) {
           {t("Niveau", "Level")}
           <select
             value={level}
-            onChange={(event) =>
-              setLevel(event.target.value as LogLine["level"])
-            }
+            onChange={(event) => {
+              const next = event.target.value as LogLine["level"];
+              setLevel(next);
+              void load(undefined, next);
+            }}
           >
             <option value="info">{t("Tout", "Everything")}</option>
             <option value="warn">

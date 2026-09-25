@@ -9,12 +9,7 @@ import type { AppVersion } from "./version.js";
 /** Where administrators forward a report, from their own browser. */
 export const DEFAULT_ISSUES_URL =
   "https://github.com/republique-et-canton-de-geneve/MeetLoom/issues/new";
-export const FEEDBACK_STATUSES = [
-  "new",
-  "in-progress",
-  "done",
-  "dismissed",
-] as const;
+const FEEDBACK_STATUSES = ["new", "in-progress", "done", "dismissed"] as const;
 
 /**
  * Problems and ideas reported from the application by anyone signed in, so

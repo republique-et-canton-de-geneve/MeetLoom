@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Database } from "./db.js";
 import { audit } from "./audit.js";
 
-export interface Announcement {
+interface Announcement {
   message: string;
   tone: "info" | "warning";
   updatedAt: string;

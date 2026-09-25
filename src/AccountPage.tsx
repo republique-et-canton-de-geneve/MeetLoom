@@ -37,7 +37,7 @@ interface Section {
   label: [fr: string, en: string];
   admin?: boolean;
 }
-export const ACCOUNT_SECTIONS: Section[] = [
+const ACCOUNT_SECTIONS: Section[] = [
   { id: "profile", icon: UserRound, label: ["Profil", "Profile"] },
   { id: "security", icon: KeyRound, label: ["Mot de passe", "Password"] },
   {
