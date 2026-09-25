@@ -100,9 +100,13 @@ jobs:
             process.exit(0);
           }
           if (response.status !== 404) throw new Error(`Could not verify release availability: HTTP ${response.status}`);
+          // The refs API answers 404 for a missing tag; /commits/<tag> answers 422.
+          const ref = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/git/ref/tags/${process.env.RELEASE_TAG}`, {headers});
+          if (ref.status === 404) process.exit(0);
+          if (!ref.ok) throw new Error(`Could not verify the existing tag: HTTP ${ref.status}`);
           const tag = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.RELEASE_TAG}`, {headers});
-          if (tag.ok && (await tag.json()).sha !== process.env.GITHUB_SHA) throw new Error('The existing tag points at another commit. Choose a new version.');
-          if (!tag.ok && tag.status !== 404) throw new Error(`Could not verify the existing tag: HTTP ${tag.status}`);
+          if (!tag.ok) throw new Error(`Could not read the existing tag: HTTP ${tag.status}`);
+          if ((await tag.json()).sha !== process.env.GITHUB_SHA) throw new Error('The existing tag points at another commit. Choose a new version.');
           JS
       - run: npm ci
       - run: npm run check
