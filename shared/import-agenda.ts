@@ -91,7 +91,13 @@ export function mergeImportedAgenda(
 
   if (base.columns.length + columns.length > 20)
     throw new Error("Import exceeds the limit of 20 columns.");
-  if (base.days.length + source.days.length > 30)
+  // Imported days first fill the destination's empty days (a new session
+  // starts with one), in order; the rest are added after the existing days.
+  const emptyDays = base.days
+    .filter((day) => !day.blocks.length)
+    .map((day) => day.id)
+    .slice(0, source.days.length);
+  if (base.days.length + source.days.length - emptyDays.length > 30)
     throw new Error("Import exceeds the limit of 30 days.");
   if (
     [...base.days, ...source.days].reduce(
@@ -102,7 +108,9 @@ export function mergeImportedAgenda(
     throw new Error("Import exceeds the limit of 1000 blocks.");
   }
 
-  const dayIds = new Map(source.days.map((day) => [day.id, freshId()]));
+  const dayIds = new Map(
+    source.days.map((day, index) => [day.id, emptyDays[index] ?? freshId()]),
+  );
   const days = source.days.map((day) => ({
     ...day,
     id: dayIds.get(day.id)!,
@@ -133,6 +141,12 @@ export function mergeImportedAgenda(
     }),
   }));
 
+  const filled = new Map(
+    days
+      .filter((day) => emptyDays.includes(day.id))
+      .map((day) => [day.id, day.blocks]),
+  );
+  const added = days.filter((day) => !filled.has(day.id));
   const content = cloneContent(source, dayIds, true, freshId);
   const pages = [...(base.pages ?? []), ...(content.pages ?? [])];
   const forms = [...(base.forms ?? []), ...(content.forms ?? [])];
@@ -145,7 +159,7 @@ export function mergeImportedAgenda(
       ? {
           contentOrder: [
             ...orderedContent(base),
-            ...orderedContent({ days, ...content }),
+            ...orderedContent({ days: added, ...content }),
           ],
         }
       : {}),
@@ -153,6 +167,11 @@ export function mergeImportedAgenda(
       ? { categories: [...(base.categories ?? []), ...categories] }
       : {}),
     columns: [...base.columns, ...columns],
-    days: [...base.days, ...days],
+    days: [
+      ...base.days.map((day) =>
+        filled.has(day.id) ? { ...day, blocks: filled.get(day.id)! } : day,
+      ),
+      ...added,
+    ],
   });
 }

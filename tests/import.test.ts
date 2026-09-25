@@ -158,10 +158,11 @@ test("import refuses cumulative day, block and column limits without mutating th
   assert.throws(() => mergeImportedAgenda(columns, source), /20 columns/);
   assert.equal(JSON.stringify(columns), beforeColumns);
   const days = createSession("owner", "Destination", "fr");
+  // Full days: an empty one would be filled instead of adding a day.
   days.days = Array.from({ length: 30 }, (_, i) => ({
     ...days.days[0],
     id: `day-${i}`,
-    blocks: [],
+    blocks: [newBlock("fr")],
   }));
   days.run.dayId = days.days[0].id;
   assert.throws(() => mergeImportedAgenda(days, source), /30 days/);
@@ -257,8 +258,45 @@ test("import remaps pages, forms, questions and navigation and makes imported pa
     JSON.stringify(publicProjection(result)).includes("SECRET_IMPORTED_PAGE"),
     false,
   );
+  // The imported day filled the destination's empty day, which keeps its
+  // place; the imported page and form follow.
   assert.deepEqual(
     result.contentOrder?.map((item) => item.kind),
-    ["day", "page", "form", "day"],
+    ["day", "page", "form"],
   );
+  assert.equal(result.days[0].blocks[0].title, "Imported activity");
+});
+
+test("an import fills the session's empty days before adding new ones", () => {
+  // A new session starts with one empty day: importing a two-day agenda must
+  // not leave that empty "Jour 1" next to the imported one.
+  const destination = createSession("owner", "Destination", "fr");
+  destination.days[0].title = "Mardi";
+  const emptyDay = destination.days[0].id;
+  const source = incoming();
+  source.days.push({
+    ...structuredClone(source.days[0]),
+    id: "second-day",
+    title: "Jour 2",
+    blocks: [newBlock("fr", { title: "Second day activity" })],
+  });
+  const result = mergeImportedAgenda(destination, source);
+  assert.equal(result.days.length, 2);
+  assert.equal(result.days[0].id, emptyDay);
+  assert.equal(result.days[0].title, "Mardi");
+  assert.equal(result.days[0].blocks[0].title, "Imported activity");
+  assert.equal(result.days[1].blocks[0].title, "Second day activity");
+  assert.deepEqual(
+    result.contentOrder
+      ?.filter((item) => item.kind === "day")
+      .map((item) => item.id) ?? result.days.map((day) => day.id),
+    result.days.map((day) => day.id),
+  );
+
+  // Days that already hold blocks are never touched.
+  const filled = createSession("owner", "Filled", "fr");
+  filled.days[0].blocks = [newBlock("fr", { title: "Existing" })];
+  const appended = mergeImportedAgenda(filled, incoming());
+  assert.equal(appended.days.length, 2);
+  assert.equal(appended.days[0].blocks[0].title, "Existing");
 });

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Clock3,
   Plus,
+  Trash2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -147,6 +148,56 @@ export default function SessionOverview({
                   >
                     <ArrowRight size={18} />
                   </button>
+                  {editable && (
+                    <button
+                      className="icon-button danger"
+                      title={
+                        session.days.length === 1
+                          ? t(
+                              "Une séance garde au moins un jour",
+                              "A session keeps at least one day",
+                            )
+                          : session.run.dayId === day.id &&
+                              ["running", "paused"].includes(session.run.status)
+                            ? t(
+                                "Ce jour est en cours d’animation",
+                                "This day is being facilitated",
+                              )
+                            : t(
+                                "Supprimer ce jour (annulable)",
+                                "Delete this day (undo available)",
+                              )
+                      }
+                      aria-label={t(
+                        `Supprimer ${day.title}`,
+                        `Delete ${day.title}`,
+                      )}
+                      disabled={
+                        session.days.length === 1 ||
+                        (session.run.dayId === day.id &&
+                          ["running", "paused"].includes(session.run.status))
+                      }
+                      onClick={() => {
+                        const count = allBlocks(day.blocks).length;
+                        if (
+                          count &&
+                          !confirm(
+                            t(
+                              `Supprimer « ${day.title} » et ses ${count} bloc(s) ? Vous pourrez annuler.`,
+                              `Delete “${day.title}” and its ${count} block(s)? You can undo it.`,
+                            ),
+                          )
+                        )
+                          return;
+                        update((s) => ({
+                          ...s,
+                          days: s.days.filter((d) => d.id !== day.id),
+                        }));
+                      }}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  )}
                 </div>
                 <div className="overview-day-meta">
                   <input

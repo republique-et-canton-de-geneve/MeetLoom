@@ -57,6 +57,29 @@ test("Escape closes the actions menu and side panels, and returns focus", async 
   await expect(picker.locator(".assignee-menu")).toBeHidden();
 });
 
+test("a day is deleted from the overview, but never the last one", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Atelier deux jours");
+  await addActivities(page, ["Ouverture"]);
+  await page.getByRole("button", { name: "Autres actions" }).click();
+  await page.getByRole("button", { name: "Dupliquer ce jour" }).click();
+  await page.getByRole("button", { name: "Vue d’ensemble" }).first().click();
+  const days = page.locator(".overview-day");
+  await expect(days).toHaveCount(2);
+  page.once("dialog", (dialog) => dialog.accept());
+  await days
+    .nth(1)
+    .getByRole("button", { name: /^Supprimer / })
+    .click();
+  await expect(days).toHaveCount(1);
+  await expect(
+    days.first().getByRole("button", { name: /^Supprimer / }),
+  ).toBeDisabled();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+});
+
 test("on a phone the editor fits the screen and days keep their names", async ({
   browser,
 }) => {
