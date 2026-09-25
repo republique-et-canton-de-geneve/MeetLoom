@@ -36,6 +36,12 @@ import {
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerOperations } from "./operations.js";
+import {
+  DEFAULT_MAX_ARCHIVE_BYTES,
+  importBodyParser,
+  registerBackups,
+  type BackupConfig,
+} from "./backups.js";
 import { appVersion, type AppVersion } from "./version.js";
 import { registerSharing } from "./sharing.js";
 import { audit } from "./audit.js";
@@ -92,6 +98,8 @@ import { installActivityApi, sessionReadMarkers } from "./activity.js";
 export interface AppConfig {
   /** Defaults to the image's APP_VERSION/APP_REVISION or package.json. */
   version?: AppVersion;
+  /** Scheduled backups and the largest archive accepted. */
+  backups?: BackupConfig;
   databaseUrl?: string;
   sqlitePath?: string;
   database?: Database;
@@ -340,6 +348,12 @@ async function assembleWith(db: Database, config: AppConfig) {
         ? next()
         : next(new HttpError(401, "UNAUTHENTICATED", "Please sign in.")),
     express.json({ limit: "7mb", strict: true }),
+  );
+  app.use(
+    "/api/admin/data/import",
+    ...importBodyParser(
+      config.backups?.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES,
+    ),
   );
   app.use(express.json({ limit: "1mb", strict: true }));
   const authenticated = (
@@ -1194,6 +1208,12 @@ async function assembleWith(db: Database, config: AppConfig) {
       role,
     });
   });
+  const backups = await registerBackups(app, {
+    db,
+    admin,
+    version: config.version ?? appVersion(),
+    config: config.backups,
+  });
   const operations = await registerOperations(app, {
     db,
     authenticated,
@@ -1415,7 +1435,9 @@ async function assembleWith(db: Database, config: AppConfig) {
     app,
     db,
     mail,
+    backups,
     close: async () => {
+      backups.close();
       await mail.close();
       await db.close();
     },

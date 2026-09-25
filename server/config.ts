@@ -60,6 +60,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     secureCookie: boolean(env, "COOKIE_SECURE", production),
     trustProxy: integer(env, "TRUST_PROXY", 0, 0, 10),
     bootstrapToken: env.BOOTSTRAP_TOKEN?.trim() || undefined,
+    backups: {
+      scheduler: boolean(env, "BACKUP_SCHEDULER", true),
+      maxArchiveBytes:
+        integer(env, "DATA_ARCHIVE_MAX_MB", 100, 1, 2048) * 1024 * 1024,
+    },
     ai: {
       baseUrl: env.LLM_BASE_URL?.trim() || undefined,
       model: env.LLM_MODEL?.trim() || undefined,

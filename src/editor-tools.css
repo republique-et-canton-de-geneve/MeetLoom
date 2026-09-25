@@ -990,6 +990,48 @@
 .admin-activity .button-row {
   align-items: center;
 }
+.admin-data h4 {
+  margin: 18px 0 6px;
+}
+.admin-data-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.admin-data-list > li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-data-list small {
+  display: block;
+  color: var(--muted);
+  margin: 3px 0 6px;
+}
+.admin-data .button-row {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.admin-data-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.admin-data-panel.warning {
+  border-color: #d8a15a;
+  background: #fff9ef;
+}
+.admin-data-panel ul {
+  list-style: none;
+  padding: 0;
+}
+.admin-data-panel ul li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
 .app-version {
   margin-top: 18px;
   font-size: 12px;

@@ -6,6 +6,9 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Added
 
+- Backups for administrators (Mon compte & équipe → Sauvegardes et données): scheduled once or twice a day, manual restore points, recovery of one session as a copy, full restore after an automatic safety backup.
+- Export and import of all data as a passphrase-encrypted file, to copy production into a test environment or move to another installation.
+- AI features no longer appear when no LLM is configured; the MCP connectors are also reachable from More actions.
 - Administrators see the current activity before an update: installed version, sessions being facilitated or paused, people in the editor and visitor links being followed (Mon compte & équipe → Activité en cours).
 - Every account sees the installed version at the bottom of "Mon compte & équipe"; release images, including release candidates, carry their exact version and commit.
 

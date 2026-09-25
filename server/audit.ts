@@ -12,6 +12,14 @@ export const AUDIT_ACTIONS = [
   "account.update",
   "account.access-revoke",
   "account.reset",
+  "settings.backups",
+  "backup.create",
+  "backup.delete",
+  "backup.download",
+  "backup.restore",
+  "backup.restore-session",
+  "data.export",
+  "data.import",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

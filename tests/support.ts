@@ -67,6 +67,21 @@ export async function harness(t: TestContext, config: AppConfig = {}) {
   function client() {
     let cookie = "";
     return {
+      /** The raw response, for binary downloads. */
+      async raw(path: string, method = "GET", body?: unknown) {
+        const response = await fetch(`${base}/api${path}`, {
+          method,
+          headers: {
+            Origin: origin,
+            "Content-Type": "application/json",
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const setCookie = response.headers.get("set-cookie");
+        if (setCookie) cookie = setCookie.split(";")[0];
+        return response;
+      },
       async request(
         path: string,
         method = "GET",

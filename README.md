@@ -85,6 +85,12 @@ LLM_API_KEY=if-required
 
 Use the exact model identifier your server expects; nothing is tied to a particular model family. The server calls `/chat/completions`, validates the response, bounds its size and duration, and returns a preview. There is no default external endpoint, no key sent to the browser, and no agenda applied without user action. Internal columns enter the AI context only when explicitly selected. For OCR, add `LLM_VISION_MODEL` on the same internal provider. Mount an internal CA through `NODE_EXTRA_CA_CERTS` if needed; do not disable TLS verification.
 
+Without `LLM_BASE_URL`, the AI features (assistant, AI help, AI summaries and structuring) do not appear at all.
+
+## Backups and moving data
+
+Administrators find scheduled backups, restore points, session recovery and the encrypted export/import of all data under **Mon compte & équipe → Sauvegardes et données**. See [operations](docs/operations.md#back-up-and-restore); they complement, not replace, backups of the PostgreSQL volume.
+
 ## Engineering and verification
 
 The [architecture, security and load review](docs/architecture-review.md) summarizes the controls, test evidence, capacity measurements and open recommendations. AI-assisted work uses [gstack](docs/gstack.md) as described in [AGENTS.md](AGENTS.md).

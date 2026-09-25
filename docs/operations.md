@@ -25,6 +25,40 @@ oc -n meetloom-dev exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:
 
 ## Back up and restore
 
+MeetLoom has two levels of backup. Use both.
+
+### Application backups (administrators, in the browser)
+
+**Mon compte & équipe → Sauvegardes et données**, for administrators:
+
+- **Scheduled backups:** off, once or twice a day at chosen times (default: every day at 02:00, Europe/Zurich), keeping the last 14 by default (1 to 60). Only one pod takes each backup, even with several running. `BACKUP_SCHEDULER=false` stops the scheduler on a server.
+- **Restore points:** created by hand (for example "Before the acceptance test"), kept until deleted, 50 at most.
+- **Recover a session:** open a backup, pick a session, **Restaurer comme copie**. The session comes back as a new copy for its owner, next to the current one, and nothing else changes. Use this when someone deleted or broke an agenda.
+- **Restore everything:** replaces all data with the backup, after an automatic **safety backup** of the current state (the last 5 are kept), so a restore can itself be undone. It asks for the administrator's password and for the word REMPLACER. Everyone is signed out.
+- **Download:** a backup as an encrypted file, importable into another installation.
+
+These backups are compressed snapshots stored **in the application database** (`app_backups`). They undo mistakes. They do not protect against losing the database volume: keep the PostgreSQL backups below for that. Each backup takes roughly the size of the data compressed; the list shows each one's size.
+
+### Moving all data between installations (export and import)
+
+To copy production into development, or to move to another OpenShift project or cluster:
+
+1. On the source, as an administrator: **Sauvegardes et données → Exporter…**. Enter your password and an encryption passphrase (12 characters or more). The browser downloads `meetloom-<date>.mldx`.
+2. On the target, as an administrator: **Importer…**, choose the file, enter the passphrase, your password and the word REMPLACER.
+3. The target's data is replaced in one transaction (all or nothing), after a safety backup of its previous state. Everyone is signed out; sign in with an account **from the imported data** (production accounts and passwords, when copying production).
+
+What moves: accounts and password hashes, workspaces, sessions, versions, comments, visitor links (they keep working on the new address), forms and responses, settings and the audit trail. What does not: sign-ins, recovery links, presence, the outgoing mail queue, and the target's own backups. The target's audit trail is kept and the imported entries are added to it.
+
+Safety rules:
+
+- The file holds all data, including password hashes and private notes. It is encrypted (AES-256-GCM, key derived from the passphrase with scrypt): without the passphrase it cannot be read, and any modification is refused. Send the passphrase through another channel than the file.
+- Export, import, restore and download need an administrator, their password (accounts signed in through OIDC are not asked) and are written to the audit trail. Import and restore also need the typed confirmation.
+- **A development copy of production contains real people's addresses.** If development has SMTP configured, disable it (or set `SMTP_SCHEDULED=false`) before importing, so development does not send reminders to them. Apply your organization's rules for personal data in test environments.
+- The largest archive accepted is 100 MB once decompressed (`DATA_ARCHIVE_MAX_MB`). The archive is processed in memory: for larger data, raise the pod memory limit accordingly, or move the data with `pg_dump` below.
+- The target must run the same MeetLoom version as the source, or a newer one. An archive from a newer version is refused rather than truncated.
+
+### PostgreSQL backups (operator)
+
 For managed PostgreSQL, use the platform's backup mechanism and regularly test restoration. For the bundled database, a logical backup can be extracted from Bash as follows:
 
 ```bash

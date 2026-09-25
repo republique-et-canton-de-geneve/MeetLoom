@@ -75,7 +75,10 @@ test("privileged actions leave an audit row with actor, target and client addres
     "SELECT action,actor_id,target,detail,ip FROM audit_events ORDER BY at,id",
   );
   const actions = rows.map((row) => row.action);
-  for (const action of AUDIT_ACTIONS)
+  // Backup and data-transfer actions are covered by their own tests.
+  for (const action of AUDIT_ACTIONS.filter(
+    (value) => !/^(backup|data)\.|^settings\.backups$/.test(value),
+  ))
     assert.ok(actions.includes(action), `${action} is recorded`);
   const setup = rows.find((row) => row.action === "installation.setup")!;
   assert.equal(setup.actor_id, owner.id);
@@ -105,7 +108,7 @@ test("an unknown audit action is refused, and every declared action is emitted b
       ),
     /Unknown audit action/,
   );
-  const sources = ["server/app.ts", "server/accounts.ts"]
+  const sources = ["server/app.ts", "server/accounts.ts", "server/backups.ts"]
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
   for (const action of AUDIT_ACTIONS)
