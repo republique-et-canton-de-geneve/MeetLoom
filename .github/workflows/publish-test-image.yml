@@ -37,7 +37,9 @@ jobs:
           # Test images carry a pre-release suffix, so a branch can never take
           # the name of a real version, nor "latest".
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(rc|dev)\.[0-9]+$ ]]; then
-            echo "Use a tag like $BASE-rc.1 or $BASE-dev.1 (got \"$VERSION\")." >&2; exit 1
+            SUGGESTED=$BASE
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && SUGGESTED=$VERSION
+            echo "Test images need a -rc.N or -dev.N suffix, so they never take a real version's name: use $SUGGESTED-rc.1 (got \"$VERSION\")." >&2; exit 1
           fi
           IMAGE=${DOCKERHUB_REPOSITORY#docker.io/}
           if [[ ! "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9._-]*$ ]]; then
