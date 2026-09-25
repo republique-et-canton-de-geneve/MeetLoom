@@ -554,20 +554,6 @@ hr {
   align-items: center;
   gap: 20px;
 }
-.privacy-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #8c958e;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.privacy-badge > span {
-  width: 5px;
-  height: 5px;
-  background: #87a28c;
-  border-radius: 50%;
-}
 .dashboard-content {
   max-width: 1350px;
   margin: 0 auto;
@@ -2812,9 +2798,6 @@ hr {
   .topbar {
     padding: 0 23px;
     height: 64px;
-  }
-  .privacy-badge {
-    display: none;
   }
   .editor-sidebar {
     width: 162px;
