@@ -53,10 +53,10 @@ The Deployment optionally loads a ConfigMap and a Secret, both named `meetloom-s
 
 ### SMTP only
 
-The non-secret settings go into the ConfigMap:
+The non-secret settings go into the ConfigMap. Each command below creates its resource, or updates it when it already exists, so it can be rerun:
 
 ```powershell
-oc -n meetloom-dev create configmap meetloom-services --from-literal=SMTP_HOST=smtp.example.org --from-literal=SMTP_PORT=587 --from-literal=SMTP_SECURE=false --from-literal=SMTP_FROM=meetloom@example.org --from-literal=SMTP_SCHEDULED=true
+oc -n meetloom-dev create configmap meetloom-services --from-literal=SMTP_HOST=smtp.example.org --from-literal=SMTP_PORT=587 --from-literal=SMTP_SECURE=false --from-literal=SMTP_FROM=meetloom@example.org --from-literal=SMTP_SCHEDULED=true --dry-run=client -o yaml | oc -n meetloom-dev apply -f -
 ```
 
 If the relay requires authentication, put the credentials in a local file excluded from Git, such as `.env.smtp`:
@@ -69,7 +69,7 @@ SMTP_PASSWORD=your-private-value
 Then create the Secret and restart:
 
 ```powershell
-oc -n meetloom-dev create secret generic meetloom-services --from-env-file=.env.smtp
+oc -n meetloom-dev create secret generic meetloom-services --from-env-file=.env.smtp --dry-run=client -o yaml | oc -n meetloom-dev apply -f -
 oc -n meetloom-dev rollout restart deployment/meetloom
 oc -n meetloom-dev rollout status deployment/meetloom
 ```

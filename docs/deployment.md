@@ -203,12 +203,12 @@ At the first installation, set `LLM_BASE_URL`, `LLM_MODEL` and optionally `LLM_A
 
 ```powershell
 oc -n meetloom-dev set data configmap/meetloom-settings LLM_BASE_URL=https://llm.example.org/v1 LLM_MODEL=exact-model-id
-oc -n meetloom-dev create secret generic meetloom-ai --from-literal=LLM_API_KEY=your-key
+oc -n meetloom-dev create secret generic meetloom-ai --from-literal=LLM_API_KEY=your-key --dry-run=client -o yaml | oc -n meetloom-dev apply -f -
 oc -n meetloom-dev rollout restart deployment/meetloom
 oc -n meetloom-dev rollout status deployment/meetloom
 ```
 
-Create the `meetloom-ai` Secret only if the server needs a key; to change it later, `oc -n meetloom-dev set data secret/meetloom-ai LLM_API_KEY=new-key`, then restart. To import scanned documents (OCR), also set `LLM_VISION_MODEL` to a vision model of the same server; the text model is enough to build agendas. The restart replaces pods one at a time, so it causes no interruption, and a pod that fails to start never replaces a running one (`oc -n meetloom-dev logs deployment/meetloom` shows why).
+Run the `meetloom-ai` line only if the server needs a key. It creates the Secret, or updates it when it already exists (the installer creates it when `LLM_API_KEY` was set at the first installation); a plain `oc create` would stop with `already exists`. Rerun it to change the key, then restart. To import scanned documents (OCR), also set `LLM_VISION_MODEL` to a vision model of the same server; the text model is enough to build agendas. The restart replaces pods one at a time, so it causes no interruption, and a pod that fails to start never replaces a running one (`oc -n meetloom-dev logs deployment/meetloom` shows why).
 
 To check: **Mon compte & équipe → Paramètres de l'installation** shows the AI as configured with its model names, and **Assistant IA** appears in the editor. If a network policy restricts egress, allow the LLM host.
 
@@ -217,7 +217,7 @@ To check: **Mon compte & équipe → Paramètres de l'installation** shows the A
 If the LLM, the SMTP relay or the OIDC provider uses a certificate signed by an internal authority, calls fail with a certificate error. Give Node.js that authority; never disable TLS verification. With the authority in a PEM file:
 
 ```powershell
-oc -n meetloom-dev create configmap meetloom-ca --from-file=ca.crt=internal-ca.pem
+oc -n meetloom-dev create configmap meetloom-ca --from-file=ca.crt=internal-ca.pem --dry-run=client -o yaml | oc -n meetloom-dev apply -f -
 oc -n meetloom-dev set volume deployment/meetloom --add --name=meetloom-ca --type=configmap --configmap-name=meetloom-ca --mount-path=/etc/meetloom-ca --read-only
 oc -n meetloom-dev set data configmap/meetloom-settings NODE_EXTRA_CA_CERTS=/etc/meetloom-ca/ca.crt
 oc -n meetloom-dev rollout restart deployment/meetloom
