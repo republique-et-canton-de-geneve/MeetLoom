@@ -416,49 +416,43 @@ export default function ImportPanel({
                 {t("Un bloc par ligne", "One block per line")}
               </button>
             </div>
-            <section className="import-ai">
-              <h3>
-                <Sparkles size={18} />
-                {t(
-                  "Structurer avec l’IA interne",
-                  "Structure with internal AI",
-                )}
-              </h3>
-              <p className="muted">
-                {t(
-                  "En cliquant, vous transmettez ce texte au modèle interne configuré. Vous pourrez corriger sa proposition avant l’import.",
-                  "Clicking sends this text to the configured internal model. You can edit its proposal before importing.",
-                )}
-              </p>
-              <label>
-                {t("Consignes facultatives", "Optional instructions")}
-                <textarea
-                  value={instructions}
-                  maxLength={4000}
-                  onChange={(event) => setInstructions(event.target.value)}
-                  placeholder={t(
-                    "Ex. conserver les temps annoncés et regrouper les sujets par thème.",
-                    "E.g. preserve stated times and group related topics.",
+            {enabled && (
+              <section className="import-ai">
+                <h3>
+                  <Sparkles size={18} />
+                  {t(
+                    "Structurer avec l’IA interne",
+                    "Structure with internal AI",
                   )}
-                />
-              </label>
-              <button
-                className="button secondary"
-                disabled={!enabled || !text.trim() || busy}
-                onClick={() => void ai()}
-              >
-                <Sparkles size={16} />
-                {t("Proposer un agenda", "Propose an agenda")}
-              </button>
-              {!enabled && (
+                </h3>
                 <p className="muted">
                   {t(
-                    "Le modèle interne doit être configuré par l’administrateur.",
-                    "The internal model must be configured by the administrator.",
+                    "En cliquant, vous transmettez ce texte au modèle interne configuré. Vous pourrez corriger sa proposition avant l’import.",
+                    "Clicking sends this text to the configured internal model. You can edit its proposal before importing.",
                   )}
                 </p>
-              )}
-            </section>
+                <label>
+                  {t("Consignes facultatives", "Optional instructions")}
+                  <textarea
+                    value={instructions}
+                    maxLength={4000}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    placeholder={t(
+                      "Ex. conserver les temps annoncés et regrouper les sujets par thème.",
+                      "E.g. preserve stated times and group related topics.",
+                    )}
+                  />
+                </label>
+                <button
+                  className="button secondary"
+                  disabled={!enabled || !text.trim() || busy}
+                  onClick={() => void ai()}
+                >
+                  <Sparkles size={16} />
+                  {t("Proposer un agenda", "Propose an agenda")}
+                </button>
+              </section>
+            )}
           </>
         )}
         {incoming && (

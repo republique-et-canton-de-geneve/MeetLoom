@@ -827,30 +827,32 @@ export default function ExportPanel({
             <Copy size={16} />
             {t("Copier le tableau", "Copy table")}
           </button>
-          <ExportAiTools
-            sessionId={session.id}
-            enabled={aiEnabled}
-            prepare={flush}
-            options={options}
-            selection={{
-              audience,
-              dayIds: [...days],
-              columnIds: [...columns],
-              pageIds: [...pages],
-              blockIds: [...blocks],
-              categoryIds: [...categoryIds],
-              landscape: options.landscape,
-            }}
-            onApply={(proposal) => {
-              setOptions(proposal.options);
-              if (proposal.outline.length)
-                setOutline((current) => [
-                  ...proposal.outline,
-                  ...current.filter((slide) => slide.kind === "form"),
-                ]);
-              setPreview(true);
-            }}
-          />
+          {aiEnabled && (
+            <ExportAiTools
+              sessionId={session.id}
+              enabled={aiEnabled}
+              prepare={flush}
+              options={options}
+              selection={{
+                audience,
+                dayIds: [...days],
+                columnIds: [...columns],
+                pageIds: [...pages],
+                blockIds: [...blocks],
+                categoryIds: [...categoryIds],
+                landscape: options.landscape,
+              }}
+              onApply={(proposal) => {
+                setOptions(proposal.options);
+                if (proposal.outline.length)
+                  setOutline((current) => [
+                    ...proposal.outline,
+                    ...current.filter((slide) => slide.kind === "form"),
+                  ]);
+                setPreview(true);
+              }}
+            />
+          )}
           <div className="export-buttons">
             <button
               className="button primary"

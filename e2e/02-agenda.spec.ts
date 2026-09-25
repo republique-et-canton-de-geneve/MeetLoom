@@ -68,3 +68,29 @@ test("on a phone the editor fits the screen and days keep their names", async ({
     ),
   ).toBe(true);
 });
+
+test("without a configured LLM no AI feature shows, and MCP connectors stay reachable", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.getByText("Atelier E2E").first().click();
+  await expect(page.locator(".display-time-control")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Assistant IA" })).toHaveCount(
+    0,
+  );
+  await page.locator("button.expand-block").first().click();
+  await expect(page.locator(".editor-inspector")).toBeVisible();
+  await expect(page.getByText("Aide IA pour ce bloc")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Autres actions" }).click();
+  await page.getByRole("button", { name: /Connecteurs IA \(MCP\)/ }).click();
+  await expect(page.locator(".editor-inspector")).toContainText(
+    "Connecteur MCP interne",
+  );
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: /Exporter/ })
+    .first()
+    .click();
+  await expect(page.getByText(/avec l’IA interne/)).toHaveCount(0);
+});

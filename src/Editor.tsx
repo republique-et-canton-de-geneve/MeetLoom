@@ -22,6 +22,7 @@ import {
   Share2,
   Settings2,
   Sparkles,
+  Plug,
   Columns3,
   LockKeyhole,
   LockKeyholeOpen,
@@ -133,6 +134,7 @@ import {
 import { useCommentCounts } from "./useCommentCounts";
 import MultiPlanView from "./MultiPlanView";
 import AiPanel from "./AiPanel";
+import McpPanel from "./McpPanel";
 import { mergeSessionDraft } from "./session-merge";
 import { flushSync } from "react-dom";
 import { registerNavigationGuard } from "./navigation";
@@ -157,6 +159,7 @@ type Panel =
   | "categories"
   | "multi-plan"
   | "lifecycle"
+  | "connectors"
   | null;
 
 export default function Editor({
@@ -1963,17 +1966,19 @@ export default function Editor({
                         ? t("Développer", "Expand")
                         : t("Réduire", "Compact")}
                     </button>
-                    <button
-                      className="toolbar-button ai-button"
-                      disabled={!editable}
-                      onClick={() => {
-                        setAiTarget(undefined);
-                        setPanel("ai");
-                      }}
-                    >
-                      <Sparkles size={16} />
-                      {t("Assistant IA", "AI assistant")}
-                    </button>
+                    {aiEnabled && (
+                      <button
+                        className="toolbar-button ai-button"
+                        disabled={!editable}
+                        onClick={() => {
+                          setAiTarget(undefined);
+                          setPanel("ai");
+                        }}
+                      >
+                        <Sparkles size={16} />
+                        {t("Assistant IA", "AI assistant")}
+                      </button>
+                    )}
                     <div className="menu-anchor">
                       <button
                         ref={menuButton}
@@ -2034,6 +2039,15 @@ export default function Editor({
                             >
                               <History size={16} />
                               {t("Historique", "Version history")}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setPanel("connectors");
+                                setMenu(false);
+                              }}
+                            >
+                              <Plug size={16} />
+                              {t("Connecteurs IA (MCP)", "AI connectors (MCP)")}
                             </button>
                             <hr />
                             <button
@@ -2621,7 +2635,7 @@ export default function Editor({
                       {currentBlock.title || t("Sans titre", "Untitled")}
                     </strong>
                   </p>
-                  {editable && (
+                  {editable && aiEnabled && (
                     <button
                       className="toolbar-button"
                       onClick={() => {
@@ -2903,7 +2917,7 @@ export default function Editor({
                 onDeleted={() => navigate("/")}
               />
             )}
-            {panel === "ai" && (
+            {panel === "ai" && aiEnabled && (
               <AiPanel
                 session={session}
                 initialBlockId={aiTarget}
@@ -2916,6 +2930,14 @@ export default function Editor({
                 update={mutate}
                 close={() => setPanel(null)}
               />
+            )}
+            {panel === "connectors" && (
+              <Inspector
+                title={t("Connecteurs IA (MCP)", "AI connectors (MCP)")}
+                close={() => setPanel(null)}
+              >
+                <McpPanel sessionId={session.id} />
+              </Inspector>
             )}
             {panel === "history" && (
               <HistoryPanel

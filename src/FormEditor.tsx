@@ -708,13 +708,15 @@ export default function FormEditor({
             </div>
           </div>
           <FormResponseSummary responses={responses} total={total} />
-          <FormAiSummary
-            key={formId}
-            sessionId={session.id}
-            formId={formId}
-            enabled={aiEnabled}
-            total={total}
-          />
+          {aiEnabled && (
+            <FormAiSummary
+              key={formId}
+              sessionId={session.id}
+              formId={formId}
+              enabled={aiEnabled}
+              total={total}
+            />
+          )}
           {responses.length < total && (
             <button
               className="button secondary"
