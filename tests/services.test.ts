@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { harness, origin, password } from "./support.js";
 import type { OidcAdapter, OidcClaims, OidcConfig } from "../server/oidc.js";
 import type { MailConfig, MailMessage } from "../server/mailer.js";

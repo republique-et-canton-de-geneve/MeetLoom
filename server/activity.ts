@@ -1,4 +1,4 @@
-import type { Express, RequestHandler, Response } from "express";
+import type { Express, RequestHandler } from "express";
 import { z } from "zod";
 import type { Database, Sql } from "./db.js";
 import type { Role, Session, User } from "../shared/model.js";

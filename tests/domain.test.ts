@@ -5,6 +5,7 @@ import {
   createSession,
   elapsedSeconds,
   formatTime,
+  localDate,
   newBlock,
   plannedStartTimestamp,
   publicProjection,
@@ -551,5 +552,24 @@ test("editing upcoming durations during a run moves the projected end at once", 
     timerView(session, 121_000).deltaSeconds,
     240,
     "a pause still delays the end",
+  );
+});
+
+test("a new session starts on today's date in its own timezone, not in UTC", () => {
+  // 00:30 in Geneva on September 24 is still September 23 in UTC.
+  const justAfterMidnight = new Date("2026-09-23T22:30:00Z");
+  const session = createSession(
+    "owner",
+    "Night",
+    "fr",
+    false,
+    justAfterMidnight,
+  );
+  assert.equal(session.timezone, "Europe/Zurich");
+  assert.equal(session.days[0].date, "2026-09-24");
+  assert.equal(localDate(justAfterMidnight, "UTC"), "2026-09-23");
+  assert.equal(
+    localDate(new Date("2026-01-01T12:00:00Z"), "Europe/Zurich"),
+    "2026-01-01",
   );
 });

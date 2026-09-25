@@ -17,7 +17,8 @@ function fail(code: string): never {
 const limitText = (text: string) =>
   text.length > DOCUMENT_MAX_TEXT
     ? fail("IMPORT_TEXT_LIMIT")
-    : text.replace(/\u0000/g, "").trim();
+    : // eslint-disable-next-line no-control-regex -- strips NUL bytes from untrusted text
+      text.replace(/\u0000/g, "").trim();
 function xml(
   source: string,
   onOpen?: (name: string, attributes: Record<string, string>) => void,

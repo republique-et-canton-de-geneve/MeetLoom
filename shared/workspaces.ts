@@ -10,7 +10,7 @@ import { pageSchema, formSchema } from "./content.js";
 import { DEFAULT_CATEGORIES } from "./model.js";
 
 export type WorkspaceRole = "admin" | "editor" | "viewer";
-export const workspaceDefaultsSchema = z
+const workspaceDefaultsSchema = z
   .object({
     editorLayout: z
       .object({ separateDescription: z.boolean(), separateTime: z.boolean() })
@@ -64,7 +64,6 @@ export const workspaceDefaultsSchema = z
         ids.add(item.id);
       }
   });
-export type WorkspaceDefaults = z.infer<typeof workspaceDefaultsSchema>;
 export const workspaceSettingsSchema = z
   .object({
     organization: z.string().trim().max(200).default(""),

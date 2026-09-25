@@ -23,14 +23,14 @@ import type {
 } from "../shared/model";
 import { useI18n } from "./i18n";
 import { api, post } from "./api";
-import { Avatar, durationLabel, ErrorBanner, Modal } from "./ui";
+import { Avatar, ErrorBanner, Modal } from "./ui";
 import { chime } from "./Timer";
 import {
   FIELD_PRESETS,
   createPresetColumn,
   fieldPresetLabel,
 } from "../shared/field-presets";
-import { mapBlocks } from "../shared/domain";
+import { localDate, mapBlocks } from "../shared/domain";
 import { QRCode } from "./QRCode";
 import ParticipantInvitePanel from "./ParticipantInvitePanel";
 
@@ -437,7 +437,6 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
               e.preventDefault();
               setBusy(true);
               setError("");
-              const values = Object.fromEntries(new FormData(e.currentTarget));
               try {
                 const payload = {
                   label: linkLabel,
@@ -667,7 +666,7 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                   value={expires}
                   onChange={(event) => setExpires(event.target.value)}
                   type="date"
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={localDate()}
                 />
               </label>
             </div>
@@ -774,7 +773,9 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
                 onClick={() => {
                   setEditingShare(share.id);
                   setLinkLabel(share.label);
-                  setExpires(share.expiresAt?.slice(0, 10) ?? "");
+                  setExpires(
+                    share.expiresAt ? localDate(new Date(share.expiresAt)) : "",
+                  );
                   setShareMode(share.mode ?? "visitor");
                   setSharedDays(
                     share.dayIds ?? session.days.map((day) => day.id),

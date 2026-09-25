@@ -279,4 +279,3 @@ export function TasksMaterialsPanel({
     </Inspector>
   );
 }
-export default TasksMaterialsPanel;

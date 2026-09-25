@@ -6,11 +6,11 @@ import {
   validateFormAnswers,
   type FormPublication,
   type FormResponse,
-  type SessionForm,
 } from "../shared/content.js";
 import type { Role, Session, User } from "../shared/model.js";
 import type { Database, Sql } from "./db.js";
 import { fail, hashToken, rateLimit, token } from "./security.js";
+import type { PublicQuotas } from "./quotas.js";
 import { guardSessionLifecycle } from "./lifecycle.js";
 import { sharingSchema } from "../shared/sharing.js";
 import { parseFormImage } from "../shared/form-images.js";
@@ -47,6 +47,7 @@ type Options = {
   ) => Promise<{ session: Session; role: Role }>;
   authenticated: RequestHandler;
   rateLimits?: boolean;
+  quotas: PublicQuotas;
 };
 const identifier = z.string().min(1).max(120);
 const expected = z.object({ version: z.number().int().nonnegative() }).strict();
@@ -79,7 +80,7 @@ const responseValue = (row: ResponseRow): FormResponse => ({
 
 export async function installContentApi(
   app: Express,
-  { db, accessible, authenticated, rateLimits }: Options,
+  { db, accessible, authenticated, rateLimits, quotas }: Options,
 ): Promise<void> {
   await db.transaction(async (sql) => {
     await sql.run(
@@ -94,7 +95,41 @@ export async function installContentApi(
     await sql.run(
       "CREATE TABLE IF NOT EXISTS form_response_images(response_id TEXT NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,question_id TEXT NOT NULL,mime TEXT NOT NULL,base64 TEXT NOT NULL,PRIMARY KEY(response_id,question_id))",
     );
+    // Running totals per publication, so quota checks never re-read stored
+    // images. Rows are created on first use from the existing responses.
+    await sql.run(
+      "CREATE TABLE IF NOT EXISTS form_publication_usage(publication_id TEXT PRIMARY KEY REFERENCES form_publications(id) ON DELETE CASCADE,responses INTEGER NOT NULL,bytes BIGINT NOT NULL)",
+    );
   });
+  /** Current totals of a publication; the caller holds its row lock. */
+  const usage = async (sql: Sql, publicationId: string) => {
+    const [row] = await sql.all<{ responses: number; bytes: number | string }>(
+      "SELECT responses,bytes FROM form_publication_usage WHERE publication_id=$1",
+      [publicationId],
+    );
+    if (row)
+      return { responses: Number(row.responses), bytes: Number(row.bytes) };
+    const [answers] = await sql.all<{
+      count: number | string;
+      size: number | string | null;
+    }>(
+      "SELECT COUNT(*) AS count,SUM(LENGTH(answers)) AS size FROM form_responses WHERE publication_id=$1",
+      [publicationId],
+    );
+    const [images] = await sql.all<{ size: number | string | null }>(
+      "SELECT SUM(LENGTH(i.base64)) AS size FROM form_response_images i JOIN form_responses r ON r.id=i.response_id WHERE r.publication_id=$1",
+      [publicationId],
+    );
+    const current = {
+      responses: Number(answers.count),
+      bytes: Number(answers.size ?? 0) + Number(images.size ?? 0),
+    };
+    await sql.run(
+      "INSERT INTO form_publication_usage(publication_id,responses,bytes) VALUES($1,$2,$3)",
+      [publicationId, current.responses, current.bytes],
+    );
+    return current;
+  };
   const formAccess = async (
     request: Request,
     response: Response,
@@ -263,10 +298,32 @@ export async function installContentApi(
     authenticated,
     async (request, response) => {
       const { session, form } = await formAccess(request, response, ["owner"]);
-      await db.run(
-        "DELETE FROM form_responses WHERE id = $1 AND session_id = $2 AND form_id = $3",
-        [parameter(request, "responseId"), session.id, form.id],
-      );
+      await db.transaction(async (sql) => {
+        const [row] = await sql.all<{
+          publication_id: string;
+          answers: string;
+        }>(
+          "SELECT publication_id,answers FROM form_responses WHERE id = $1 AND session_id = $2 AND form_id = $3",
+          [parameter(request, "responseId"), session.id, form.id],
+        );
+        if (!row) return;
+        const images = await sql.all<{ base64: string }>(
+          "SELECT base64 FROM form_response_images WHERE response_id = $1",
+          [parameter(request, "responseId")],
+        );
+        const size =
+          row.answers.length +
+          images.reduce((total, image) => total + image.base64.length, 0);
+        await sql.run(
+          "DELETE FROM form_responses WHERE id = $1 AND session_id = $2 AND form_id = $3",
+          [parameter(request, "responseId"), session.id, form.id],
+        );
+        // Deleting responses frees room under the publication's quota.
+        await sql.run(
+          "UPDATE form_publication_usage SET responses = CASE WHEN responses > 0 THEN responses - 1 ELSE 0 END, bytes = CASE WHEN bytes > $1 THEN bytes - $1 ELSE 0 END WHERE publication_id = $2",
+          [size, row.publication_id],
+        );
+      });
       response.status(204).end();
     },
   );
@@ -436,6 +493,21 @@ export async function installContentApi(
             );
           return { id: prior.id, createdAt: prior.created_at };
         }
+        // The publication row is locked above, so parallel submissions
+        // cannot race past these totals.
+        const size =
+          answers.length +
+          images.reduce((total, image) => total + image.base64.length, 0);
+        const current = await usage(sql, row.id);
+        if (
+          current.responses >= quotas.formResponses ||
+          current.bytes + size > quotas.formBytes
+        )
+          return fail(
+            409,
+            "FORM_FULL",
+            "This form is not accepting more responses.",
+          );
         const identity =
           form.identityMode === "anonymous" ||
           (form.identityMode === "optional" && !body.shareIdentity)
@@ -465,6 +537,10 @@ export async function installContentApi(
             "INSERT INTO form_response_images(response_id,question_id,mime,base64) VALUES($1,$2,$3,$4)",
             [id, image.questionId, image.mime, image.base64],
           );
+        await sql.run(
+          "UPDATE form_publication_usage SET responses = responses + 1, bytes = bytes + $1 WHERE publication_id = $2",
+          [size, row.id],
+        );
         return { id, createdAt: now };
       });
       response.status(201).json({ response: result });

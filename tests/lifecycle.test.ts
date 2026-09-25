@@ -42,7 +42,7 @@ test("closing a session freezes agenda, timer, comments and form access, while p
     ).status,
     400,
   );
-  let closed = await editor.client.request(
+  const closed = await editor.client.request(
     `/sessions/${s.id}/lifecycle`,
     "POST",
     {

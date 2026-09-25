@@ -131,18 +131,22 @@ oc -n meetloom-dev get events --sort-by=.lastTimestamp
 | Pod `CrashLoopBackOff`                                               | Read `oc logs deployment/meetloom` (or `meetloom-postgresql`). A missing or wrong `APP_ORIGIN` or database secret is reported explicitly.                                                                                                                  |
 | Pod created but events mention `SecurityContextConstraints` or quota | Your project's policy rejects the pod. The manifests run without root and without fixed UID; send the event text to your cluster administrators.                                                                                                           |
 
-### Try a release candidate before merging
+### Try a branch before merging
 
-With a release candidate published from the pull request branch (see [Publish a version](#2-publish-a-version)), install it like any version, for example `-Image <mirror-host>/your-account/meetloom:0.1.0-rc.1`. After a fix, publish `v0.1.0-rc.2` the same way and switch the running image:
+**The simple way: Actions → Publish test image → Run workflow.** Choose the branch, optionally type a tag (for example `0.1.0-rc.4`; left empty, the tag is `<package.json version>-dev.<run number>`), and run. The workflow checks that CI passed on that exact commit (open a pull request for the branch and wait for green first), builds the image, verifies it with an arbitrary UID and a read-only root, scans it with Trivy and pushes it to Docker Hub. Its summary shows the command to switch development to it:
 
 ```powershell
-oc -n meetloom-dev set image deployment/meetloom app=<mirror-host>/your-account/meetloom:0.1.0-rc.2
+oc -n meetloom-dev set image deployment/meetloom app=<mirror-host>/your-account/meetloom:0.1.0-rc.4
 oc -n meetloom-dev rollout status deployment/meetloom
 ```
 
-Once validated, merge the pull request and publish the final `v0.1.0` from `main`.
+Test tags always end in `-rc.N` or `-dev.N`, never take the name of a real version or `latest`, and an existing tag is never overwritten: after a fix, run it again with the next number. No GitHub release is created. GitHub shows this button only once the workflow exists on `main`; before that, publish a pre-release instead: **Releases → Draft a new release**, tag `v0.1.0-rc.4` created on the branch, **Set as a pre-release** checked (see [Publish a version](#2-publish-a-version)).
+
+A test image works like any version: rerun the installer with it if the branch changes the manifests, otherwise `oc set image` is enough. Once validated, merge the pull request and publish the final `v0.1.0` from `main`.
 
 ## 4. Update after a new release
+
+**Before updating, check who is using the application.** Signed in as an administrator, open **Mon compte & équipe → Activité en cours**. It shows the installed version and the sessions an update could disturb: timers running or paused, people in the editor, visitor links followed in the last three minutes. An update replaces pods one at a time, so nobody loses work, but a timer or a visitor page can freeze for a few seconds: prefer a moment when the list is empty. After the update, the same panel (and the bottom of **Mon compte & équipe**, for every account) shows the new version.
 
 **The simplest and always safe way: rerun the installer with the new image.** It is the same command as the first installation, only the image tag changes:
 

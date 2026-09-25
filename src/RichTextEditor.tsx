@@ -506,4 +506,3 @@ function ActiveEditor({
     </>
   );
 }
-export default RichTextEditor;

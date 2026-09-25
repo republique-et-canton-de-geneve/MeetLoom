@@ -12,9 +12,11 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "lint": "node scripts/lint.mjs",
+    "deadcode": "knip",
     "test": "tsx --test tests/*.test.ts",
-    "format": "prettier --write src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
-    "format:check": "prettier --check src shared server tests e2e playwright.config.ts docs package.json *.json *.md",
+    "format": "prettier --write src shared server tests e2e playwright.config.ts eslint.config.js scripts loadtest docs package.json *.json *.md",
+    "format:check": "prettier --check src shared server tests e2e playwright.config.ts eslint.config.js scripts loadtest docs package.json *.json *.md",
     "check": "npm run typecheck && npm test && npm run build",
     "test:e2e": "npm run build && playwright test"
   },
@@ -50,9 +52,13 @@
   "overrides": {
     "pptxgenjs": {
       "image-size": "^2.0.4"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
     }
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "1.63.0",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
@@ -62,9 +68,15 @@
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.2",
+    "eslint": "^10.11.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "knip": "^6.38.0",
     "prettier": "^3.9.9",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.70.1",
     "vite": "^7.1.3"
   }
 }

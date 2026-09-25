@@ -636,6 +636,9 @@
   min-height: 20px;
   width: 22px;
 }
+.editor-inspector:focus {
+  outline: none;
+}
 .editor-inspector {
   width: var(--inspector-width, 420px);
   min-width: 320px;
@@ -968,6 +971,70 @@
 }
 .admin-account-row .button-row {
   flex-wrap: wrap;
+}
+.admin-activity-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+}
+.admin-activity-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-activity-list small,
+.admin-activity-list span {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.admin-activity .button-row {
+  align-items: center;
+}
+.admin-data h4 {
+  margin: 18px 0 6px;
+}
+.admin-data-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.admin-data-list > li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-data-list small {
+  display: block;
+  color: var(--muted);
+  margin: 3px 0 6px;
+}
+.admin-data .button-row {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.admin-data-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.admin-data-panel.warning {
+  border-color: #d8a15a;
+  background: #fff9ef;
+}
+.admin-data-panel ul {
+  list-style: none;
+  padding: 0;
+}
+.admin-data-panel ul li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.app-version {
+  margin-top: 18px;
+  font-size: 12px;
 }
 .account-deletion {
   margin-top: 20px;
@@ -1664,4 +1731,26 @@
   padding-left: 18px;
   font-size: 13px;
   line-height: 1.8;
+}
+/* Phones: session contents become one row that scrolls on its own instead of
+   widening the page, and each entry keeps its name. */
+@media (max-width: 650px) {
+  .session-navigation {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .sidebar .session-navigation nav {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    padding: 0 0 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .session-navigation .content-nav-row {
+    flex: 0 0 auto;
+  }
+  .session-navigation .content-nav-row .nav-item {
+    max-width: 160px;
+  }
 }

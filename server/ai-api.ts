@@ -10,7 +10,7 @@ import {
 } from "../shared/ai.js";
 import { allBlocks, publicProjection } from "../shared/domain.js";
 import { richTextToPlain } from "../shared/richtext.js";
-import type { Locale, Role, Session, User } from "../shared/model.js";
+import type { Role, Session, User } from "../shared/model.js";
 import type { Database, Sql } from "./db.js";
 import { complete, type AiConfig } from "./ai.js";
 import { fail, HttpError, rateLimit } from "./security.js";

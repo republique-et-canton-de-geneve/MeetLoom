@@ -34,9 +34,8 @@ export const idSchema = z
   .max(80)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/)
   .refine((value) => !unsafeKeys.has(value), "Reserved identifier");
-export const localeSchema = z.enum(["fr", "en"]);
 export const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-export const dateSchema = z
+const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((value) => {
@@ -180,7 +179,7 @@ export const blockSchema = z.preprocess((value, context) => {
   return value;
 }, rawBlockSchema);
 
-export const daySchema = z
+const daySchema = z
   .object({
     id: idSchema,
     title: z.string().trim().min(1).max(120),

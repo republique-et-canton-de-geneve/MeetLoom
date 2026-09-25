@@ -32,6 +32,8 @@ const schema = [
   `CREATE TABLE IF NOT EXISTS versions (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, payload TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), label TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS presence_heartbeats (session_id TEXT NOT NULL, user_id TEXT NOT NULL, client_id TEXT NOT NULL, block_id TEXT, editing INTEGER NOT NULL, last_seen BIGINT NOT NULL, PRIMARY KEY (session_id, user_id, client_id))`,
   `CREATE INDEX IF NOT EXISTS presence_heartbeats_seen_idx ON presence_heartbeats(last_seen)`,
+  `CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, at TEXT NOT NULL, action TEXT NOT NULL, actor_id TEXT, target TEXT, detail TEXT NOT NULL, ip TEXT)`,
+  `CREATE INDEX IF NOT EXISTS audit_events_at_idx ON audit_events(at)`,
   `CREATE INDEX IF NOT EXISTS sessions_owner_idx ON sessions(owner_id)`,
   `CREATE INDEX IF NOT EXISTS members_user_idx ON members(user_id)`,
   `CREATE INDEX IF NOT EXISTS shares_session_idx ON shares(session_id)`,
@@ -98,8 +100,11 @@ export async function openDatabase(
         }
       },
       async close() {
-        await releaseStartupLock();
-        await pool.end();
+        try {
+          await releaseStartupLock();
+        } finally {
+          await pool.end();
+        }
       },
     };
   } else {

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "tests/*.test.ts",
+    "e2e/*.ts",
+    "e2e/serve.mjs",
+    "server/document-worker.ts",
+    "loadtest/run.mjs"
+  ],
+  "project": [
+    "server/**/*.ts",
+    "shared/**/*.ts",
+    "src/**/*.{ts,tsx}",
+    "tests/**/*.ts",
+    "e2e/**/*.{ts,mjs}"
+  ],
+  "ignoreExportsUsedInFile": false
+}

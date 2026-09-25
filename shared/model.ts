@@ -44,7 +44,7 @@ export interface Block {
   fields: Record<string, string>;
   lockedStart?: string;
 }
-export interface Room {
+interface Room {
   id: string;
   title: string;
   blocks: Block[];

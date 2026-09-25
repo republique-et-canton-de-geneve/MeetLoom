@@ -63,6 +63,7 @@ import "./dashboard.css";
 import "./workspaces.css";
 import "./lifecycle.css";
 import "./timer-recovery.css";
+import AppVersion from "./AppVersion";
 
 const Editor = lazy(() => import("./Editor"));
 const PublicAgenda = lazy(() => import("./PublicAgenda"));
@@ -70,6 +71,8 @@ const PublicForm = lazy(() => import("./PublicForm"));
 const RecoverAccount = lazy(() => import("./RecoverAccount"));
 const ProfileSettings = lazy(() => import("./ProfileSettings"));
 const AdminAccounts = lazy(() => import("./AdminAccounts"));
+const AdminActivity = lazy(() => import("./AdminActivity"));
+const AdminData = lazy(() => import("./AdminData"));
 const AdminSettings = lazy(() => import("./AdminSettings"));
 const WorkspacePanel = lazy(() => import("./WorkspacePanel"));
 const LifecyclePanel = lazy(() => import("./LifecyclePanel"));
@@ -2184,8 +2187,10 @@ function Dashboard({
           </details>
           <Suspense fallback={<Loading />}>
             <ProfileSettings user={user} onSaved={refreshUser} />
+            <AdminActivity user={user} />
             <AdminAccounts user={user} />
             <AdminSettings user={user} />
+            <AdminData user={user} />
           </Suspense>
           <p className="muted">
             {t(
@@ -2270,6 +2275,7 @@ function Dashboard({
               "Only the workspace administrator can create invitations.",
             )}
           </small>
+          <AppVersion />
         </Modal>
       )}
     </div>

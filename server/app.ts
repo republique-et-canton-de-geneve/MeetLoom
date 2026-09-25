@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { Session, Role, User, Share } from "../shared/model.js";
+import type { Session, Role, User } from "../shared/model.js";
 import { DEFAULT_SOUND, INITIAL_RUN } from "../shared/model.js";
 import {
   createSession,
@@ -35,7 +35,22 @@ import {
 } from "./security.js";
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
+import { registerOperations } from "./operations.js";
+import {
+  DEFAULT_MAX_ARCHIVE_BYTES,
+  importBodyParser,
+  registerBackups,
+  type BackupConfig,
+} from "./backups.js";
+import { appVersion, type AppVersion } from "./version.js";
 import { registerSharing } from "./sharing.js";
+import { audit } from "./audit.js";
+import {
+  publicQuotas,
+  requestBudget,
+  type PublicQuotas,
+  type RequestBudget,
+} from "./quotas.js";
 import { installTransfersApi } from "./transfers.js";
 import { installAccountsApi, accountProfile } from "./accounts.js";
 import { cloneContent } from "../shared/content.js";
@@ -81,6 +96,10 @@ import {
 import { installActivityApi, sessionReadMarkers } from "./activity.js";
 
 export interface AppConfig {
+  /** Defaults to the image's APP_VERSION/APP_REVISION or package.json. */
+  version?: AppVersion;
+  /** Scheduled backups and the largest archive accepted. */
+  backups?: BackupConfig;
   databaseUrl?: string;
   sqlitePath?: string;
   database?: Database;
@@ -96,6 +115,10 @@ export interface AppConfig {
   oidcAdapter?: OidcAdapter;
   mail?: MailConfig;
   mailTransport?: MailTransport;
+  /** Caps on data stored through public links; defaults in quotas.ts. */
+  quotas?: Partial<PublicQuotas>;
+  /** Requests per minute across the API; defaults in quotas.ts. */
+  requestBudget?: Partial<RequestBudget>;
 }
 type UserRow = {
   id: string;
@@ -220,10 +243,20 @@ async function assembleWith(db: Database, config: AppConfig) {
     helmet({
       crossOriginEmbedderPolicy: false,
       referrerPolicy: { policy: "no-referrer" },
+      // Everything is self-hosted (internal and air-gapped networks): helmet's
+      // defaults would also allow fonts and styles from any HTTPS origin.
+      contentSecurityPolicy: {
+        directives: {
+          "font-src": ["'self'", "data:"],
+          "style-src": ["'self'", "'unsafe-inline'"],
+        },
+      },
     }),
   );
   app.use("/api", (_request, response, next) => {
     response.setHeader("Cache-Control", "no-store");
+    // Timers run on the server clock: browsers use this to correct their own.
+    response.setHeader("X-Server-Time", String(Date.now()));
     next();
   });
   app.get("/api/health", (_request, response) =>
@@ -237,7 +270,11 @@ async function assembleWith(db: Database, config: AppConfig) {
       response.status(503).json({ status: "unavailable" });
     }
   });
-  if (config.rateLimits !== false) app.use("/api", rateLimit(600, 60000));
+  const budget = requestBudget(config.requestBudget);
+  // A flood guard per address, high enough for a meeting room of visitors
+  // behind one NAT or proxy; signed-in users get their own budget below.
+  if (config.rateLimits !== false)
+    app.use("/api", rateLimit(budget.perAddress, 60000));
   app.use("/api", (request, _response, next) => {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
       if (request.get("Sec-Fetch-Site") === "cross-site")
@@ -271,8 +308,6 @@ async function assembleWith(db: Database, config: AppConfig) {
     }
     next();
   });
-  app.use("/api/import/extract", express.json({ limit: "7mb", strict: true }));
-  app.use(express.json({ limit: "1mb", strict: true }));
   app.use("/api", async (request, response, next) => {
     const raw = (request.get("Cookie") ?? "")
       .split(";")
@@ -294,6 +329,33 @@ async function assembleWith(db: Database, config: AppConfig) {
     }
     next();
   });
+  if (config.rateLimits !== false) {
+    const perUser = rateLimit(
+      budget.perUser,
+      60000,
+      (_request, response) => `user:${(response.locals.user as User).id}`,
+    );
+    app.use("/api", (request, response, next) =>
+      response.locals.user ? perUser(request, response, next) : next(),
+    );
+  }
+  // Bodies are parsed after the session cookie is resolved, so the larger
+  // import limit is only ever spent on signed-in users.
+  app.use(
+    "/api/import/extract",
+    (_request, response, next) =>
+      response.locals.user
+        ? next()
+        : next(new HttpError(401, "UNAUTHENTICATED", "Please sign in.")),
+    express.json({ limit: "7mb", strict: true }),
+  );
+  app.use(
+    "/api/admin/data/import",
+    ...importBodyParser(
+      config.backups?.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES,
+    ),
+  );
+  app.use(express.json({ limit: "1mb", strict: true }));
   const authenticated = (
     _request: Request,
     response: Response,
@@ -457,6 +519,10 @@ async function assembleWith(db: Database, config: AppConfig) {
         await sql.run("INSERT INTO bootstrap(id,user_id) VALUES(1,$1)", [
           row.id,
         ]);
+        await audit(sql, request, response, "installation.setup", {
+          target: row.id,
+          actorId: row.id,
+        });
         return issueAuth(sql, row.id);
       });
     } catch (error) {
@@ -554,10 +620,15 @@ async function assembleWith(db: Database, config: AppConfig) {
   app.put("/api/admin/settings/signup", admin, async (request, response) => {
     const signup = signupSchema.parse(request.body);
     signup.domains = [...new Set(signup.domains)];
-    await db.run(
-      "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
-      ["signup", JSON.stringify(signup)],
-    );
+    await db.transaction(async (sql) => {
+      await sql.run(
+        "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+        ["signup", JSON.stringify(signup)],
+      );
+      await audit(sql, request, response, "settings.signup", {
+        detail: { enabled: signup.enabled, domains: signup.domains.length },
+      });
+    });
     response.json({ signup });
   });
   app.post("/api/auth/login", authLimiter, async (request, response) => {
@@ -679,6 +750,10 @@ async function assembleWith(db: Database, config: AppConfig) {
         "INSERT INTO invites(token_hash,email,name,expires_at,created_by) VALUES($1,$2,$3,$4,$5)",
         [hashToken(raw), input.email, input.name, expires, user(response).id],
       );
+      await audit(sql, request, response, "account.invite", {
+        target: input.email,
+        detail: { role: input.role ?? null },
+      });
     });
     response
       .status(201)
@@ -771,10 +846,13 @@ async function assembleWith(db: Database, config: AppConfig) {
   );
   app.put("/api/settings", admin, async (request, response) => {
     const { sound } = z.object({ sound: soundSchema }).parse(request.body);
-    await db.run(
-      "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
-      ["sound", JSON.stringify(sound)],
-    );
+    await db.transaction(async (sql) => {
+      await sql.run(
+        "INSERT INTO app_settings(id,payload) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+        ["sound", JSON.stringify(sound)],
+      );
+      await audit(sql, request, response, "settings.sound");
+    });
     response.json({ sound });
   });
 
@@ -1130,11 +1208,25 @@ async function assembleWith(db: Database, config: AppConfig) {
       role,
     });
   });
+  const backups = await registerBackups(app, {
+    db,
+    admin,
+    version: config.version ?? appVersion(),
+    config: config.backups,
+  });
+  const operations = await registerOperations(app, {
+    db,
+    authenticated,
+    admin,
+    version: config.version ?? appVersion(),
+  });
   await registerSharing(app, {
     db,
     accessible,
     synchronized,
     rateLimits: config.rateLimits,
+    quotas: publicQuotas(config.quotas),
+    linkVisited: operations.linkVisited,
   });
   installTransfersApi(app, { db, accessible, save });
   app.get("/api/sessions/:id/members", async (request, response) => {
@@ -1240,6 +1332,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     accessible,
     authenticated,
     rateLimits: config.rateLimits,
+    quotas: publicQuotas(config.quotas),
   });
   await installAiApi(app, {
     db,
@@ -1342,7 +1435,9 @@ async function assembleWith(db: Database, config: AppConfig) {
     app,
     db,
     mail,
+    backups,
     close: async () => {
+      backups.close();
       await mail.close();
       await db.close();
     },

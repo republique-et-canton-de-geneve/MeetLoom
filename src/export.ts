@@ -2,7 +2,6 @@ import {
   blockDuration,
   formatTime,
   publicProjection,
-  scheduleTreeDay,
 } from "../shared/domain.js";
 import { richTextToPlain } from "../shared/richtext.js";
 import { scheduleExportDay } from "../shared/export-projection.js";

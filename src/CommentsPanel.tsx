@@ -24,7 +24,7 @@ import { useI18n } from "./i18n";
 import { Avatar, ErrorBanner, Inspector } from "./ui";
 import "./comments.css";
 
-export function CommentComposer({
+function CommentComposer({
   collaborators,
   busy,
   onSend,
@@ -180,7 +180,7 @@ export function CommentComposer({
   );
 }
 
-export function CommentsPanel({
+function CommentsPanel({
   session,
   close,
   children,

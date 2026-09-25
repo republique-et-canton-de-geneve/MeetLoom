@@ -24,7 +24,7 @@ const option = z
   .object({ id, label: z.string().trim().min(1).max(300) })
   .strict();
 const base = { id, title, description: text, required: z.boolean() };
-export const questionSchema = z.discriminatedUnion("type", [
+const questionSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("short") }).strict(),
   z.object({ ...base, type: z.literal("long") }).strict(),
   z.object({ ...base, type: z.literal("image") }).strict(),

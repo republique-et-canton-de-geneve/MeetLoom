@@ -23,6 +23,8 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run deadcode
       - run: npm run check
       - run: npm run format:check
       - name: Check infrastructure formatting
@@ -102,6 +104,7 @@ jobs:
           kubectl kustomize k8s/overlays/openshift-external-db > /tmp/meetloom-external.yaml
           bash -n scripts/deploy-openshift.sh
           bash -n scripts/verify-container.sh
+          shellcheck scripts/*.sh .claude/hooks/*.sh
       - name: Parse the PowerShell installer
         shell: pwsh
         run: |

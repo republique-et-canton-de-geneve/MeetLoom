@@ -175,3 +175,67 @@ test("closing the application shuts down every limiter store it created", async 
   await runtime.close();
   assert.equal(shutdown.mock.callCount(), init.mock.callCount());
 });
+
+test("a room of visitors behind one address keeps following a public link", async (t) => {
+  // 700 polls in a minute from one address: about 230 attendees behind a
+  // meeting-room NAT, each refreshing the visitor page every three seconds.
+  const { harness } = await import("./support.js");
+  const h = await harness(t, { rateLimits: true, trustProxy: 1 });
+  await h.setup();
+  const session = await h.session();
+  const share = await h.owner.request(
+    `/sessions/${session.id}/shares`,
+    "POST",
+    {
+      label: "Room",
+    },
+  );
+  const room = h.client();
+  const statuses = new Set<number>();
+  for (let index = 0; index < 700; index++)
+    statuses.add(
+      (
+        await room.request(
+          `/public/${share.body.share.token}`,
+          "GET",
+          undefined,
+          {
+            "X-Forwarded-For": "203.0.113.10",
+          },
+        )
+      ).status,
+    );
+  assert.deepEqual([...statuses], [200]);
+});
+
+test("signed-in requests are budgeted per account, not per address", async (t) => {
+  const { harness } = await import("./support.js");
+  const h = await harness(t, {
+    rateLimits: true,
+    trustProxy: 1,
+    requestBudget: { perAddress: 10_000, perUser: 5 },
+  });
+  await h.setup();
+  const other = await h.account("other@example.test");
+  // setup and account creation used the owner's budget; move addresses to
+  // show that changing IP does not reset an account's budget.
+  const statuses: number[] = [];
+  for (let index = 0; index < 8; index++)
+    statuses.push(
+      (
+        await h.owner.request("/sessions", "GET", undefined, {
+          "X-Forwarded-For": `198.51.100.${index + 1}`,
+        })
+      ).status,
+    );
+  assert.ok(statuses.includes(429), JSON.stringify(statuses));
+  assert.equal(
+    (
+      await other.client.request("/sessions", "GET", undefined, {
+        "X-Forwarded-For": "198.51.100.1",
+      })
+    ).status,
+    200,
+    "another account behind the same address keeps its own budget",
+  );
+});

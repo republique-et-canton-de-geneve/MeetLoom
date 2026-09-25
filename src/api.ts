@@ -1,4 +1,5 @@
 import type { Locale } from "../shared/model";
+import { recordServerTime } from "./clock";
 
 const messages: Record<string, [string, string]> = {
   AI_CONTEXT_LIMIT: [
@@ -226,6 +227,14 @@ const messages: Record<string, [string, string]> = {
     "Cette discussion a atteint sa limite. Créez une nouvelle discussion.",
     "This conversation reached its limit. Start a new thread.",
   ],
+  VISITOR_COMMENT_LIMIT: [
+    "Ce lien n’accepte plus de commentaires.",
+    "This link is no longer accepting comments.",
+  ],
+  FORM_FULL: [
+    "Ce formulaire n’accepte plus de réponses.",
+    "This form is no longer accepting responses.",
+  ],
   FORM_EMPTY: [
     "Ajoutez au moins une question avant de publier le formulaire.",
     "Add at least one question before publishing the form.",
@@ -448,6 +457,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     init?.body ??
     (["POST", "PUT", "PATCH", "DELETE"].includes(method) ? "{}" : undefined);
   let response: Response;
+  const sentAt = Date.now();
   try {
     response = await fetch(`/api${path}`, {
       credentials: "same-origin",
@@ -460,6 +470,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     if (error instanceof Error && error.name === "AbortError") throw error;
     throw new ApiError(0, "", "NETWORK_ERROR");
   }
+  recordServerTime(response, sentAt);
   if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => null);
   if (!response.ok)

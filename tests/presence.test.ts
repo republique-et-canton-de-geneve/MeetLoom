@@ -174,6 +174,19 @@ test("presence API is session scoped, never trusts supplied identities, and refl
     200,
   );
   assert.equal((await guest.client.request(route)).status, 404);
+  // Leaving is accepted once access is gone (member removed, session in the
+  // trash): the closing tab would otherwise log an error. It only ever
+  // removes the caller's own tab.
+  assert.equal(
+    (await guest.client.request(route, "DELETE", { clientId: ownerTab }))
+      .status,
+    204,
+  );
+  assert.equal(
+    (await guest.client.request(route, "DELETE", { clientId: guestTab }))
+      .status,
+    204,
+  );
   assert.equal((await h.owner.request(route)).body.participants.length, 1);
   assert.equal(
     (await h.owner.request(route, "DELETE", { clientId: ownerTab })).status,

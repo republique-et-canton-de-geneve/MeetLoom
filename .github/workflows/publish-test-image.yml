@@ -1,0 +1,115 @@
+name: Publish test image
+# Actions → "Publish test image" → Run workflow, on any branch: publishes a
+# Docker Hub image of that branch to try it in development before merging.
+# Official versions still come from GitHub Releases (github-release.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag, e.g. 0.1.0-rc.4 (empty: <package.json version>-dev.<run number>)"
+        required: false
+        default: ""
+permissions:
+  contents: read
+  checks: read
+concurrency:
+  group: meetloom-test-image-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Resolve the tag and Docker Hub repository
+        id: image
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY || secrets.DOCKERHUB_REPOSITORY }}
+        run: |
+          BASE=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          VERSION=$(echo "${INPUT_VERSION:-$BASE-dev.$RUN_NUMBER}" | tr -d '[:space:]')
+          VERSION=${VERSION#v}
+          # Test images carry a pre-release suffix, so a branch can never take
+          # the name of a real version, nor "latest".
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(rc|dev)\.[0-9]+$ ]]; then
+            echo "Use a tag like $BASE-rc.1 or $BASE-dev.1 (got \"$VERSION\")." >&2; exit 1
+          fi
+          IMAGE=${DOCKERHUB_REPOSITORY#docker.io/}
+          if [[ ! "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo 'Set the DOCKERHUB_REPOSITORY GitHub variable to account/meetloom.' >&2; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Require a green CI on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CONCLUSION=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=CI%20Success" \
+            --jq '[.check_runs[] | .conclusion // .status] | first // "missing"')
+          case "$CONCLUSION" in
+            success) echo "CI Success passed on $GITHUB_SHA." ;;
+            missing) echo "No CI on this commit: open a pull request for this branch, wait for CI to pass, then run this again." >&2; exit 1 ;;
+            queued|in_progress) echo "CI is still running on this commit: run this again once it has passed." >&2; exit 1 ;;
+            *) echo "CI did not pass on this commit ($CONCLUSION): fix it first." >&2; exit 1 ;;
+          esac
+      - name: Refuse to overwrite an existing tag
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/$IMAGE/tags/$VERSION")
+          if [[ "$STATUS" == 200 && "$GITHUB_RUN_ATTEMPT" == 1 ]]; then
+            echo "$IMAGE:$VERSION already exists: choose the next number." >&2; exit 1
+          fi
+      - name: Build
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          docker build --build-arg APP_VERSION="$VERSION" \
+            --build-arg APP_REVISION="$GITHUB_SHA" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
+            -t "$IMAGE:$VERSION" .
+      - name: Verify with an arbitrary UID and read-only root
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ steps.image.outputs.version }}
+        run: bash scripts/verify-container.sh "$IMAGE:$VERSION"
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.image }}:${{ steps.image.outputs.version }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          VERSION: ${{ steps.image.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          docker push "$IMAGE:$VERSION"
+          {
+            echo "### Test image published"
+            echo
+            echo "\`docker.io/$IMAGE:$VERSION\` from branch \`$BRANCH\`, commit \`$GITHUB_SHA\`."
+            echo
+            echo "Try it in development (replace the image name if you use a registry mirror):"
+            echo
+            echo '```'
+            echo "oc -n <dev-project> set image deployment/meetloom app=docker.io/$IMAGE:$VERSION"
+            echo "oc -n <dev-project> rollout status deployment/meetloom"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

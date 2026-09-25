@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Block, Session } from "../shared/model";
 import { TIMER_COLORS, timerMinimapView } from "../shared/timer-visual";
+import { serverNow } from "./clock";
 /** Mounted only for the active top-level segment, so long agendas need one clock. */
 export default function TimerMinimapProgress({
   session,
@@ -9,11 +10,11 @@ export default function TimerMinimapProgress({
   session: Session;
   block: Block;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow);
   useEffect(() => {
-    setNow(Date.now());
+    setNow(serverNow());
     if (session.run.status !== "running") return;
-    const interval = window.setInterval(() => setNow(Date.now()), 250);
+    const interval = window.setInterval(() => setNow(serverNow()), 250);
     return () => window.clearInterval(interval);
   }, [session.run]);
   const view = timerMinimapView(session, block, now);

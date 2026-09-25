@@ -102,15 +102,30 @@ export function Inspector({
     }
   });
   const drag = useRef<{ x: number; width: number } | null>(null);
+  const root = useRef<HTMLElement>(null);
+  // Focus moves into the panel so Escape closes it without a click first, and
+  // goes back to the control that opened it when it closes.
+  useEffect(() => {
+    const panel = root.current;
+    const opener = document.activeElement as HTMLElement | null;
+    if (!panel?.contains(opener)) panel?.focus();
+    return () => {
+      if (opener?.isConnected && !panel?.isConnected) opener.focus();
+    };
+  }, []);
   const resize = (value: number) => {
     const next = Math.max(320, Math.min(800, value));
     setWidth(next);
     try {
       localStorage.setItem("meetloom-inspector-width", String(next));
-    } catch {}
+    } catch {
+      // Storage unavailable (private browsing): the width stays for this tab.
+    }
   };
   return (
     <aside
+      ref={root}
+      tabIndex={-1}
       className="editor-inspector"
       style={{ "--inspector-width": `${width}px` } as CSSProperties}
       aria-label={title}

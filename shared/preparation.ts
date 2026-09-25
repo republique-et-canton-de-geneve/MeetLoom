@@ -10,7 +10,7 @@ import {
 } from "./richtext.js";
 import type { Block, Locale, Session } from "./model.js";
 
-export interface PreparationSource {
+interface PreparationSource {
   blockId: string;
   blockTitle: string;
   columnId: string;

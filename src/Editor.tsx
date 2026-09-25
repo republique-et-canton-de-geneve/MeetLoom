@@ -22,6 +22,7 @@ import {
   Share2,
   Settings2,
   Sparkles,
+  Plug,
   Columns3,
   LockKeyhole,
   LockKeyholeOpen,
@@ -40,7 +41,6 @@ import {
   Maximize2,
   ArrowUp,
   ArrowDown,
-  Play,
   BarChart3,
   Archive,
   X,
@@ -74,7 +74,6 @@ import {
   ErrorBanner,
   LanguageSwitch,
   Loading,
-  Modal,
   Inspector,
 } from "./ui";
 import { useSession } from "./useSession";
@@ -95,7 +94,7 @@ import {
 } from "./TimeFields";
 import SessionOverview from "./SessionOverview";
 import ColumnResizer from "./ColumnResizer";
-import RichTextEditor from "./RichTextEditor";
+import { RichTextEditor } from "./RichTextEditor";
 import ExportPanel from "./ExportPanel";
 import type { PrintOptions } from "./export-options";
 import { TasksMaterialsPanel } from "./TasksMaterialsPanel";
@@ -135,11 +134,12 @@ import {
 import { useCommentCounts } from "./useCommentCounts";
 import MultiPlanView from "./MultiPlanView";
 import AiPanel from "./AiPanel";
+import McpPanel from "./McpPanel";
 import { mergeSessionDraft } from "./session-merge";
 import { flushSync } from "react-dom";
 import { registerNavigationGuard } from "./navigation";
 
-export function useCategoryLabel(overrides?: CategoryDefinition[]) {
+function useCategoryLabel(overrides?: CategoryDefinition[]) {
   const { locale } = useI18n();
   return (category: Category) =>
     categoriesFor(locale, overrides).find((c) => c.id === category)?.label ??
@@ -159,6 +159,7 @@ type Panel =
   | "categories"
   | "multi-plan"
   | "lifecycle"
+  | "connectors"
   | null;
 
 export default function Editor({
@@ -307,6 +308,17 @@ export default function Editor({
     }
   }, [panel]);
   const [menu, setMenu] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenu(false);
+      menuButton.current?.focus();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [menu]);
   const [compact, setCompact] = useState(false);
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(
     new Set(),
@@ -329,7 +341,9 @@ export default function Editor({
   useEffect(() => {
     try {
       localStorage.setItem(`meetloom-widths-${id}`, JSON.stringify(widths));
-    } catch {}
+    } catch {
+      // Storage unavailable (private browsing): widths stay for this tab.
+    }
   }, [id, widths]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -504,15 +518,6 @@ export default function Editor({
     }
     data.update(() => result.session!);
   };
-  const reorderDay = (dayId: string, offset: number) =>
-    mutate((s) => {
-      const from = s.days.findIndex((d) => d.id === dayId),
-        to = from + offset;
-      if (from < 0 || to < 0 || to >= s.days.length) return s;
-      const days = [...s.days];
-      [days[from], days[to]] = [days[to], days[from]];
-      return { ...s, days };
-    });
   const leave = async () => {
     try {
       await multiLeave.current?.();
@@ -1961,21 +1966,25 @@ export default function Editor({
                         ? t("Développer", "Expand")
                         : t("Réduire", "Compact")}
                     </button>
-                    <button
-                      className="toolbar-button ai-button"
-                      disabled={!editable}
-                      onClick={() => {
-                        setAiTarget(undefined);
-                        setPanel("ai");
-                      }}
-                    >
-                      <Sparkles size={16} />
-                      {t("Assistant IA", "AI assistant")}
-                    </button>
+                    {aiEnabled && (
+                      <button
+                        className="toolbar-button ai-button"
+                        disabled={!editable}
+                        onClick={() => {
+                          setAiTarget(undefined);
+                          setPanel("ai");
+                        }}
+                      >
+                        <Sparkles size={16} />
+                        {t("Assistant IA", "AI assistant")}
+                      </button>
+                    )}
                     <div className="menu-anchor">
                       <button
+                        ref={menuButton}
                         className="icon-button"
                         onClick={() => setMenu(!menu)}
+                        aria-expanded={menu}
                         aria-label={t("Autres actions", "More actions")}
                       >
                         <MoreHorizontal size={21} />
@@ -2030,6 +2039,15 @@ export default function Editor({
                             >
                               <History size={16} />
                               {t("Historique", "Version history")}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setPanel("connectors");
+                                setMenu(false);
+                              }}
+                            >
+                              <Plug size={16} />
+                              {t("Connecteurs IA (MCP)", "AI connectors (MCP)")}
                             </button>
                             <hr />
                             <button
@@ -2617,7 +2635,7 @@ export default function Editor({
                       {currentBlock.title || t("Sans titre", "Untitled")}
                     </strong>
                   </p>
-                  {editable && (
+                  {editable && aiEnabled && (
                     <button
                       className="toolbar-button"
                       onClick={() => {
@@ -2899,7 +2917,7 @@ export default function Editor({
                 onDeleted={() => navigate("/")}
               />
             )}
-            {panel === "ai" && (
+            {panel === "ai" && aiEnabled && (
               <AiPanel
                 session={session}
                 initialBlockId={aiTarget}
@@ -2912,6 +2930,14 @@ export default function Editor({
                 update={mutate}
                 close={() => setPanel(null)}
               />
+            )}
+            {panel === "connectors" && (
+              <Inspector
+                title={t("Connecteurs IA (MCP)", "AI connectors (MCP)")}
+                close={() => setPanel(null)}
+              >
+                <McpPanel sessionId={session.id} />
+              </Inspector>
             )}
             {panel === "history" && (
               <HistoryPanel
