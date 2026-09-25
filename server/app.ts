@@ -612,6 +612,7 @@ async function assembleWith(db: Database, config: AppConfig) {
           ? {
               model: config.ai.model ?? null,
               visionModel: config.ai.visionModel ?? null,
+              allowSelfSigned: !!config.ai.allowSelfSigned,
             }
           : null,
       },

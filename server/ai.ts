@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Agent } from "undici";
 import { z } from "zod";
 import { blockSchema } from "../shared/validation.js";
 import type { Block, Locale, Session } from "../shared/model.js";
@@ -13,33 +14,17 @@ export interface AiConfig {
   apiKey?: string;
   timeoutMs?: number;
   maxResponseBytes?: number;
-  /** Token budget per answer; reasoning models spend part of it thinking. */
-  maxTokens?: number;
+  /** Accept a self-signed or internally signed certificate, for LLM calls
+   * only (LLM_ALLOW_SELF_SIGNED). Installing the authority is safer. */
+  allowSelfSigned?: boolean;
 }
 
-/** Why an answer could not be used, for operators: status, content type and
- * shape only, never the text of the prompt or the answer. */
-function unusable(reason: string, details: Record<string, unknown> = {}) {
-  console.warn(`AI service answer unusable: ${reason}`, details);
-}
+let selfSignedAgent: Agent | undefined;
 
-/** The text of a chat completion message. OpenAI-compatible servers return a
- * string, some gateways a list of text parts; reasoning models without a
- * reasoning parser put their thinking first, between <think> tags. */
-function messageText(content: unknown): string {
-  const text =
-    typeof content === "string"
-      ? content
-      : Array.isArray(content)
-        ? content
-            .map((part: { type?: unknown; text?: unknown }) =>
-              part?.type === "text" && typeof part.text === "string"
-                ? part.text
-                : "",
-            )
-            .join("")
-        : "";
-  return text.replace(/^\s*<think>[\s\S]*?<\/think>/i, "").trim();
+/** Why a request failed, for operators: codes, status and content type only,
+ * never the prompt or the answer. */
+function warn(message: string, details: Record<string, unknown> = {}) {
+  console.warn(message, details);
 }
 
 export async function complete(
@@ -86,43 +71,66 @@ export async function complete(
     config.timeoutMs ?? 30000,
   );
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: image ? config.visionModel : config.model,
-        messages: [
-          { role: "system", content: system },
-          ...history,
-          {
-            role: "user",
-            content: image
-              ? [
-                  { type: "text", text: prompt },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:${image.mime};base64,${image.base64}`,
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.apiKey
+            ? { Authorization: `Bearer ${config.apiKey}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          model: image ? config.visionModel : config.model,
+          messages: [
+            { role: "system", content: system },
+            ...history,
+            {
+              role: "user",
+              content: image
+                ? [
+                    { type: "text", text: prompt },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: `data:${image.mime};base64,${image.base64}`,
+                      },
                     },
-                  },
-                ]
-              : prompt,
-          },
-        ],
-        temperature: 0.4,
-        max_tokens: config.maxTokens ?? 4000,
-        ...(json ? { response_format: { type: "json_object" } } : {}),
-      }),
-      redirect: "error",
-    });
+                  ]
+                : prompt,
+            },
+          ],
+          temperature: 0.4,
+          max_tokens: 4000,
+          ...(json ? { response_format: { type: "json_object" } } : {}),
+        }),
+        redirect: "error",
+        ...(config.allowSelfSigned
+          ? {
+              dispatcher: (selfSignedAgent ??= new Agent({
+                connect: { rejectUnauthorized: false },
+              })),
+            }
+          : {}),
+      } as RequestInit);
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      // TLS (unknown certificate authority), DNS or connection failure:
+      // no answer came back, so the service is unreachable.
+      const cause = (error as { cause?: { code?: unknown } }).cause;
+      warn(
+        `AI service unreachable: ${typeof cause?.code === "string" ? cause.code : "network error"}`,
+      );
+      return fail(
+        502,
+        "AI_UNAVAILABLE",
+        "The internal AI service could not complete this request.",
+      );
+    }
     if (!response.ok || !response.body) {
-      unusable(`HTTP ${response.status}`, {
-        contentType: response.headers.get("content-type"),
-      });
+      warn(`AI service answered HTTP ${response.status}`);
       return fail(
         502,
         "AI_UNAVAILABLE",
@@ -139,7 +147,6 @@ export async function complete(
         bytes += part.value.byteLength;
         if (bytes > (config.maxResponseBytes ?? 100000)) {
           await reader.cancel();
-          unusable("larger than AI_MAX_RESPONSE_BYTES", { bytes });
           return fail(
             502,
             "AI_RESPONSE_LIMIT",
@@ -151,61 +158,36 @@ export async function complete(
     } finally {
       reader.releaseLock();
     }
-    const contentType = response.headers.get("content-type");
-    let body: unknown;
-    try {
-      body = JSON.parse(Buffer.concat(buffers).toString("utf8"));
-    } catch {
-      unusable(
-        "not JSON; check that LLM_BASE_URL ends with the API path, usually /v1",
-        {
-          contentType,
-        },
+    const parsed = z
+      .object({
+        choices: z
+          .array(
+            z.object({
+              message: z.object({ content: z.string().min(1).max(40000) }),
+            }),
+          )
+          .min(1),
+      })
+      .safeParse(
+        (() => {
+          try {
+            return JSON.parse(Buffer.concat(buffers).toString("utf8"));
+          } catch {
+            return undefined;
+          }
+        })(),
       );
+    if (!parsed.success) {
+      warn("AI service answer is not a chat completion", {
+        contentType: response.headers.get("content-type"),
+      });
       return fail(
         502,
         "AI_RESPONSE_INVALID",
         "The internal AI service returned an unusable response.",
       );
     }
-    const choice = (body as { choices?: unknown[] })?.choices?.[0] as
-      | { message?: Record<string, unknown>; finish_reason?: unknown }
-      | undefined;
-    const text = messageText(choice?.message?.content);
-    if (!text) {
-      const details = {
-        contentType,
-        choices: Array.isArray((body as { choices?: unknown })?.choices),
-        messageKeys: Object.keys(choice?.message ?? {}),
-      };
-      if (choice?.finish_reason === "length") {
-        unusable(
-          "finish_reason=length before any answer; a reasoning model may need a larger LLM_MAX_TOKENS",
-          details,
-        );
-        return fail(
-          502,
-          "AI_RESPONSE_TRUNCATED",
-          "The AI ran out of room before answering.",
-        );
-      }
-      unusable(
-        choice ? "empty content" : "no choices[0].message in the answer",
-        details,
-      );
-      return fail(
-        502,
-        "AI_RESPONSE_INVALID",
-        "The internal AI service returned an unusable response.",
-      );
-    }
-    if (text.length > 40000)
-      return fail(
-        502,
-        "AI_RESPONSE_LIMIT",
-        "The AI response exceeded the allowed size.",
-      );
-    return text;
+    return parsed.data.choices[0].message.content;
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (controller.signal.aborted)

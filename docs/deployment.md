@@ -212,25 +212,28 @@ Run the `meetloom-ai` line only if the server needs a key. It creates the Secret
 
 To check: **Mon compte & équipe → Paramètres de l'installation** shows the AI as configured with its model names, and **Assistant IA** appears in the editor. If a network policy restricts egress, allow the LLM host.
 
-If an AI request ends with **La réponse de l'IA est inutilisable** or **L'IA n'a pas eu la place de terminer sa réponse**, the application logs why, without the text of the request or the answer:
+If an AI request fails, the application logs why, without the text of the request or the answer:
 
 ```powershell
-oc -n meetloom-dev logs deployment/meetloom --since=1h | Select-String "AI service answer"
+oc -n meetloom-dev logs deployment/meetloom --since=1h | Select-String "AI service"
 ```
 
-| Log line                                   | Cause and fix                                                                                                                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HTTP 401`, `HTTP 404`, `HTTP 400`         | Wrong key, URL or model name: check `LLM_API_KEY`, `LLM_BASE_URL` and the exact `LLM_MODEL`.                                                                                                               |
-| `not JSON` (often `text/html`)             | `LLM_BASE_URL` points at a web page, not at the API: it usually ends with `/v1`.                                                                                                                           |
-| `finish_reason=length before any answer`   | A reasoning model (Qwen3, DeepSeek-R1, gpt-oss…) spent the whole budget thinking. Raise `LLM_MAX_TOKENS` (default 4000, for example to 16000), and `AI_TIMEOUT_MS` (default 30000) since thinking is slow. |
-| `larger than AI_MAX_RESPONSE_BYTES`        | The answer, reasoning included, exceeds 100,000 bytes: raise `AI_MAX_RESPONSE_BYTES`.                                                                                                                      |
-| `empty content` or `no choices[0].message` | The server does not answer in the Chat Completions format: check that it is OpenAI-compatible.                                                                                                             |
+| Log line                                                                                     | Cause and fix                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AI service unreachable: SELF_SIGNED_CERT_IN_CHAIN` (or `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`) | The LLM's certificate comes from an internal authority: install it, or set `LLM_ALLOW_SELF_SIGNED=true` ([Internal certificate authority](#internal-certificate-authority)). |
+| `AI service unreachable: ENOTFOUND`, `ECONNREFUSED`, `ETIMEDOUT`                             | Wrong host in `LLM_BASE_URL`, or a network policy blocking egress to it.                                                                                                     |
+| `AI service answered HTTP 401`, `404`, `400`                                                 | Wrong key, URL or model name: check `LLM_API_KEY`, `LLM_BASE_URL` and the exact `LLM_MODEL`.                                                                                 |
+| `AI service answer is not a chat completion` (often `text/html`)                             | `LLM_BASE_URL` points at a web page, not at the OpenAI-compatible API: it usually ends with `/v1`.                                                                           |
 
-Reasoning shown between `<think>` tags at the start of an answer is removed. These settings go into `meetloom-settings` like the others (`oc set data configmap/meetloom-settings LLM_MAX_TOKENS=16000 AI_TIMEOUT_MS=120000`), followed by a restart.
+To test the connection from a pod, outside the application:
+
+```powershell
+oc -n meetloom-dev exec deployment/meetloom '--' node -e 'const b=process.env.LLM_BASE_URL.replace(/\/$/,"");fetch(b+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",...(process.env.LLM_API_KEY?{Authorization:"Bearer "+process.env.LLM_API_KEY}:{})},body:JSON.stringify({model:process.env.LLM_MODEL,messages:[{role:"user",content:"Hello"}],max_tokens:50})}).then(async r=>{console.log(r.status,r.headers.get("content-type"));console.log((await r.text()).slice(0,2000))})'
+```
 
 ### Internal certificate authority
 
-If the LLM, the SMTP relay or the OIDC provider uses a certificate signed by an internal authority, calls fail with a certificate error. Give Node.js that authority; never disable TLS verification. With the authority in a PEM file:
+If the LLM, the SMTP relay or the OIDC provider uses a certificate signed by an internal authority, calls fail with a certificate error (`SELF_SIGNED_CERT_IN_CHAIN` in the logs). The recommended fix is to give Node.js that authority, which keeps every certificate checked. With the authority in a PEM file:
 
 ```powershell
 oc -n meetloom-dev create configmap meetloom-ca --from-file=ca.crt=internal-ca.pem --dry-run=client -o yaml | oc -n meetloom-dev apply -f -
@@ -240,6 +243,13 @@ oc -n meetloom-dev rollout restart deployment/meetloom
 ```
 
 On OpenShift, a ConfigMap labelled `config.openshift.io/inject-trusted-cabundle=true` receives the cluster's trusted bundle under the key `ca-bundle.crt` instead: create it empty with that label, mount it the same way, and point `NODE_EXTRA_CA_CERTS` to `/etc/meetloom-ca/ca-bundle.crt`. Rerunning the installer keeps a volume added this way; check it after an update with `oc -n meetloom-dev set volume deployment/meetloom`.
+
+**Without the authority, for the LLM only:** `LLM_ALLOW_SELF_SIGNED=true` accepts the LLM's certificate without checking it. It applies to LLM calls only, never to OIDC or SMTP, and **Paramètres de l'installation** shows it. The connection stays encrypted, but anyone able to intercept traffic between the pod and the LLM could impersonate it and read the prompts and the API key: keep it to an internal network, and prefer installing the authority when you can.
+
+```powershell
+oc -n meetloom-dev set data configmap/meetloom-settings LLM_ALLOW_SELF_SIGNED=true
+oc -n meetloom-dev rollout restart deployment/meetloom
+```
 
 ### Organizational sign-in and email
 

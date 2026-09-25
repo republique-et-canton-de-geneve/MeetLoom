@@ -403,10 +403,6 @@ const messages: Record<string, [string, string]> = {
     "Le service d’IA n’a pas répondu à temps. Réessayez.",
     "The AI service did not respond in time. Please retry.",
   ],
-  AI_RESPONSE_TRUNCATED: [
-    "L’IA n’a pas eu la place de terminer sa réponse. Réessayez avec une demande plus courte, ou demandez à l’administrateur d’augmenter LLM_MAX_TOKENS.",
-    "The AI ran out of room before answering. Retry with a shorter request, or ask the administrator to raise LLM_MAX_TOKENS.",
-  ],
   AI_RESPONSE_INVALID: [
     "La réponse de l’IA est inutilisable. Réessayez.",
     "The AI response could not be used. Please retry.",
