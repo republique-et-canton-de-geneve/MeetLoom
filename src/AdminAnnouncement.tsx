@@ -3,7 +3,7 @@ import type { User } from "../shared/model";
 import { api } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
-import { linkified, type Announcement } from "./AnnouncementBanner";
+import type { Announcement } from "./AnnouncementBanner";
 
 /** The banner message shown to every account, set by administrators. */
 export default function AdminAnnouncement({ user }: { user: User }) {
@@ -93,7 +93,7 @@ export default function AdminAnnouncement({ user }: { user: User }) {
             className={`announcement-banner preview ${tone}`}
             aria-label={t("Aperçu", "Preview")}
           >
-            <p>{linkified(message.trim())}</p>
+            <p>{message.trim()}</p>
           </div>
         )}
         <div className="button-row">

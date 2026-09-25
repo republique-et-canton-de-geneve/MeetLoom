@@ -11,17 +11,30 @@ export interface Announcement {
 const DISMISSED = "meetloom.announcement.dismissed";
 const REFRESH_MS = 5 * 60_000;
 
+/** An http(s) address, normalized; anything else is not a link. */
+function webAddress(text: string) {
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Addresses in the message become links; the rest stays text. */
-export function linkified(message: string) {
-  return message.split(/(https?:\/\/[^\s<>"]+)/g).map((part, index) =>
-    index % 2 ? (
-      <a key={index} href={part} target="_blank" rel="noopener noreferrer">
+function linkified(message: string) {
+  return message.split(/(https?:\/\/[^\s<>"]+)/g).map((part, index) => {
+    const href = index % 2 ? webAddress(part) : null;
+    return href ? (
+      <a key={index} href={href} target="_blank" rel="noopener noreferrer">
         {part}
       </a>
     ) : (
       part
-    ),
-  );
+    );
+  });
 }
 
 /** The administrators' message, on every page for accounts. Closing it
