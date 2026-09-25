@@ -433,9 +433,11 @@ export default function PublicAgenda({ token }: { token: string }) {
                                 }}
                               >
                                 <strong>{formatTime(item.startMinute)}</strong>
-                                <span>
-                                  {durationLabel(blockDuration(item.block))}
-                                </span>
+                                {item.block.kind !== "note" && (
+                                  <span>
+                                    {durationLabel(blockDuration(item.block))}
+                                  </span>
+                                )}
                               </td>
                               <th
                                 className="public-block-title"
