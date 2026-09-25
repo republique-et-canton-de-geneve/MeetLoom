@@ -318,9 +318,8 @@ test("owners can copy a visitor link again, and its address never leaves the ins
     email: "owner@example.test",
     password,
   });
-  const moved = (
-    await owner.request(`/sessions/${session.id}/shares`)
-  ).body.shares[0];
+  const moved = (await owner.request(`/sessions/${session.id}/shares`)).body
+    .shares[0];
   assert.equal(moved.token, null);
   // A new address replaces it; the old one stops working.
   const renewed = await owner.request(

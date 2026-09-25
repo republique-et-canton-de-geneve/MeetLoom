@@ -60,6 +60,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     secureCookie: boolean(env, "COOKIE_SECURE", production),
     trustProxy: integer(env, "TRUST_PROXY", 0, 0, 10),
     bootstrapToken: env.BOOTSTRAP_TOKEN?.trim() || undefined,
+    feedbackIssuesUrl: issuesUrl(env.FEEDBACK_ISSUES_URL),
+    logs: { retentionDays: integer(env, "LOG_RETENTION_DAYS", 14, 1, 365) },
     backups: {
       scheduler: boolean(env, "BACKUP_SCHEDULER", true),
       maxArchiveBytes:
@@ -145,4 +147,20 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     port: integer(env, "PORT", 3000, 0, 65535),
     host: env.HOST || "0.0.0.0",
   };
+}
+
+/** Unset: the project's own issues. Empty: no GitHub link. */
+function issuesUrl(value: string | undefined) {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("FEEDBACK_ISSUES_URL must be an HTTPS address.");
+  }
+  if (url.protocol !== "https:" || url.username || url.password)
+    throw new Error("FEEDBACK_ISSUES_URL must be an HTTPS address.");
+  return url.href;
 }

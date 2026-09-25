@@ -1,6 +1,8 @@
 import { createApp } from "./app.js";
 import { readConfig } from "./config.js";
 import { loadEnvFile } from "node:process";
+import { log } from "./log.js";
+import { appVersion } from "./version.js";
 
 // Node's native loader preserves values already provided by OpenShift/Compose.
 try {
@@ -23,7 +25,9 @@ if (
   );
 }
 const server = runtime.app.listen(config.port, config.host, () =>
-  console.info(`MeetLoom listening on port ${config.port}`),
+  log.info(`MeetLoom listening on port ${config.port}`, {
+    version: appVersion().version,
+  }),
 );
 let stopping = false;
 const stop = () => {

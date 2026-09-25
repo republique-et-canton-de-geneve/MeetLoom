@@ -8,6 +8,18 @@ import { extractTasks, extractMaterials } from "../shared/richtext.js";
 import { accountProfile } from "./accounts.js";
 import { hashToken, rateLimit, token } from "./security.js";
 import { getSessionLifecycle } from "./lifecycle.js";
+import { log } from "./log.js";
+
+/** The SMTP error codes (connection, authentication, rejection), never the
+ * message or its recipients. */
+const smtpFailure = (error: unknown) => {
+  const value = error as { code?: unknown; responseCode?: unknown };
+  return {
+    code: typeof value?.code === "string" ? value.code : "unknown",
+    responseCode:
+      typeof value?.responseCode === "number" ? value.responseCode : null,
+  };
+};
 
 export interface MailConfig {
   host: string;
@@ -101,8 +113,8 @@ export async function installMailApi(
   const background = (job: () => Promise<void>) => {
     if (closing || pending.size >= 100) return false;
     const work = job()
-      .catch(() => {
-        console.warn("SMTP delivery failed.");
+      .catch((error: unknown) => {
+        log.warn("SMTP delivery failed", smtpFailure(error));
       })
       .finally(() => pending.delete(work));
     pending.add(work);
@@ -228,12 +240,12 @@ export async function installMailApi(
         );
         if (commit) await commit(sql);
       });
-    } catch {
+    } catch (error) {
       await db.run(
         "UPDATE mail_deliveries SET status='failed',lease_until=$1 WHERE id=$2",
         [now + 5 * 60 * 1000, key],
       );
-      console.warn("Scheduled SMTP delivery failed.");
+      log.warn("Scheduled SMTP delivery failed", smtpFailure(error));
     }
   }
   async function scheduled(now = Date.now()) {

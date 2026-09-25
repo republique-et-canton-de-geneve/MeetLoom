@@ -26,6 +26,7 @@ import {
   takeSnapshot,
   type Snapshot,
 } from "./snapshot.js";
+import { log } from "./log.js";
 
 /**
  * Application-level backups and data transfer, for administrators.
@@ -293,10 +294,9 @@ export async function registerBackups(
           "UPDATE backup_schedule SET last_slot=$1 WHERE id='scheduled' AND last_slot=$2",
           [previous, slot],
         );
-        console.error(
-          "Scheduled backup failed:",
-          (error as Error).message.slice(0, 200),
-        );
+        log.error("Scheduled backup failed", {
+          reason: (error as Error).message.slice(0, 200),
+        });
         return false;
       }
       return true;

@@ -57,6 +57,7 @@ export const SNAPSHOT_TABLES = [
   "form_response_images",
   "ai_conversations",
   "ai_messages",
+  "feedback",
   "audit_events",
 ] as const;
 
@@ -71,6 +72,7 @@ export const TRANSIENT_TABLES = [
   "share_activity",
   "mail_deliveries",
   "mail_recovery_requests",
+  "server_logs",
 ] as const;
 /** Kept across a restore or an import, so both can be undone. */
 export const PRESERVED_TABLES = [
