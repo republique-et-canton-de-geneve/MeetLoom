@@ -13,15 +13,16 @@ oc -n meetloom-dev exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:
 
 `/api/health` confirms that the process responds. The installed version is shown to signed-in accounts (`/api/about`) and in the administrators' **Activité en cours** panel (`/api/admin/activity`); release images carry it in `APP_VERSION` and `APP_REVISION`, set at build time, and other builds fall back to `package.json`. `/api/ready` checks database availability. Readiness must not depend on the optional LLM: an LLM outage must not remove the application from service. Do not use logs to store prompts or private meeting content.
 
-| Symptom                 | Check                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `ImagePullBackOff`      | Published image reference, registry access, and ServiceAccount pull secret    |
-| PVC `Pending`           | Default storage class, quota, and available capacity                          |
-| Pod rejected by an SCC  | No manually added UID, unprivileged policy, and a compatible PostgreSQL image |
-| Cookie/session rejected | HTTPS, exact `APP_ORIGIN`, Route, and trusted proxy count                     |
-| Readiness failure       | Application/database logs, `DATABASE_URL`, DNS, and PostgreSQL network access |
-| AI unavailable          | `LLM_BASE_URL` and `LLM_MODEL` in the ConfigMap, restart after changes        |
-| LLM certificate error   | Mounted internal CA and `NODE_EXTRA_CA_CERTS`, without disabling TLS          |
+| Symptom                 | Check                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ImagePullBackOff`      | Published image reference, registry access, and ServiceAccount pull secret                                                                                                           |
+| PVC `Pending`           | Default storage class, quota, and available capacity                                                                                                                                 |
+| Pod rejected by an SCC  | No manually added UID, unprivileged policy, and a compatible PostgreSQL image                                                                                                        |
+| Cookie/session rejected | HTTPS, exact `APP_ORIGIN`, Route, and trusted proxy count                                                                                                                            |
+| Readiness failure       | Application/database logs, `DATABASE_URL`, DNS, and PostgreSQL network access                                                                                                        |
+| AI features missing     | `LLM_BASE_URL` and `LLM_MODEL` in the ConfigMap, restart after changes ([Connect an LLM](deployment.md#connect-an-llm))                                                              |
+| Certificate error       | Internal CA mounted and `NODE_EXTRA_CA_CERTS` set, or `LLM_ALLOW_SELF_SIGNED=true` for the LLM only ([Internal certificate authority](deployment.md#internal-certificate-authority)) |
+| No password recovery    | SMTP settings in `meetloom-services`, restart after changes ([guide](services-auth-mail.md#openshift--kubernetes))                                                                   |
 
 ## Back up and restore
 

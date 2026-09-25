@@ -83,7 +83,7 @@ LLM_MODEL=exact-model-identifier
 LLM_API_KEY=if-required
 ```
 
-Use the exact model identifier your server expects; nothing is tied to a particular model family. The server calls `/chat/completions`, validates the response, bounds its size and duration, and returns a preview. There is no default external endpoint, no key sent to the browser, and no agenda applied without user action. Internal columns enter the AI context only when explicitly selected. For OCR, add `LLM_VISION_MODEL` on the same internal provider. Mount an internal CA through `NODE_EXTRA_CA_CERTS` if needed; do not disable TLS verification.
+Use the exact model identifier your server expects; nothing is tied to a particular model family. The server calls `/chat/completions`, validates the response, bounds its size and duration, and returns a preview. There is no default external endpoint, no key sent to the browser, and no agenda applied without user action. Internal columns enter the AI context only when explicitly selected. For OCR, add `LLM_VISION_MODEL` on the same internal provider. For an internal certificate authority, mount it through `NODE_EXTRA_CA_CERTS`; `LLM_ALLOW_SELF_SIGNED=true` instead skips certificate checks for the LLM only (see [deployment](docs/deployment.md#internal-certificate-authority)).
 
 Without `LLM_BASE_URL`, the AI features (assistant, AI help, AI summaries and structuring) do not appear at all.
 

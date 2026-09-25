@@ -47,6 +47,7 @@
     "react-dom": "^19.1.1",
     "read-excel-file": "^9.3.10",
     "saxes": "^6.0.0",
+    "undici": "^7.30.0",
     "zod": "^4.1.5"
   },
   "overrides": {

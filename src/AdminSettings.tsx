@@ -9,7 +9,11 @@ type Settings = {
   services: {
     smtp: boolean;
     oidc: boolean;
-    ai: { model: string | null; visionModel: string | null } | null;
+    ai: {
+      model: string | null;
+      visionModel: string | null;
+      allowSelfSigned: boolean;
+    } | null;
   };
 };
 
@@ -126,7 +130,7 @@ export default function AdminSettings({ user }: { user: User }) {
             <li>
               <strong>{t("IA", "AI")}</strong> ·{" "}
               {settings.services.ai
-                ? `${t("modèle", "model")} ${settings.services.ai.model ?? "—"}${settings.services.ai.visionModel ? ` · ${t("vision", "vision")} ${settings.services.ai.visionModel}` : ""}`
+                ? `${t("modèle", "model")} ${settings.services.ai.model ?? "—"}${settings.services.ai.visionModel ? ` · ${t("vision", "vision")} ${settings.services.ai.visionModel}` : ""}${settings.services.ai.allowSelfSigned ? t(" · certificat non vérifié (LLM_ALLOW_SELF_SIGNED)", " · certificate not verified (LLM_ALLOW_SELF_SIGNED)") : ""}`
                 : state(false)}
             </li>
           </ul>

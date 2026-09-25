@@ -71,6 +71,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       visionModel: env.LLM_VISION_MODEL?.trim() || undefined,
       apiKey: env.LLM_API_KEY || undefined,
       timeoutMs: integer(env, "AI_TIMEOUT_MS", 30000, 100, 300000),
+      allowSelfSigned: boolean(env, "LLM_ALLOW_SELF_SIGNED", false),
       maxResponseBytes: integer(
         env,
         "AI_MAX_RESPONSE_BYTES",

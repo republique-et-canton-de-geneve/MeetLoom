@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Agent } from "undici";
 import { z } from "zod";
 import { blockSchema } from "../shared/validation.js";
 import type { Block, Locale, Session } from "../shared/model.js";
@@ -13,6 +14,17 @@ export interface AiConfig {
   apiKey?: string;
   timeoutMs?: number;
   maxResponseBytes?: number;
+  /** Accept a self-signed or internally signed certificate, for LLM calls
+   * only (LLM_ALLOW_SELF_SIGNED). Installing the authority is safer. */
+  allowSelfSigned?: boolean;
+}
+
+let selfSignedAgent: Agent | undefined;
+
+/** Why a request failed, for operators: codes, status and content type only,
+ * never the prompt or the answer. */
+function warn(message: string, details: Record<string, unknown> = {}) {
+  console.warn(message, details);
 }
 
 export async function complete(
@@ -59,45 +71,72 @@ export async function complete(
     config.timeoutMs ?? 30000,
   );
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: image ? config.visionModel : config.model,
-        messages: [
-          { role: "system", content: system },
-          ...history,
-          {
-            role: "user",
-            content: image
-              ? [
-                  { type: "text", text: prompt },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:${image.mime};base64,${image.base64}`,
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.apiKey
+            ? { Authorization: `Bearer ${config.apiKey}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          model: image ? config.visionModel : config.model,
+          messages: [
+            { role: "system", content: system },
+            ...history,
+            {
+              role: "user",
+              content: image
+                ? [
+                    { type: "text", text: prompt },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: `data:${image.mime};base64,${image.base64}`,
+                      },
                     },
-                  },
-                ]
-              : prompt,
-          },
-        ],
-        temperature: 0.4,
-        max_tokens: 4000,
-        ...(json ? { response_format: { type: "json_object" } } : {}),
-      }),
-      redirect: "error",
-    });
-    if (!response.ok || !response.body)
+                  ]
+                : prompt,
+            },
+          ],
+          temperature: 0.4,
+          max_tokens: 4000,
+          ...(json ? { response_format: { type: "json_object" } } : {}),
+        }),
+        redirect: "error",
+        ...(config.allowSelfSigned
+          ? {
+              dispatcher: (selfSignedAgent ??= new Agent({
+                connect: { rejectUnauthorized: false },
+              })),
+            }
+          : {}),
+      } as RequestInit);
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      // TLS (unknown certificate authority), DNS or connection failure:
+      // no answer came back, so the service is unreachable.
+      const cause = (error as { cause?: { code?: unknown } }).cause;
+      warn(
+        `AI service unreachable: ${typeof cause?.code === "string" ? cause.code : "network error"}`,
+      );
       return fail(
         502,
         "AI_UNAVAILABLE",
         "The internal AI service could not complete this request.",
       );
+    }
+    if (!response.ok || !response.body) {
+      warn(`AI service answered HTTP ${response.status}`);
+      return fail(
+        502,
+        "AI_UNAVAILABLE",
+        "The internal AI service could not complete this request.",
+      );
+    }
     const reader = response.body.getReader();
     const buffers: Uint8Array[] = [];
     let bytes = 0;
@@ -119,7 +158,7 @@ export async function complete(
     } finally {
       reader.releaseLock();
     }
-    const result = z
+    const parsed = z
       .object({
         choices: z
           .array(
@@ -129,8 +168,26 @@ export async function complete(
           )
           .min(1),
       })
-      .parse(JSON.parse(Buffer.concat(buffers).toString("utf8")));
-    return result.choices[0].message.content;
+      .safeParse(
+        (() => {
+          try {
+            return JSON.parse(Buffer.concat(buffers).toString("utf8"));
+          } catch {
+            return undefined;
+          }
+        })(),
+      );
+    if (!parsed.success) {
+      warn("AI service answer is not a chat completion", {
+        contentType: response.headers.get("content-type"),
+      });
+      return fail(
+        502,
+        "AI_RESPONSE_INVALID",
+        "The internal AI service returned an unusable response.",
+      );
+    }
+    return parsed.data.choices[0].message.content;
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (controller.signal.aborted)
