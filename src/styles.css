@@ -2030,10 +2030,31 @@ hr {
   transition: width 0.2s linear;
 }
 .timer-delta {
-  font-size: 10px;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
   color: #b6c6b5;
   grid-column: 1/-1;
-  margin-top: 3px;
+  margin-top: 6px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  background: #ffffff14;
+}
+/* Late and early must stand out from "on schedule": colour, icon and text. */
+.timer-delta[data-schedule="late"] {
+  background: #f3b552;
+  color: #3b2a06;
+}
+.timer-delta[data-schedule="very-late"] {
+  background: #f17b79;
+  color: #3d0f0e;
+}
+.timer-delta[data-schedule="early"] {
+  background: #8fc9f2;
+  color: #0d2f47;
 }
 .timer-controls {
   display: flex;

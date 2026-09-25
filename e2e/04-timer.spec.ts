@@ -56,6 +56,12 @@ test("a finished session shows no countdown, position or schedule estimate", asy
   await page.getByRole("button", { name: /Animer la séance/ }).click();
   const bar = page.locator(".timer-bar");
   await expect(bar).toContainText("Accueil");
+  // Late or early stands out from "on schedule", not only by its wording.
+  const schedule = bar.locator(".timer-delta");
+  await expect(schedule).toHaveAttribute("data-schedule", "on-time");
+  await bar.getByTitle("Ajouter cinq minutes au bloc").click();
+  await expect(schedule).toHaveAttribute("data-schedule", "very-late");
+  await expect(schedule).toContainText("5 min de retard");
   for (const next of ["Idées", "Décision"]) {
     await page.getByTitle("Bloc suivant").click();
     await expect(bar).toContainText(next);

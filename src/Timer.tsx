@@ -10,6 +10,9 @@ import {
   PictureInPicture2,
   Volume2,
   VolumeX,
+  Check,
+  FastForward,
+  TriangleAlert,
 } from "lucide-react";
 import type {
   Locale,
@@ -285,22 +288,45 @@ export function TimerContent({
           style={{ width: `${progress}%`, background: TIMER_COLORS[visual] }}
         />
       </div>
-      <span className="timer-delta">
-        {finished
-          ? ""
-          : Math.abs(delta) < 30
-            ? t("Dans le temps prévu", "Right on schedule")
-            : delta > 0
-              ? t(
-                  `Fin prévue avec ${Math.ceil(delta / 60)} min de retard`,
-                  `Expected to end ${Math.ceil(delta / 60)} min late`,
-                )
-              : t(
-                  `Fin prévue avec ${Math.ceil(-delta / 60)} min d’avance`,
-                  `Expected to end ${Math.ceil(-delta / 60)} min early`,
-                )}
-      </span>
+      {!finished && <ScheduleBadge delta={delta} />}
     </div>
+  );
+}
+
+/** How the day's planned end compares with now, as a coloured badge with an
+ * icon so late and early stand out from "on schedule" at a glance. */
+function ScheduleBadge({ delta }: { delta: number }) {
+  const { t } = useI18n();
+  const minutes = Math.ceil(Math.abs(delta) / 60);
+  const state =
+    Math.abs(delta) < 30
+      ? "on-time"
+      : delta < 0
+        ? "early"
+        : minutes >= 5
+          ? "very-late"
+          : "late";
+  const Icon =
+    state === "on-time"
+      ? Check
+      : state === "early"
+        ? FastForward
+        : TriangleAlert;
+  return (
+    <span className="timer-delta" data-schedule={state}>
+      <Icon size={13} aria-hidden="true" />
+      {state === "on-time"
+        ? t("Dans le temps prévu", "Right on schedule")
+        : state === "early"
+          ? t(
+              `Fin prévue avec ${minutes} min d’avance`,
+              `Expected to end ${minutes} min early`,
+            )
+          : t(
+              `Fin prévue avec ${minutes} min de retard`,
+              `Expected to end ${minutes} min late`,
+            )}
+    </span>
   );
 }
 
