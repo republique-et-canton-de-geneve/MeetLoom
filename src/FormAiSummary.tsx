@@ -4,6 +4,7 @@ import type { FormAiSummary as Summary } from "../shared/form-analysis";
 import { post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
+import Markdown from "./Markdown";
 export function FormAiSummary({
   sessionId,
   formId,
@@ -78,7 +79,7 @@ export function FormAiSummary({
               ? ` · ${t("Échantillon des réponses les plus récentes ; synthèse partielle.", "Sample of the most recent responses; partial summary.")}`
               : ""}
           </p>
-          <div style={{ whiteSpace: "pre-wrap" }}>{result.summary}</div>
+          <Markdown text={result.summary} />
         </>
       )}
     </section>

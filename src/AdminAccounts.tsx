@@ -35,10 +35,8 @@ export default function AdminAccounts({ user }: { user: User }) {
   };
   if (!user.isAdmin) return null;
   return (
-    <details className="admin-accounts">
-      <summary>
-        {t("Administration des comptes", "Account administration")}
-      </summary>
+    <section className="admin-accounts account-section">
+      <h2>{t("Administration des comptes", "Account administration")}</h2>
       {error && <ErrorBanner message={error} />}
       <p className="muted">
         {t(
@@ -188,6 +186,6 @@ export default function AdminAccounts({ user }: { user: User }) {
           </div>
         </div>
       )}
-    </details>
+    </section>
   );
 }

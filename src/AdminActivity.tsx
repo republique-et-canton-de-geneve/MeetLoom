@@ -102,8 +102,8 @@ export default function AdminActivity({ user }: { user: User }) {
     return parts;
   };
   return (
-    <details className="admin-accounts admin-activity">
-      <summary>
+    <section className="admin-accounts admin-activity account-section">
+      <h2>
         {t("Activité en cours", "Current activity")}
         {activity &&
           ` · ${
@@ -114,7 +114,7 @@ export default function AdminActivity({ user }: { user: User }) {
                 )
               : t("aucune séance", "no session")
           }`}
-      </summary>
+      </h2>
       {error && <ErrorBanner message={error} />}
       {activity && (
         <>
@@ -161,6 +161,6 @@ export default function AdminActivity({ user }: { user: User }) {
           </div>
         </>
       )}
-    </details>
+    </section>
   );
 }

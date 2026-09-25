@@ -36,6 +36,10 @@ import {
 import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerOperations } from "./operations.js";
+import { registerAnnouncement } from "./announcement.js";
+import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
+import { log } from "./log.js";
+import { registerLogs, type LogConfig } from "./logs.js";
 import {
   DEFAULT_MAX_ARCHIVE_BYTES,
   importBodyParser,
@@ -119,6 +123,10 @@ export interface AppConfig {
   quotas?: Partial<PublicQuotas>;
   /** Requests per minute across the API; defaults in quotas.ts. */
   requestBudget?: Partial<RequestBudget>;
+  /** Where administrators forward user reports; "" hides the link. */
+  feedbackIssuesUrl?: string;
+  /** How long server log lines stay readable in the application. */
+  logs?: LogConfig;
 }
 type UserRow = {
   id: string;
@@ -1221,6 +1229,19 @@ async function assembleWith(db: Database, config: AppConfig) {
     admin,
     version: config.version ?? appVersion(),
   });
+  const logs = await registerLogs(app, { db, admin, config: config.logs });
+  registerAnnouncement(app, { db, admin });
+  await registerFeedback(app, {
+    db,
+    authenticated,
+    admin,
+    version: config.version ?? appVersion(),
+    issuesUrl:
+      config.feedbackIssuesUrl === undefined
+        ? DEFAULT_ISSUES_URL
+        : config.feedbackIssuesUrl || null,
+    rateLimits: config.rateLimits,
+  });
   await registerSharing(app, {
     db,
     accessible,
@@ -1389,7 +1410,7 @@ async function assembleWith(db: Database, config: AppConfig) {
   app.use(
     (
       error: unknown,
-      _request: Request,
+      request: Request,
       response: Response,
       _next: express.NextFunction,
     ) => {
@@ -1420,10 +1441,13 @@ async function assembleWith(db: Database, config: AppConfig) {
           error: "Request body is too large.",
           code: "BODY_TOO_LARGE",
         });
-      console.error(
-        "Request failed",
-        error instanceof Error ? error.name : "UnknownError",
-      );
+      // The route and the cause, never the query string or the body.
+      log.error("Request failed", {
+        method: request.method,
+        path: request.path.slice(0, 200),
+        error: error instanceof Error ? error.name : "UnknownError",
+        reason: error instanceof Error ? error.message.slice(0, 200) : null,
+      });
       response.status(500).json({
         error: "The request could not be completed.",
         code: "INTERNAL_ERROR",
@@ -1437,8 +1461,10 @@ async function assembleWith(db: Database, config: AppConfig) {
     db,
     mail,
     backups,
+    logs,
     close: async () => {
       backups.close();
+      await logs.close();
       await mail.close();
       await db.close();
     },

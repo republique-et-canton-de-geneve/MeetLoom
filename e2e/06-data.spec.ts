@@ -6,12 +6,8 @@ test("an administrator keeps restore points and moves all data with an encrypted
   browser,
 }) => {
   const page = await signIn(browser, admin);
-  await page.getByRole("button", { name: /Mon compte & équipe/ }).click();
-  const dialog = page.locator("dialog[open]");
-  await dialog
-    .locator("summary", { hasText: "Sauvegardes et données" })
-    .click();
-  const data = dialog.locator(".admin-data");
+  await page.goto("/account/data");
+  const data = page.locator(".account-page .admin-data");
   await expect(data).toContainText("Sauvegardes automatiques");
 
   await data.getByPlaceholder("Ex. Avant la recette").fill("Recette E2E");

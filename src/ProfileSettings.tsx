@@ -78,8 +78,8 @@ export default function ProfileSettings({
     }
   };
   return (
-    <details className="profile-settings">
-      <summary>{t("Profil et préférences", "Profile and preferences")}</summary>
+    <section className="profile-settings account-section">
+      <h2>{t("Profil et préférences", "Profile and preferences")}</h2>
       {error && <ErrorBanner message={error} />}{" "}
       {notice && <p role="status">{notice}</p>}
       <form
@@ -320,6 +320,6 @@ export default function ProfileSettings({
           </button>
         </form>
       </details>
-    </details>
+    </section>
   );
 }

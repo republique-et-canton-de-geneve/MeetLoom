@@ -67,10 +67,8 @@ export default function AdminSettings({ user }: { user: User }) {
   const state = (on: boolean) =>
     on ? t("configuré", "configured") : t("non configuré", "not configured");
   return (
-    <details className="admin-accounts admin-settings">
-      <summary>
-        {t("Paramètres de l’installation", "Installation settings")}
-      </summary>
+    <section className="admin-accounts admin-settings account-section">
+      <h2>{t("Paramètres de l’installation", "Installation settings")}</h2>
       {error && <ErrorBanner message={error} />}
       <h4>{t("Création de compte", "Account creation")}</h4>
       <label className="checkbox-label">
@@ -142,6 +140,6 @@ export default function AdminSettings({ user }: { user: User }) {
           </p>
         </>
       )}
-    </details>
+    </section>
   );
 }

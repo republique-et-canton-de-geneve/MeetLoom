@@ -39,6 +39,17 @@ test("privileged actions leave an audit row with actor, target and client addres
     ).status,
     200,
   );
+  assert.equal(
+    (
+      await h.owner.request(
+        "/admin/announcement",
+        "PUT",
+        { message: "Maintenance", tone: "info" },
+        address,
+      )
+    ).status,
+    200,
+  );
   const guest = await h.account("guest@example.test");
   const updated = await h.owner.request(
     `/admin/accounts/${guest.user.id}`,
@@ -108,7 +119,12 @@ test("an unknown audit action is refused, and every declared action is emitted b
       ),
     /Unknown audit action/,
   );
-  const sources = ["server/app.ts", "server/accounts.ts", "server/backups.ts"]
+  const sources = [
+    "server/app.ts",
+    "server/accounts.ts",
+    "server/backups.ts",
+    "server/announcement.ts",
+  ]
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
   for (const action of AUDIT_ACTIONS)

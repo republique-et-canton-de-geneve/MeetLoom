@@ -35,7 +35,7 @@ In **GitHub → Settings → Branches**, protect `main`: require a pull request 
 
 ## 2. Publish a version
 
-The version source is `package.json`, currently `0.1.1`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
+The version source is `package.json`, currently `0.1.2`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
 
 Choose one trigger:
 

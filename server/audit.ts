@@ -8,6 +8,7 @@ export const AUDIT_ACTIONS = [
   "installation.setup",
   "settings.signup",
   "settings.sound",
+  "settings.announcement",
   "account.invite",
   "account.update",
   "account.access-revoke",

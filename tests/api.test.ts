@@ -1064,7 +1064,7 @@ test("concurrent writes use compare-and-swap and cannot forge ownership or runni
   assert.equal(current.version, session.version + 1);
 });
 
-test("anonymous shares whitelist fields server-side, expire and revoke; tokens are returned only once", async (t) => {
+test("anonymous shares whitelist fields server-side, expire and revoke; tokens are never stored in clear", async (t) => {
   const h = await harness(t);
   await h.setup();
   const session = await h.session();
@@ -1108,13 +1108,15 @@ test("anonymous shares whitelist fields server-side, expire and revoke; tokens a
     assert.ok(!serialized.includes(secret), secret);
   assert.ok(serialized.includes("PUBLIC_INSTRUCTION"));
   assert.equal(publicResponse.headers.get("cache-control"), "no-store");
+  // Owners can copy the address again; it is stored hashed and sealed.
   assert.equal(
     (await h.owner.request(path + "/shares")).body.shares[0].token,
-    undefined,
+    share.token,
   );
-  const stored = await h.db.all<{ token_hash: string }>(
-    "SELECT token_hash FROM shares",
+  const stored = await h.db.all(
+    "SELECT token_hash,sealed FROM shares JOIN share_secrets ON share_id=id",
   );
+  assert.equal(stored.length, 1);
   assert.ok(!JSON.stringify(stored).includes(share.token));
   await h.owner.request(path + `/shares/${share.id}`, "DELETE", {});
   assert.equal(

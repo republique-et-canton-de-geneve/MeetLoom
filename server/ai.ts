@@ -4,6 +4,7 @@ import { z } from "zod";
 import { blockSchema } from "../shared/validation.js";
 import type { Block, Locale, Session } from "../shared/model.js";
 import { fail, HttpError } from "./security.js";
+import { log, type LogDetails } from "./log.js";
 import { allBlocks, blockDuration } from "../shared/domain.js";
 import { richTextToPlain } from "../shared/richtext.js";
 
@@ -23,8 +24,8 @@ let selfSignedAgent: Agent | undefined;
 
 /** Why a request failed, for operators: codes, status and content type only,
  * never the prompt or the answer. */
-function warn(message: string, details: Record<string, unknown> = {}) {
-  console.warn(message, details);
+function warn(message: string, details?: LogDetails) {
+  log.warn(message, details);
 }
 
 export async function complete(

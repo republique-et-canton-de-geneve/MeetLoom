@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  type ReactNode,
   useRef,
   useState,
   type FormEvent,
@@ -36,6 +37,7 @@ import {
   Trash2,
   FolderPlus,
   Pencil,
+  MessageSquareWarning,
 } from "lucide-react";
 import type {
   User,
@@ -63,17 +65,13 @@ import "./dashboard.css";
 import "./workspaces.css";
 import "./lifecycle.css";
 import "./timer-recovery.css";
-import AppVersion from "./AppVersion";
 
 const Editor = lazy(() => import("./Editor"));
 const PublicAgenda = lazy(() => import("./PublicAgenda"));
 const PublicForm = lazy(() => import("./PublicForm"));
 const RecoverAccount = lazy(() => import("./RecoverAccount"));
-const ProfileSettings = lazy(() => import("./ProfileSettings"));
-const AdminAccounts = lazy(() => import("./AdminAccounts"));
-const AdminActivity = lazy(() => import("./AdminActivity"));
-const AdminData = lazy(() => import("./AdminData"));
-const AdminSettings = lazy(() => import("./AdminSettings"));
+const AccountPage = lazy(() => import("./AccountPage"));
+import AnnouncementBanner from "./AnnouncementBanner";
 const WorkspacePanel = lazy(() => import("./WorkspacePanel"));
 const LifecyclePanel = lazy(() => import("./LifecyclePanel"));
 const ReportTrashPanel = lazy(() => import("./ReportTrashPanel"));
@@ -119,6 +117,17 @@ type AuthStatus = {
   signupEnabled?: boolean;
   signupDomains?: string[];
 };
+/** The last page outside the account pages, for problem reports. */
+let lastPage = location.pathname.startsWith("/account")
+  ? "/"
+  : location.pathname;
+/** Pages for accounts carry the administrators' announcement. */
+const withAnnouncement = (page: ReactNode) => (
+  <>
+    <AnnouncementBanner />
+    {page}
+  </>
+);
 export default function App() {
   return (
     <Suspense fallback={<Loading />}>
@@ -141,7 +150,9 @@ function AppRoutes() {
   useEffect(() => {
     refresh();
     const controller = browserNavigation((url) => {
-      setPath(new URL(url).pathname);
+      const next = new URL(url).pathname;
+      if (!next.startsWith("/account")) lastPage = next;
+      setPath(next);
       window.scrollTo(0, 0);
     });
     navigation.current = controller;
@@ -199,7 +210,7 @@ function AppRoutes() {
       </main>
     );
   if (!auth.user || inviteToken)
-    return (
+    return withAnnouncement(
       <AuthScreen
         auth={auth}
         inviteToken={inviteToken}
@@ -207,29 +218,38 @@ function AppRoutes() {
           navigate("/");
           refresh();
         }}
-      />
+      />,
+    );
+  const logout = async () => {
+    await post("/auth/logout");
+    navigate("/");
+    refresh();
+  };
+  const accountSection = path.match(/^\/account(?:\/([a-z-]+))?\/?$/);
+  if (accountSection)
+    return withAnnouncement(
+      <AccountPage
+        user={auth.user}
+        section={accountSection[1]}
+        from={lastPage}
+        navigate={navigate}
+        refreshUser={refresh}
+        logout={logout}
+      />,
     );
   const id = path.match(/^\/session\/([^/]+)$/)?.[1];
   if (id)
-    return (
+    return withAnnouncement(
       <Editor
         key={id}
         id={id}
         user={auth.user}
         aiEnabled={auth.aiEnabled}
         navigate={navigate}
-      />
+      />,
     );
-  return (
-    <Dashboard
-      user={auth.user}
-      navigate={navigate}
-      refreshUser={refresh}
-      logout={async () => {
-        await post("/auth/logout");
-        refresh();
-      }}
-    />
+  return withAnnouncement(
+    <Dashboard user={auth.user} navigate={navigate} logout={logout} />,
   );
 }
 
@@ -503,12 +523,10 @@ function Dashboard({
   user,
   navigate,
   logout,
-  refreshUser,
 }: {
   user: User;
   navigate: (url: string) => void;
   logout: () => void;
-  refreshUser: () => void;
 }) {
   const { t, locale } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -571,14 +589,6 @@ function Dashboard({
   const [error, setError] = useState("");
   const [create, setCreate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [account, setAccount] = useState(false);
-  const [createdInvite, setCreatedInvite] = useState("");
-  const [inviteError, setInviteError] = useState("");
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteCopied, setInviteCopied] = useState(false);
-  const [passwordBusy, setPasswordBusy] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordChanged, setPasswordChanged] = useState(false);
   const refreshDashboard = async () => {
     const [agenda, spaces] = await Promise.all([
       api<{ sessions: SessionSummary[] }>("/sessions"),
@@ -1003,9 +1013,16 @@ function Dashboard({
             <Archive size={18} />
             {t("Archives", "Archive")}
           </button>
-          <button className="nav-item" onClick={() => setAccount(true)}>
+          <button className="nav-item" onClick={() => navigate("/account")}>
             <Users size={18} />
             {t("Mon compte & équipe", "Account & team")}
+          </button>
+          <button
+            className="nav-item"
+            onClick={() => navigate("/account/feedback")}
+          >
+            <MessageSquareWarning size={18} />
+            {t("Signaler un problème", "Report a problem")}
           </button>
         </nav>
         <nav
@@ -1059,11 +1076,22 @@ function Dashboard({
           </p>
         </nav>
         <div className="sidebar-user">
-          <Avatar src={user.avatar} name={user.name} />
-          <div>
-            <strong>{user.name}</strong>
-            <small>{t("Mon compte", "My account")}</small>
-          </div>
+          <a
+            href="/account"
+            className="sidebar-user-link"
+            title={t("Ouvrir mon compte", "Open my account")}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              navigate("/account");
+            }}
+          >
+            <Avatar src={user.avatar} name={user.name} />
+            <div>
+              <strong>{user.name}</strong>
+              <small>{t("Mon compte", "My account")}</small>
+            </div>
+          </a>
           <button
             className="icon-button"
             title={t("Se déconnecter", "Sign out")}
@@ -2085,197 +2113,6 @@ function Dashboard({
               </button>
             </div>
           </form>
-        </Modal>
-      )}
-      {account && (
-        <Modal
-          title={t("Mon compte & équipe", "Account & team")}
-          close={() => setAccount(false)}
-        >
-          <div className="account-details">
-            <Avatar src={user.avatar} name={user.name} />
-            <div>
-              <strong>{user.name}</strong>
-              <p>{user.email}</p>
-            </div>
-          </div>
-          <details className="account-password">
-            <summary>
-              {t("Changer mon mot de passe", "Change my password")}
-            </summary>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const values = new FormData(form);
-                setPasswordError("");
-                setPasswordChanged(false);
-                if (
-                  values.get("newPassword") !== values.get("confirmPassword")
-                ) {
-                  setPasswordError(
-                    t(
-                      "Les nouveaux mots de passe ne correspondent pas.",
-                      "The new passwords do not match.",
-                    ),
-                  );
-                  return;
-                }
-                setPasswordBusy(true);
-                try {
-                  await post("/auth/password", {
-                    currentPassword: values.get("currentPassword"),
-                    newPassword: values.get("newPassword"),
-                  });
-                  form.reset();
-                  setPasswordChanged(true);
-                } catch (error) {
-                  setPasswordError((error as Error).message);
-                } finally {
-                  setPasswordBusy(false);
-                }
-              }}
-            >
-              <label>
-                {t("Mot de passe actuel", "Current password")}
-                <input
-                  name="currentPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  maxLength={200}
-                />
-              </label>
-              <label>
-                {t("Nouveau mot de passe", "New password")}
-                <input
-                  name="newPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={200}
-                />
-                <small>
-                  {t(
-                    "Au moins 12 caractères. Les autres connexions seront déconnectées.",
-                    "At least 12 characters. Other signed-in sessions will be signed out.",
-                  )}
-                </small>
-              </label>
-              <label>
-                {t("Confirmer le nouveau mot de passe", "Confirm new password")}
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={200}
-                />
-              </label>
-              {passwordError && <ErrorBanner message={passwordError} />}{" "}
-              {passwordChanged && (
-                <p role="status">
-                  {t("Mot de passe modifié.", "Password updated.")}
-                </p>
-              )}
-              <button className="button secondary" disabled={passwordBusy}>
-                {t("Enregistrer le nouveau mot de passe", "Save new password")}
-              </button>
-            </form>
-          </details>
-          <Suspense fallback={<Loading />}>
-            <ProfileSettings user={user} onSaved={refreshUser} />
-            <AdminActivity user={user} />
-            <AdminAccounts user={user} />
-            <AdminSettings user={user} />
-            <AdminData user={user} />
-          </Suspense>
-          <p className="muted">
-            {t(
-              "Invitez un collègue à créer son compte, puis ajoutez-le aux séances de votre choix depuis leur panneau de partage.",
-              "Invite a colleague to create an account, then add them to the sessions you choose from their sharing panel.",
-            )}
-          </p>
-          {inviteError && <ErrorBanner message={inviteError} />}
-          {user.isAdmin && (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setInviteError("");
-                setInviteBusy(true);
-                try {
-                  const values = Object.fromEntries(
-                    new FormData(e.currentTarget),
-                  );
-                  const r = await post<{ token: string }>(
-                    "/auth/invites",
-                    values,
-                  );
-                  setCreatedInvite(`${location.origin}/join/${r.token}`);
-                  setInviteCopied(false);
-                } catch (e) {
-                  setInviteError((e as Error).message);
-                } finally {
-                  setInviteBusy(false);
-                }
-              }}
-            >
-              <label>
-                {t("Nom du collègue", "Colleague’s name")}
-                <input name="name" required maxLength={100} />
-              </label>
-              <label>
-                {t("Adresse e-mail", "Email address")}
-                <input name="email" type="email" required />
-              </label>
-              <button className="button primary" disabled={inviteBusy}>
-                {t("Créer une invitation", "Create invitation")}
-              </button>
-            </form>
-          )}
-          {createdInvite && (
-            <div className="share-result">
-              <p>
-                {t(
-                  "Transmettez ce lien à votre collègue :",
-                  "Send this link to your colleague:",
-                )}
-              </p>
-              <input
-                readOnly
-                value={createdInvite}
-                onFocus={(e) => e.target.select()}
-              />
-              <button
-                className="button secondary"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(createdInvite);
-                    setInviteCopied(true);
-                  } catch {
-                    setInviteError(
-                      t(
-                        "Sélectionnez le lien pour le copier manuellement.",
-                        "Select the link to copy it manually.",
-                      ),
-                    );
-                  }
-                }}
-              >
-                <Copy size={15} />
-                {inviteCopied ? t("Copié", "Copied") : t("Copier", "Copy")}
-              </button>
-            </div>
-          )}
-          <small className="muted">
-            {t(
-              "La création de comptes est réservée à l’administrateur de cet espace.",
-              "Only the workspace administrator can create invitations.",
-            )}
-          </small>
-          <AppVersion />
         </Modal>
       )}
     </div>

@@ -23,6 +23,7 @@ import { ErrorBanner, Inspector, Loading } from "./ui";
 import { useI18n } from "./i18n";
 import McpPanel from "./McpPanel";
 import "./ai.css";
+import Markdown from "./Markdown";
 
 export interface AiPanelProps {
   session: Session;
@@ -466,7 +467,11 @@ export default function AiPanel({
                       })}
                     </time>
                   </div>
-                  <p>{message.content}</p>
+                  {message.role === "assistant" ? (
+                    <Markdown text={message.content} />
+                  ) : (
+                    <p>{message.content}</p>
+                  )}
                   {!!message.operations?.length && (
                     <div className="ai-change-set">
                       <strong>

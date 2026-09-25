@@ -121,7 +121,7 @@ Restarting the application resets counters. Counters are kept per pod: with the 
 
 ## Reading the audit trail
 
-Administrator actions are recorded in the `audit_events` table: `installation.setup`, `settings.signup`, `settings.sound`, `account.invite`, `account.update` (enable, disable, administrator right), `account.access-revoke` and `account.reset` (a password-reset link was issued; the link itself is never stored). Each row holds the time, the acting account, the target, the client IP address and a small JSON detail. Rows older than 400 days are removed when new events are written. There is no screen for it; read it with SQL, for example from the PostgreSQL pod:
+Administrator actions are recorded in the `audit_events` table: `installation.setup`, `settings.signup`, `settings.sound`, `settings.announcement`, `account.invite`, `account.update` (enable, disable, administrator right), `account.access-revoke` and `account.reset` (a password-reset link was issued; the link itself is never stored). Each row holds the time, the acting account, the target, the client IP address and a small JSON detail. Rows older than 400 days are removed when new events are written. There is no screen for it; read it with SQL, for example from the PostgreSQL pod:
 
 ```bash
 oc -n meetloom-dev exec deploy/meetloom-postgresql -- \
@@ -130,6 +130,14 @@ oc -n meetloom-dev exec deploy/meetloom-postgresql -- \
 ```
 
 The application offers no path to change or delete rows; the database does not enforce it, so restrict direct database access accordingly.
+
+## Server logs, announcements and user feedback
+
+Administrators read the server messages of every pod in **My account & team → Logs**, without OpenShift access: failed requests (method, path, error and cause), SMTP failures (error codes), LLM connection problems (`AI service ...`), failed scheduled backups and startups. Each line is also written to the standard output as before, so `oc logs` and log collectors keep working. Lines are stored in the `server_logs` table, which is never exported, and kept `LOG_RETENTION_DAYS` days (default 14, at most 20,000 lines). A request query string or body is never logged.
+
+The announcement banner is stored with the installation settings; changing it is audited (`settings.announcement`). It is shown on the sign-in page too: keep it free of confidential information.
+
+User reports (**Report a problem**) are stored in the `feedback` table and exported with the data. The server never calls GitHub: **Create a GitHub issue** opens a draft in the administrator's own browser. `FEEDBACK_ISSUES_URL` sets where that draft goes (default: this project's GitHub issues, `https://github.com/<owner>/<repo>/issues/new` format); set it empty to show only **Copy**.
 
 ## Retention, closure, and optional services
 

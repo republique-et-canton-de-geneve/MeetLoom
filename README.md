@@ -44,9 +44,10 @@ Open [the Vite server](http://127.0.0.1:5173). If `APP_ORIGIN` is set during dev
 - Multi-day agendas; rich text, tasks and materials, categories, assignees, nested groups, notes, and parallel tracks. Move, duplicate, undo/redo, copy or transfer between sessions, and lock start times with overlap warnings.
 - Reorderable, resizable columns, separate time/duration and description layouts, editor visibility, and **team** or **team & visitors** audiences. Presenter notes are private by default.
 - Local accounts, profiles and preferences, administration, invitations, and session roles. Optional OIDC sign-in and SMTP recovery remain disabled until configured.
+- An account and administration page: current activity before an update, backups and encrypted data transfer, an announcement banner for everyone, problem reports and ideas from users (forwardable to GitHub issues from the administrator's browser), and the server logs of every pod.
 - Presence, merging of independent changes, explicit conflict resolution, threaded comments, and mentions. Named versions, a readable activity log, day restoration/copying, and recovery of deleted items for 72 hours.
 - Pages and forms, responses, exports, and optional AI summaries. Publication links are revocable and response privacy is enforced on the server.
-- Visitor links and simplified agendas without an account, with content restrictions, expiration, and revocation. The server removes private fields before sending data. Public pages refresh automatically.
+- Visitor links and simplified agendas without an account, with content restrictions, expiration, and revocation; owners can copy a link's address and QR code again at any time. The server removes private fields before sending data. Public pages refresh automatically.
 - A shared timer: pause, resume, navigation, +1/+5 extensions, recovery of the previous block after automatic advancement, progress, and ahead/behind indicators against durations captured at the start.
 - Advance warnings in minutes or as a percentage of remaining duration, an end sound, sound selection, and volume. Per-session settings and defaults for new sessions.
 - A **Document Picture-in-Picture** window in compatible browsers, with a separate window as a fallback. The display includes the title and timing, without internal notes.

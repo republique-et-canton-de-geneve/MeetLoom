@@ -145,7 +145,9 @@ export interface Share {
   enabled?: boolean;
   id: string;
   label: string;
-  token?: string;
+  /** The address token, for owners; null when it cannot be read here
+   * (created before addresses were kept, or imported from elsewhere). */
+  token?: string | null;
   expiresAt: string | null;
   createdAt: string;
   mode?: "visitor" | "agenda";

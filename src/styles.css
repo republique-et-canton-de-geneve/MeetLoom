@@ -2030,10 +2030,31 @@ hr {
   transition: width 0.2s linear;
 }
 .timer-delta {
-  font-size: 10px;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
   color: #b6c6b5;
   grid-column: 1/-1;
-  margin-top: 3px;
+  margin-top: 6px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  background: #ffffff14;
+}
+/* Late and early must stand out from "on schedule": colour, icon and text. */
+.timer-delta[data-schedule="late"] {
+  background: #f3b552;
+  color: #3b2a06;
+}
+.timer-delta[data-schedule="very-late"] {
+  background: #f17b79;
+  color: #3d0f0e;
+}
+.timer-delta[data-schedule="early"] {
+  background: #8fc9f2;
+  color: #0d2f47;
 }
 .timer-controls {
   display: flex;
@@ -2417,13 +2438,15 @@ hr {
 }
 .list-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 15px 0;
   border-bottom: 1px solid #edf2e7;
 }
 .list-item > div {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .list-item strong {
   display: block;
@@ -3626,4 +3649,83 @@ hr {
   font-weight: 650;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* Answers written by the AI (src/Markdown.tsx). */
+.markdown {
+  line-height: 1.6;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown h3,
+.markdown h4,
+.markdown h5 {
+  font-size: 14px;
+  font-weight: 650;
+  margin: 16px 0 6px;
+}
+.markdown h3 {
+  font-size: 15px;
+}
+.markdown p {
+  margin: 0 0 10px;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.markdown li {
+  margin: 3px 0;
+}
+.markdown li > ul,
+.markdown li > ol {
+  margin: 4px 0 0;
+}
+.markdown code {
+  font-size: 0.92em;
+  background: #f1f5f2;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* Administrators' announcement (src/AnnouncementBanner.tsx). */
+.announcement-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  background: #e6f0fb;
+  color: #173b5c;
+  border-bottom: 1px solid #c7dbf1;
+}
+.announcement-banner.warning {
+  background: #fdf1d8;
+  color: #4b3405;
+  border-bottom-color: #f1d494;
+}
+.announcement-banner p {
+  flex: 1;
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.announcement-banner a {
+  color: inherit;
+  text-decoration: underline;
+}
+.announcement-banner .icon-button {
+  color: inherit;
+}
+.announcement-banner.preview {
+  border: 1px solid #c7dbf1;
+  border-radius: 8px;
+}
+.announcement-banner.preview.warning {
+  border-color: #f1d494;
 }

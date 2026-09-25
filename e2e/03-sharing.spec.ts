@@ -36,4 +36,12 @@ test("a visitor link shows the agenda but never the team's private notes", async
   await expect(visitor.getByText(secret)).toHaveCount(0);
   expect(responses.length).toBeGreaterThan(0);
   expect(responses.join("\n")).not.toContain(secret);
+
+  // The owner finds the address again after closing the share dialog.
+  await page.getByRole("button", { name: "Partager", exact: true }).click();
+  const link = page.locator(".list-item", { hasText: "E2E" });
+  await link.getByRole("button", { name: "Afficher le lien" }).click();
+  await expect(page.getByLabel("Lien visiteur créé")).toHaveValue(
+    new RegExp(`/s/${share.token}$`),
+  );
 });
