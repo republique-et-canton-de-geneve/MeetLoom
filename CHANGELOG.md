@@ -4,6 +4,25 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-25
+
+### Added
+
+- My account & team is a page of its own, with a section per topic; your name at the bottom of the sidebar opens it.
+- Visitor links can be shown again, with their QR code, after closing the share dialog. Older links offer a new address that keeps their scope and comments.
+- An announcement banner written by administrators, shown to every account including on the sign-in page.
+- Report a problem or suggest an idea from the application, without a GitHub account; administrators triage reports and can open a GitHub issue draft from their browser.
+- Administrators read the server logs of every pod in the application.
+
+### Changed
+
+- The timer bar shows late and early as coloured badges (amber, red from five minutes, blue when early).
+
+### Fixed
+
+- Form response summaries by the AI are in the interface language, answer the facilitator's question first and show formatted headings and lists instead of raw Markdown.
+- Failed requests and SMTP failures are logged with their route or error code.
+
 ## [0.1.1] - 2026-09-25
 
 ### Added

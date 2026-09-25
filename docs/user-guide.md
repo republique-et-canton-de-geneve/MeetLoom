@@ -40,9 +40,11 @@ Authorized session members can read team columns. Roles:
 | Viewer                     | Yes             | No          | No            | No            |
 | Visitor without an account | No              | No          | No            | No            |
 
-From **Share**, the owner can generate a link, set its expiry and revoke it. Copy the link when it is created: the server stores only its hash. Its preview uses the actual visitor page. After revocation, a browser viewing it clears the agenda on the next refresh.
+From **Share**, the owner can generate a link, set its expiry and revoke it. **Show link** gives an existing link's address, QR code and preview again at any time. Links created before version 0.1.2, or imported from another installation, cannot show their address: **New address** replaces it while keeping the link's scope and comments (the previous address stops working). The preview uses the actual visitor page. After revocation, a browser viewing it clears the agenda on the next refresh.
 
-Administrators create account invitations in **My account & team**. Send an invitation through your normal internal channel. It is single-use and expires after 72 hours. Once the account exists, the owner can add it to a session with the appropriate role.
+Visitor comments reach the team in the **Comments** panel of the editor, under **Visitor conversation**: reply or resolve them there, without opening the visitor link.
+
+Administrators create account invitations in **My account & team → Accounts and invitations**. Send an invitation through your normal internal channel. It is single-use and expires after 72 hours. Once the account exists, the owner can add it to a session with the appropriate role.
 
 ## Run a session
 
@@ -60,6 +62,8 @@ Did the timer advance automatically while discussion was still going? Increase t
 
 Locked times help plan the agenda and identify conflicts. Automatic advancement runs activities consecutively without waiting through gaps between locked times. Add an explicit break block or pause the timer to reserve that time during delivery.
 
+The projected end is a badge under the progress bar: neutral with a check mark on schedule, amber when late, red from five minutes late, blue when early.
+
 The progress bar turns orange at 20% remaining and red at 5%. The active minimap segment shows progress as well. These visual thresholds are independent of the sound setting below.
 
 ## Sounds
@@ -72,11 +76,24 @@ Session settings apply to all its blocks. Administrators can also set defaults f
 
 The **Always-on-top window** control opens Document Picture-in-Picture when supported by desktop Chrome or Edge. It shows the current block, countdown and progress. Move it onto the presentation screen and keep the MeetLoom tab open.
 
+The strip with the site address at the top of that window belongs to the browser: Chrome and Edge always show it so that no page can imitate another, and MeetLoom cannot hide it. Make the window shorter and MeetLoom keeps only the countdown and the progress bar.
+
 When the API is unavailable, MeetLoom opens a separate window and explains that it cannot guarantee priority. On Windows, PowerToys Always On Top can pin it (`Win+Ctrl+T`). Test your PowerPoint full-screen mode and monitor setup before a real session. In a video call, sharing only the PowerPoint window can exclude the timer; share the appropriate screen if both must be visible.
+
+## My account, announcements and problem reports
+
+**My account & team** (the dashboard menu, or your name at the bottom of the sidebar) is a page of its own: profile, password and **Report a problem**, plus, for administrators, current activity, accounts and invitations, installation settings (including the announcement), backups and data, user feedback and logs.
+
+- **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. Anyone can close it; it comes back when an administrator changes it. It is public: never put anything confidential in it.
+- **Report a problem** (dashboard, the editor's More actions menu, or the account page): describe a problem or suggest an idea; the page concerned is filled in for you. You follow what became of your reports on the same page. No GitHub account is needed.
+- **User feedback** (administrators): triage reports (received, in progress, done, dismissed). **Create a GitHub issue** opens a draft in your own browser, without the author's name, for you to review; the server never contacts GitHub.
+- **Logs** (administrators): the server messages of every pod, by level and text, kept 14 days by default. They say what failed and why (a route, an SMTP or AI error code), never passwords, content or answers.
 
 ## AI, exports and history
 
 Forms also offer an **Image** question. Respondents can select PNG, JPEG or WebP; the browser reduces the file and removes its metadata before upload. Received images are visible only in response details for owners and editors. They are not sent to AI summaries or included in CSV. In anonymous mode, avoid photos that identify their author. After resizing, limits are 256 KiB per image and 512 KiB per response.
+
+AI answers show their headings, lists and bold text as formatted text. A form's response summary is written in the interface language and answers your optional question first.
 
 The **Assistant** panel keeps private conversations. Choose no context, the open session, specific sessions, the current workspace or all accessible workspaces. Including internal notes and Pages is explicit. AI proposes changes to blocks, dates, Pages and forms; review the preview, then apply or reject. Other sessions are references; only the open session can be changed. An outdated proposal cannot overwrite a newer version. Personal settings and organization/workspace instruction sets guide responses. These commands remain unavailable until an LLM is configured. See [Internal AI and document import](ai-and-import.md).
 
