@@ -30,6 +30,7 @@ import {
 import { useI18n } from "./i18n";
 import { TIMER_COLORS, timerVisualState } from "../shared/timer-visual";
 import { serverNow } from "./clock";
+import { durationLabel } from "./ui";
 
 let audioContext: AudioContext | null = null;
 async function enableAudio() {
@@ -225,7 +226,7 @@ export function TimerContent({
   now: number;
   compact?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const day = session.days.find((d) => d.id === session.run.dayId);
   const playable = runnableBlocks(day?.blocks ?? []);
   const view = timerView(session, now);
@@ -288,7 +289,23 @@ export function TimerContent({
           style={{ width: `${progress}%`, background: TIMER_COLORS[visual] }}
         />
       </div>
-      {!finished && <ScheduleBadge delta={delta} />}
+      {!finished && view.projectedEnd !== null && (
+        <div className="timer-schedule">
+          <ScheduleBadge delta={delta} />
+          <span className="timer-end">
+            {t("Fin prévue", "Expected end")}{" "}
+            {new Intl.DateTimeFormat(locale === "fr" ? "fr-CH" : "en-GB", {
+              timeZone: session.timezone,
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(view.projectedEnd)}
+          </span>
+          <span className="timer-left">
+            {t("reste", "left")}{" "}
+            {durationLabel(Math.ceil(view.dayRemainingSeconds / 60))}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -318,14 +335,8 @@ function ScheduleBadge({ delta }: { delta: number }) {
       {state === "on-time"
         ? t("Dans le temps prévu", "Right on schedule")
         : state === "early"
-          ? t(
-              `Fin prévue avec ${minutes} min d’avance`,
-              `Expected to end ${minutes} min early`,
-            )
-          : t(
-              `Fin prévue avec ${minutes} min de retard`,
-              `Expected to end ${minutes} min late`,
-            )}
+          ? t(`${minutes} min d’avance`, `${minutes} min early`)
+          : t(`${minutes} min de retard`, `${minutes} min late`)}
     </span>
   );
 }

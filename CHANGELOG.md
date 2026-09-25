@@ -4,6 +4,10 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+### Added
+
+- The timer shows the day's expected end time and the total time left, for facilitators and visitors, also in a thin always-on-top window.
+
 ### Changed
 
 - The announcement banner can no longer be closed: it stays until an administrator removes it.

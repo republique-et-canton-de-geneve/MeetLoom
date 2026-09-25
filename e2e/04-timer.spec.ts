@@ -95,6 +95,8 @@ test("a visitor whose clock is ten minutes fast still sees the right countdown",
   await expect(live).toContainText("restantes");
   await expect(live).not.toContainText("de dépassement");
   await expect(live.locator(".timer-clock strong")).toHaveText(/^0[34]:\d\d$/);
+  // Visitors see when the day should end too.
+  await expect(live.locator(".timer-end")).toHaveText(/^Fin prévue \d\d:\d\d$/);
   await page.getByTitle("Réinitialiser").click();
   await expect(
     page.getByRole("button", { name: /Animer la séance/ }),
@@ -120,5 +122,10 @@ test("late and early stand out from on schedule, not only by their wording", asy
   await page.getByTitle("Ajouter cinq minutes au bloc").click();
   await expect(schedule).toHaveAttribute("data-schedule", "very-late");
   await expect(schedule).toContainText("6 min de retard");
+  // The day's expected end and the total time left sit next to it.
+  await expect(page.locator(".timer-bar .timer-end")).toHaveText(
+    /^Fin prévue \d\d:\d\d$/,
+  );
+  await expect(page.locator(".timer-bar .timer-left")).toContainText("reste");
   await page.getByTitle("Réinitialiser").click();
 });

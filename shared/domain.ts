@@ -877,10 +877,22 @@ export function timerView(session: TimedSession, now = Date.now()) {
     session.run.startedAt !== null &&
     session.run.elapsedBeforePause === 0 &&
     session.run.startedAt > now;
+  const startsIn = waiting ? (session.run.startedAt! - now) / 1000 : 0;
+  // What is left of the whole day at the current durations: the rest of the
+  // current block (nothing once it overruns) and every block still to come.
+  const dayRemaining = block
+    ? startsIn +
+      Math.max(0, remaining) +
+      upcoming.reduce((sum, value) => sum + value.duration * 60, 0)
+    : 0;
   return {
     block,
     /** Seconds until a scheduled start that is still ahead, otherwise 0. */
-    startsInSeconds: waiting ? (session.run.startedAt! - now) / 1000 : 0,
+    startsInSeconds: startsIn,
+    /** Seconds left until the end of the day's last block. */
+    dayRemainingSeconds: dayRemaining,
+    /** When the day is expected to end (epoch milliseconds), or null. */
+    projectedEnd: active && block ? now + dayRemaining * 1000 : null,
     remainingSeconds: block ? remaining : 0,
     elapsedSeconds: elapsed,
     progress: duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0,

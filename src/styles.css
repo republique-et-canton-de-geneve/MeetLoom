@@ -2015,16 +2015,31 @@ hr {
   background: #abd09f;
   transition: width 0.2s linear;
 }
+/* The day at a glance: ahead or behind, expected end, time left. */
+.timer-schedule {
+  grid-column: 1/-1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #c2d4c4;
+}
+.timer-end {
+  font-weight: 600;
+  color: #f5f8f1;
+}
+.timer-left::before {
+  content: "· ";
+}
 .timer-delta {
-  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 12px;
   font-weight: 600;
   color: #b6c6b5;
-  grid-column: 1/-1;
-  margin-top: 6px;
   padding: 2px 9px 2px 7px;
   border-radius: 999px;
   background: #ffffff14;
@@ -2115,7 +2130,7 @@ hr {
   font-size: 12px;
 }
 .floating-window .timer-position,
-.floating-window .timer-delta {
+.floating-window .timer-schedule {
   font-size: 12px;
 }
 .floating-window .timer-track {
@@ -2143,7 +2158,7 @@ hr {
 }
 @media (max-height: 150px) {
   .floating-window .timer-position,
-  .floating-window .timer-delta {
+  .floating-window .timer-left {
     display: none;
   }
   .floating-window .timer-track {
@@ -2156,30 +2171,48 @@ hr {
     display: none;
   }
 }
+/* A thin strip: the block on the left, the clock in the middle and the
+   expected end on the right, the progress bar underneath. */
 @media (max-height: 80px) {
-  .floating-window .timer-current {
-    display: none;
-  }
   .floating-window .timer-content {
-    grid-template-columns: 1fr;
-    justify-items: center;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 16px;
+  }
+  .floating-window .timer-current {
+    grid-column: 1;
+    grid-row: 1;
   }
   .floating-window .timer-clock {
+    grid-column: 2;
+    grid-row: 1;
     align-items: center;
   }
+  .floating-window .timer-schedule {
+    grid-column: 3;
+    grid-row: 1;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+  }
   .floating-window .timer-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
     margin-top: 4px;
   }
 }
 @media (max-width: 380px) {
   .floating-window .timer-position,
-  .floating-window .timer-delta {
+  .floating-window .timer-left {
     display: none;
   }
 }
 @media (max-width: 260px) {
   .floating-window .timer-current,
+  .floating-window .timer-schedule,
   .floating-window .timer-clock span {
     display: none;
   }
@@ -2188,9 +2221,11 @@ hr {
     justify-items: center;
   }
   .floating-window .timer-clock {
+    grid-column: 1;
     align-items: center;
   }
   .floating-window .timer-track {
+    grid-column: 1;
     width: 100%;
   }
 }

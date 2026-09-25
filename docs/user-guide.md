@@ -62,7 +62,7 @@ Did the timer advance automatically while discussion was still going? Increase t
 
 Locked times help plan the agenda and identify conflicts. Automatic advancement runs activities consecutively without waiting through gaps between locked times. Add an explicit break block or pause the timer to reserve that time during delivery.
 
-The projected end is a badge under the progress bar: neutral with a check mark on schedule, amber when late, red from five minutes late, blue when early.
+Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. In a thin always-on-top window, the current block stays on the left of the countdown and the badge with the expected end on its right.
 
 The progress bar turns orange at 20% remaining and red at 5%. The active minimap segment shows progress as well. These visual thresholds are independent of the sound setting below.
 
