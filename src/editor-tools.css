@@ -905,6 +905,43 @@
   min-width: 0;
   padding-right: 27px;
 }
+.content-nav-row .nav-item[draggable="true"] {
+  cursor: grab;
+}
+/* A grip on hover says the list can be reordered by dragging. */
+.content-nav-grip {
+  position: absolute;
+  left: -1px;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+}
+.content-nav-row:hover .content-nav-grip {
+  opacity: 0.8;
+}
+.content-nav-row.dragging {
+  opacity: 0.4;
+}
+/* Where the dragged item will land. */
+.content-nav-row.drop-before::before,
+.content-nav-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--green);
+  box-shadow: 0 0 0 2px #fff;
+  pointer-events: none;
+  z-index: 2;
+}
+.content-nav-row.drop-before::before {
+  top: -2px;
+}
+.content-nav-row.drop-after::after {
+  bottom: -2px;
+}
 .content-nav-row .nav-item span {
   overflow: hidden;
   text-overflow: ellipsis;
