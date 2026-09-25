@@ -236,6 +236,7 @@ export const runSchema = z
         "Too many planned durations",
       )
       .optional(),
+    plannedTotal: z.number().finite().min(0).max(100_000_000).optional(),
     actualDurations: safeRecordKeys
       .pipe(z.record(idSchema, z.number().finite().min(0).max(100_000_000)))
       .refine(

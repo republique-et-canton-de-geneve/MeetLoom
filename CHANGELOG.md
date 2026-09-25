@@ -25,6 +25,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 - Importing an agenda into a session fills its empty days instead of adding a duplicate "Jour 1" next to them.
 - The facilitator picker closes on a click elsewhere, and lists people on one line each.
+- Removing a block still to come during a run now puts the day ahead by its planned time (adding one still puts it behind); the timer said "on schedule".
 - The notification badge appears within seconds and as soon as you come back to the window, without reloading the page.
 - Editing the agenda after a finished run no longer resets the timer: the actual durations and "Restore the starting plan" / "Use actual durations" stay available.
 

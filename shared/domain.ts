@@ -729,6 +729,9 @@ export function publicProjection(
       completedDuration: run.completedDuration,
       autoAdvance: run.autoAdvance,
       revision: run.revision,
+      ...(run.plannedTotal !== undefined
+        ? { plannedTotal: run.plannedTotal }
+        : {}),
       ...(run.plannedDurations
         ? {
             plannedDurations: Object.fromEntries(
@@ -897,16 +900,25 @@ export function timerView(session: TimedSession, now = Date.now()) {
       ? (session.run.plannedDurations[value.id] ?? 0)
       : value.duration * 60;
   const delta =
-    active && session.run.runStartedAt !== null
-      ? Math.max(0, now - session.run.runStartedAt) / 1000 -
-        session.run.completedDuration +
-        Math.max(0, remaining) -
-        plannedBlockSeconds(session.run, block) +
-        upcoming.reduce(
-          (sum, value) => sum + value.duration * 60 - plannedUpcoming(value),
-          0,
-        )
-      : 0;
+    active &&
+    session.run.runStartedAt !== null &&
+    session.run.plannedTotal !== undefined
+      ? // Projected end against the day planned at the start: a block
+        // removed ahead saves its time, a block added costs its duration.
+        Math.max(0, now - session.run.runStartedAt) / 1000 +
+        Math.max(0, remaining) +
+        upcoming.reduce((sum, value) => sum + value.duration * 60, 0) -
+        session.run.plannedTotal
+      : active && session.run.runStartedAt !== null
+        ? Math.max(0, now - session.run.runStartedAt) / 1000 -
+          session.run.completedDuration +
+          Math.max(0, remaining) -
+          plannedBlockSeconds(session.run, block) +
+          upcoming.reduce(
+            (sum, value) => sum + value.duration * 60 - plannedUpcoming(value),
+            0,
+          )
+        : 0;
   const waiting =
     session.run.status === "running" &&
     session.run.startedAt !== null &&
@@ -1112,6 +1124,7 @@ export function transitionRun(
       throw new Error("Unknown day");
     Object.assign(run, INITIAL_RUN, { dayId });
     delete run.plannedDurations;
+    delete run.plannedTotal;
     delete run.actualDurations;
   } else if (action === "start") {
     if (input.dayId && !days.some((candidate) => candidate.id === input.dayId))
@@ -1159,6 +1172,14 @@ export function transitionRun(
             .flatMap((value) => allBlocks([value]).slice(1)),
         ].map((value) => [value.id, value.duration * 60]),
       ),
+      plannedTotal: chosenBlocks
+        .slice(
+          Math.max(
+            0,
+            chosenBlocks.findIndex((value) => value.id === chosenBlock.id),
+          ),
+        )
+        .reduce((sum, value) => sum + value.duration * 60, 0),
       actualDurations: {},
     });
   } else if (action === "pause" && current.status === "running") {

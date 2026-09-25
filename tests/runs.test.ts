@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { harness } from "./support.js";
-import { newBlock, withStepDurations } from "../shared/domain.js";
+import { newBlock, timerView, withStepDurations } from "../shared/domain.js";
 import type { RunRecord as Run } from "../shared/history.js";
 
 test("every finished run is kept with its planned and actual durations, so the initial plan survives", async (t) => {
@@ -113,4 +113,42 @@ test("editing the agenda after a run keeps the finished run and its actual durat
   assert.equal(session.run.status, "finished");
   assert.ok(session.run.plannedDurations);
   assert.ok(Object.keys(session.run.actualDurations ?? {}).length);
+});
+
+test("removing an upcoming block during a run puts the day ahead, adding one puts it behind", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  let session = await h.session();
+  session.days[0].blocks = ["A", "B", "C"].map((title) =>
+    newBlock("fr", { title, duration: 5 }),
+  );
+  const put = async () => {
+    const result = await h.owner.request(`/sessions/${session.id}`, "PUT", {
+      session,
+      version: session.version,
+    });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    session = result.body.session;
+  };
+  await put();
+  session = (
+    await h.owner.request(`/sessions/${session.id}/run`, "POST", {
+      action: "start",
+    })
+  ).body.session;
+  const delta = () =>
+    Math.round(timerView(session, session.run.runStartedAt!).deltaSeconds);
+  assert.equal(delta(), 0);
+  // Five planned minutes gone: five minutes ahead.
+  session.days[0].blocks = session.days[0].blocks.slice(0, 2);
+  await put();
+  assert.equal(delta(), -300);
+  // Two new five-minute blocks: five minutes behind.
+  session.days[0].blocks = [
+    ...session.days[0].blocks,
+    newBlock("fr", { title: "D", duration: 5 }),
+    newBlock("fr", { title: "E", duration: 5 }),
+  ];
+  await put();
+  assert.equal(delta(), 300);
 });
