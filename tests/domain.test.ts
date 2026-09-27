@@ -147,14 +147,22 @@ test("pause, resume and manual next preserve elapsed time and report schedule de
   const original = fixture();
   let session = transitionRun(original, "start", {}, 1000);
   assert.equal(timerView(session, 61_000).remainingSeconds, 540);
+  // The whole day: the rest of A, then B and C (17 minutes from the start).
+  assert.equal(timerView(session, 61_000).dayRemainingSeconds, 960);
+  assert.equal(timerView(session, 61_000).projectedEnd, 1_021_000);
   session = transitionRun(session, "pause", {}, 61_000);
   assert.equal(elapsedSeconds(session.run, 91_000), 60);
   session = transitionRun(session, "resume", {}, 91_000);
   assert.equal(elapsedSeconds(session.run, 121_000), 90);
   assert.equal(timerView(session, 121_000).deltaSeconds, 30);
+  // Thirty seconds of pause push the end thirty seconds later.
+  assert.equal(timerView(session, 121_000).projectedEnd, 1_051_000);
   session = transitionRun(session, "next", {}, 121_000);
   assert.equal(session.run.blockId, session.days[0].blocks[1].id);
   assert.equal(timerView(session, 121_000).deltaSeconds, -480);
+  assert.equal(timerView(session, 121_000).dayRemainingSeconds, 420);
+  // An overrun counts nothing left for the block, not a negative time.
+  assert.equal(timerView(session, 481_000).dayRemainingSeconds, 120);
   assert.equal(
     session.version,
     original.version,

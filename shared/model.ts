@@ -75,6 +75,9 @@ export interface RunState {
   autoAdvance: boolean;
   revision: number;
   plannedDurations?: Record<string, number>;
+  /** Seconds planned from the starting block to the end of the day, captured
+   * at the start: removed or added blocks move the projected end against it. */
+  plannedTotal?: number;
   actualDurations?: Record<string, number>;
   /** Last automatic boundary; never exposed in the visitor projection. */
   lastAutoAdvance?: {

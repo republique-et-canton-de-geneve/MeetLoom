@@ -57,4 +57,9 @@ export interface VisitorComment {
   createdAt: string;
   parentId: string | null;
   resolved: boolean;
+  /** Written by the organizers. */
+  team?: boolean;
+  /** The link it came through (team view only). */
+  shareId?: string;
+  shareLabel?: string | null;
 }

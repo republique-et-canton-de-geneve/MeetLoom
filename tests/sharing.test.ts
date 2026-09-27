@@ -343,3 +343,98 @@ test("owners can copy a visitor link again, and its address never leaves the ins
     renewed.body.token,
   );
 });
+
+test("organizers start a conversation with a link's participants, and their messages show as the team's", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session(),
+    path = `/sessions/${session.id}`,
+    blockId = session.days[0].blocks[0].id;
+  const share = (
+    await h.owner.request(path + "/shares", "POST", {
+      label: "Salle A",
+      allowComments: true,
+    })
+  ).body.share;
+  const silent = (
+    await h.owner.request(path + "/shares", "POST", { label: "Sans échanges" })
+  ).body.share;
+  // Only links accepting comments can receive a message.
+  const team = await h.owner.request(path + "/visitor-comments");
+  assert.deepEqual(
+    team.body.links.map((link: { label: string }) => link.label),
+    ["Salle A"],
+  );
+  const started = await h.owner.request(path + "/visitor-comments", "POST", {
+    shareId: share.id,
+    blockId,
+    text: "Bienvenue, posez vos questions ici.",
+  });
+  assert.equal(started.status, 201, JSON.stringify(started.body));
+  assert.equal(
+    (
+      await h.owner.request(path + "/visitor-comments", "POST", {
+        shareId: silent.id,
+        text: "Refusé",
+      })
+    ).status,
+    403,
+  );
+  const other = await h.session();
+  const foreign = (
+    await h.owner.request(`/sessions/${other.id}/shares`, "POST", {
+      label: "Autre",
+      allowComments: true,
+    })
+  ).body.share;
+  assert.equal(
+    (
+      await h.owner.request(path + "/visitor-comments", "POST", {
+        shareId: foreign.id,
+        text: "Mauvaise séance",
+      })
+    ).status,
+    404,
+  );
+  const viewer = await h.account("viewer@example.test");
+  await h.owner.request(path + "/members", "POST", {
+    email: "viewer@example.test",
+    role: "viewer",
+  });
+  assert.equal(
+    (
+      await viewer.client.request(path + "/visitor-comments", "POST", {
+        shareId: share.id,
+        text: "Pas autorisé",
+      })
+    ).status,
+    403,
+  );
+
+  // The visitor sees the organizers' message, marked as the team's.
+  const guest = h.client();
+  await guest.request(`/public/${share.token}/comments`, "POST", {
+    author: "Toto",
+    text: "Merci !",
+    parentId: started.body.comment.id,
+  });
+  const seen = (await guest.request(`/public/${share.token}/comments`)).body
+    .comments as { text: string; team: boolean }[];
+  assert.deepEqual(
+    seen.map((comment) => [comment.text, comment.team]),
+    [
+      ["Bienvenue, posez vos questions ici.", true],
+      ["Merci !", false],
+    ],
+  );
+  // The team sees which link each conversation came through.
+  const listed = (await h.owner.request(path + "/visitor-comments")).body
+    .comments as { shareLabel: string; team: boolean }[];
+  assert.deepEqual(
+    listed.map((comment) => [comment.shareLabel, comment.team]),
+    [
+      ["Salle A", true],
+      ["Salle A", false],
+    ],
+  );
+});

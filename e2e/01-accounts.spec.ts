@@ -37,10 +37,10 @@ test("anyone else creates their own account and only sees their own sessions", a
 test("accounts sign in again and keep their sessions apart", async ({
   browser,
 }) => {
-  const alex = await signIn(browser, admin);
+  const alex = await signIn(browser, admin, { fresh: true });
   await expect(alex.getByText("Séance de l’admin")).toBeVisible();
   await expect(alex.getByText("Séance de Camille")).toHaveCount(0);
-  const camille = await signIn(browser, member);
+  const camille = await signIn(browser, member, { fresh: true });
   await expect(camille.getByText("Séance de Camille")).toBeVisible();
   await expect(camille.getByText("Séance de l’admin")).toHaveCount(0);
 });

@@ -15,6 +15,7 @@ import { accessibleSessionRows, mappedSession } from "./workspaces.js";
 import { fail, hashToken, rateLimit, token } from "./security.js";
 import type { PublicQuotas } from "./quotas.js";
 import { installationKey, seal, unseal } from "./sealing.js";
+import { notifyVisitorComment } from "./app-notifications.js";
 
 interface Dependencies {
   db: Database;
@@ -58,6 +59,10 @@ export async function registerSharing(
     );
     await sql.run(
       "CREATE INDEX IF NOT EXISTS visitor_comments_share_idx ON visitor_comments(share_id,created_at)",
+    );
+    // Messages written by the organizers, shown as the team's to visitors.
+    await sql.run(
+      "CREATE TABLE IF NOT EXISTS visitor_comment_team (comment_id TEXT PRIMARY KEY REFERENCES visitor_comments(id) ON DELETE CASCADE, user_id TEXT NOT NULL)",
     );
     // The address of each link, sealed so owners can copy it again later.
     await sql.run(
@@ -131,14 +136,15 @@ export async function registerSharing(
       createdAt: string;
       parentId: string | null;
       resolved: number;
+      team: string | null;
     }>(
-      'SELECT id,block_id AS "blockId",author,text,created_at AS "createdAt",parent_id AS "parentId",resolved FROM visitor_comments WHERE share_id=$1 ORDER BY created_at DESC,id DESC LIMIT 500',
+      'SELECT c.id,c.block_id AS "blockId",c.author,c.text,c.created_at AS "createdAt",c.parent_id AS "parentId",c.resolved,t.comment_id AS team FROM visitor_comments c LEFT JOIN visitor_comment_team t ON t.comment_id=c.id WHERE c.share_id=$1 ORDER BY c.created_at DESC,c.id DESC LIMIT 500',
       [shareId],
     );
     return rows
       .filter((row) => !row.blockId || blockIds.has(row.blockId))
       .reverse()
-      .map((row) => ({ ...row, resolved: !!row.resolved }));
+      .map((row) => ({ ...row, resolved: !!row.resolved, team: !!row.team }));
   };
   const validateNonempty = async (
     session: Session,
@@ -550,22 +556,149 @@ export async function registerSharing(
             comment.createdAt,
           ],
         );
+        await notifyVisitorComment(sql, link.session_id, {
+          id: comment.parentId ?? comment.id,
+          author: comment.author,
+        });
         return comment;
       });
       res.status(201).json({ comment });
     },
   );
   app.get("/api/sessions/:id/visitor-comments", async (req, res) => {
-    const { session } = await accessible(id.parse(req.params.id), who(res).id);
-    const rows = await db.all<{ resolved: number }>(
-      'SELECT id,block_id AS "blockId",author,text,created_at AS "createdAt",parent_id AS "parentId",resolved FROM visitor_comments WHERE session_id=$1 ORDER BY created_at DESC LIMIT 500',
+    const { session, role } = await accessible(
+      id.parse(req.params.id),
+      who(res).id,
+    );
+    const rows = await db.all<{ resolved: number; team: string | null }>(
+      'SELECT c.id,c.block_id AS "blockId",c.author,c.text,c.created_at AS "createdAt",c.parent_id AS "parentId",c.resolved,c.share_id AS "shareId",l.label AS "shareLabel",t.comment_id AS team FROM visitor_comments c LEFT JOIN shares l ON l.id=c.share_id LEFT JOIN visitor_comment_team t ON t.comment_id=c.id WHERE c.session_id=$1 ORDER BY c.created_at DESC,c.id DESC LIMIT 500',
       [session.id],
     );
     res.json({
       comments: rows
         .reverse()
-        .map((row) => ({ ...row, resolved: !!row.resolved })),
+        .map((row) => ({ ...row, resolved: !!row.resolved, team: !!row.team })),
+      // Links where organizers can start a conversation with participants.
+      links:
+        role === "viewer"
+          ? []
+          : (await commentLinks(session.id)).map(({ id, label }) => ({
+              id,
+              label,
+            })),
     });
+  });
+  /** Links of the session that accept visitor comments right now. */
+  const commentLinks = async (sessionId: string, sql: Sql = db) => {
+    const rows = await sql.all<{
+      id: string;
+      label: string;
+      options: string | null;
+    }>(
+      "SELECT l.id,l.label,o.payload AS options FROM shares l LEFT JOIN share_options o ON o.share_id=l.id WHERE l.session_id=$1 AND (l.expires_at IS NULL OR l.expires_at>$2) ORDER BY l.created_at",
+      [sessionId, new Date().toISOString()],
+    );
+    return rows
+      .map((row) => ({
+        ...row,
+        options: sharingSchema.parse(
+          row.options ? JSON.parse(row.options) : {},
+        ),
+      }))
+      .filter(
+        (row) =>
+          row.options.enabled &&
+          row.options.allowComments &&
+          row.options.mode === "visitor",
+      );
+  };
+  // An organizer starts a conversation visible to one link's participants.
+  app.post("/api/sessions/:id/visitor-comments", async (req, res) => {
+    const organizers: Role[] = ["owner", "editor", "facilitator"];
+    const { session } = await accessible(
+      id.parse(req.params.id),
+      who(res).id,
+      organizers,
+    );
+    const input = z
+      .object({
+        shareId: id,
+        text: z.string().trim().min(1).max(4000),
+        blockId: id.nullable().default(null),
+      })
+      .strict()
+      .parse(req.body);
+    const comment = await db.transaction(async (sql) => {
+      const current = await lockAccess(
+        sql,
+        session.id,
+        who(res).id,
+        organizers,
+        true,
+      );
+      const [owned] = await sql.all(
+        "SELECT id FROM shares WHERE id=$1 AND session_id=$2",
+        [input.shareId, session.id],
+      );
+      if (!owned) return fail(404, "NOT_FOUND", "This link does not exist.");
+      const link = (await commentLinks(session.id, sql)).find(
+        (value) => value.id === input.shareId,
+      );
+      if (!link)
+        return fail(
+          403,
+          "COMMENTS_DISABLED",
+          "Comments are disabled for this link.",
+        );
+      if (
+        input.blockId &&
+        !sharedAgenda(current, link.options).days.some((day) =>
+          allBlocks(day.blocks).some((block) => block.id === input.blockId),
+        )
+      )
+        return fail(400, "INVALID_BLOCK", "This block is not shared.");
+      const [stored] = await sql.all<{ count: number | string }>(
+        "SELECT COUNT(*) AS count FROM visitor_comments WHERE share_id=$1",
+        [link.id],
+      );
+      if (Number(stored.count) >= quotas.visitorComments)
+        return fail(
+          409,
+          "VISITOR_COMMENT_LIMIT",
+          "This link has reached its comment limit.",
+        );
+      const comment = {
+        id: randomUUID(),
+        blockId: input.blockId,
+        author: who(res).name,
+        text: input.text,
+        parentId: null,
+        createdAt: new Date().toISOString(),
+        resolved: false,
+        team: true,
+        shareId: link.id,
+        shareLabel: link.label,
+      };
+      await sql.run(
+        "INSERT INTO visitor_comments(id,session_id,share_id,block_id,author,text,parent_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+        [
+          comment.id,
+          session.id,
+          link.id,
+          comment.blockId,
+          comment.author,
+          comment.text,
+          null,
+          comment.createdAt,
+        ],
+      );
+      await sql.run(
+        "INSERT INTO visitor_comment_team(comment_id,user_id) VALUES($1,$2)",
+        [comment.id, who(res).id],
+      );
+      return comment;
+    });
+    res.status(201).json({ comment });
   });
   app.patch(
     "/api/sessions/:id/visitor-comments/:commentId",
@@ -628,6 +761,7 @@ export async function registerSharing(
           parentId: parent.id,
           createdAt: new Date().toISOString(),
           resolved: false,
+          team: true,
         };
         await sql.run(
           "INSERT INTO visitor_comments(id,session_id,share_id,block_id,author,text,parent_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
@@ -641,6 +775,10 @@ export async function registerSharing(
             comment.parentId,
             comment.createdAt,
           ],
+        );
+        await sql.run(
+          "INSERT INTO visitor_comment_team(comment_id,user_id) VALUES($1,$2)",
+          [comment.id, who(res).id],
         );
         return comment;
       });

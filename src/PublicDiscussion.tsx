@@ -1,49 +1,50 @@
-import { useEffect, useState } from "react";
-import { MessageSquare, Reply, Check } from "lucide-react";
-import type { PublicSession, Role } from "../shared/model";
+import { useEffect, useRef, useState } from "react";
+import { MessageSquare, Pencil, Reply } from "lucide-react";
+import type { PublicSession } from "../shared/model";
 import type { VisitorComment } from "../shared/sharing";
 import { allBlocks } from "../shared/domain";
 import { useI18n } from "./i18n";
 import { api } from "./api";
-import { Avatar, ErrorBanner } from "./ui";
+import { ErrorBanner } from "./ui";
+import { ChatComposer, ChatMessage, ChatThread } from "./Chat";
 
+const NAME = "meetloom.visitor-name";
+
+/**
+ * Questions and comments of a visitor link, as a conversation: the
+ * organizers' answers are marked as theirs, resolved exchanges stay visible
+ * (folded), and a reply is written under the message it answers.
+ */
 export default function PublicDiscussion({
   session,
   token,
-  role,
   readOnly = false,
 }: {
   session: PublicSession;
-  token?: string;
-  role?: Role;
+  token: string;
   readOnly?: boolean;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [comments, setComments] = useState<VisitorComment[]>([]),
-    [text, setText] = useState(""),
     [name, setName] = useState(() => {
       try {
-        return localStorage.getItem("meetloom.visitor-name") ?? "";
+        return localStorage.getItem(NAME) ?? "";
       } catch {
         return "";
       }
     }),
+    [editingName, setEditingName] = useState(false),
     [blockId, setBlockId] = useState(""),
-    [reply, setReply] = useState<VisitorComment | null>(null),
-    [resolved, setResolved] = useState(false),
+    [reply, setReply] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const path = token
-    ? `/public/${encodeURIComponent(token)}/comments`
-    : `/sessions/${session.id}/visitor-comments`;
-  const request = <T,>(suffix = "", init: RequestInit = {}) =>
-    api<T>(path + suffix, {
-      ...init,
-      ...(token ? { credentials: "omit" as const } : {}),
-    });
+  const list = useRef<HTMLDivElement>(null);
+  const path = `/public/${encodeURIComponent(token)}/comments`;
   const load = async () => {
     try {
-      const result = await request<{ comments: VisitorComment[] }>();
+      const result = await api<{ comments: VisitorComment[] }>(path, {
+        credentials: "omit",
+      });
       setComments(result.comments);
     } catch (e) {
       setError((e as Error).message);
@@ -56,90 +57,161 @@ export default function PublicDiscussion({
     return () => clearInterval(timer);
   }, [path]);
   const blocks = session.days.flatMap((day) => allBlocks(day.blocks));
-  const roots = comments.filter(
-    (comment) =>
-      !comment.parentId &&
-      (!blockId || comment.blockId === blockId) &&
-      (resolved || !comment.resolved),
-  );
-  const canResolve = !readOnly && role && role !== "viewer";
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (readOnly) return;
+  const roots = comments.filter((comment) => !comment.parentId);
+  const send = async (text: string, parentId: string | null) => {
     setBusy(true);
     setError("");
     try {
-      if (token) {
-        await request("", {
-          method: "POST",
-          body: JSON.stringify({
-            author: name,
-            text,
-            blockId: blockId || null,
-            parentId: reply?.id ?? null,
-          }),
-        });
-        try {
-          localStorage.setItem("meetloom.visitor-name", name);
-        } catch {
-          /* Storage is optional. */
-        }
-      } else if (reply)
-        await request(`/${reply.id}/replies`, {
-          method: "POST",
-          body: JSON.stringify({ text }),
-        });
-      setText("");
+      await api(path, {
+        method: "POST",
+        credentials: "omit",
+        body: JSON.stringify({
+          author: name.trim(),
+          text,
+          blockId: parentId ? null : blockId || null,
+          parentId,
+        }),
+      });
+      try {
+        localStorage.setItem(NAME, name.trim());
+      } catch {
+        /* Storage is optional. */
+      }
+      setEditingName(false);
       setReply(null);
       await load();
+      if (!parentId)
+        requestAnimationFrame(() =>
+          list.current?.lastElementChild?.scrollIntoView({ block: "nearest" }),
+        );
     } catch (e) {
       setError((e as Error).message);
+      throw e;
     } finally {
       setBusy(false);
     }
   };
-  const commentView = (comment: VisitorComment) => (
-    <article className="comment" key={comment.id}>
-      <Avatar name={comment.author} small />
-      <div>
-        <div className="comment-meta">
-          <strong>{comment.author}</strong>
-          <time>
-            {new Date(comment.createdAt).toLocaleString(locale, {
-              dateStyle: "short",
-              timeStyle: "short",
-            })}
-          </time>
-        </div>
-        <p>{comment.text}</p>
-      </div>
-    </article>
+  const named = !!name.trim() && !editingName;
+  const nameField = (
+    <label className="visitor-name">
+      {t("Votre nom", "Your name")}
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        required
+        maxLength={80}
+        placeholder={t("Prénom Nom", "First Last")}
+      />
+    </label>
   );
   return (
     <section
       className="visitor-discussion"
-      aria-label={t("Conversation visiteurs", "Visitor conversation")}
+      aria-label={t("Questions et commentaires", "Questions and comments")}
     >
       <h3>
         <MessageSquare size={18} />
-        {t("Conversation visiteurs", "Visitor conversation")}
+        {t("Questions et commentaires", "Questions and comments")}
       </h3>
       <p className="muted">
         {t(
-          "Ces échanges et votre nom sont visibles par les visiteurs de ce lien et par l’équipe.",
-          "These messages and your name are visible to visitors of this link and to the team.",
+          "Visibles par les personnes ayant ce lien et par l’équipe d’animation.",
+          "Visible to people with this link and to the organizers.",
         )}
       </p>
       {error && <ErrorBanner message={error} />}
-      <div className="form-grid">
-        <label>
-          {t("À propos de", "About")}
+      <div className="visitor-discussion-list" ref={list}>
+        {roots.map((root) => {
+          const replies = comments.filter(
+            (comment) => comment.parentId === root.id,
+          );
+          const block = root.blockId
+            ? (blocks.find((value) => value.id === root.blockId)?.title ??
+              t("Ancien bloc", "Previous block"))
+            : null;
+          return (
+            <ChatThread
+              key={root.id}
+              header={block && <span className="chat-tag">{block}</span>}
+              resolved={root.resolved}
+              summary={`${root.author} : ${root.text}`}
+              count={1 + replies.length}
+              canResolve={false}
+              reply={
+                readOnly ? null : reply === root.id ? (
+                  <div className="chat-reply">
+                    {!named && nameField}
+                    <ChatComposer
+                      focusOnMount
+                      busy={busy || !name.trim()}
+                      label={t("Votre réponse", "Your reply")}
+                      placeholder={t("Répondre…", "Reply…")}
+                      onSend={(text) => send(text, root.id)}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-button chat-reply-button"
+                    onClick={() => setReply(root.id)}
+                  >
+                    <Reply size={13} />
+                    {t("Répondre", "Reply")}
+                  </button>
+                )
+              }
+            >
+              {[root, ...replies].map((comment) => (
+                <ChatMessage
+                  key={comment.id}
+                  author={comment.author}
+                  createdAt={comment.createdAt}
+                  text={comment.text}
+                  team={comment.team}
+                  reply={!!comment.parentId}
+                />
+              ))}
+            </ChatThread>
+          );
+        })}
+        {!roots.length && (
+          <p className="muted visitor-discussion-empty">
+            {t(
+              "Aucune question pour le moment. Soyez le premier à écrire.",
+              "No questions yet. Be the first to write.",
+            )}
+          </p>
+        )}
+      </div>
+      {readOnly ? (
+        <p className="muted">
+          {t(
+            "Séance clôturée : les échanges sont en lecture seule.",
+            "Closed session: discussions are read-only.",
+          )}
+        </p>
+      ) : (
+        <div className="visitor-discussion-composer">
+          {named ? (
+            <p className="visitor-identity">
+              {t("Vous écrivez en tant que", "Writing as")}{" "}
+              <strong>{name.trim()}</strong>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setEditingName(true)}
+              >
+                <Pencil size={12} />
+                {t("Modifier", "Change")}
+              </button>
+            </p>
+          ) : (
+            nameField
+          )}
           <select
+            aria-label={t("À propos de", "About")}
             value={blockId}
-            onChange={(event) => {
-              setBlockId(event.target.value);
-              setReply(null);
-            }}
+            onChange={(event) => setBlockId(event.target.value)}
           >
             <option value="">{t("Toute la séance", "Whole session")}</option>
             {blocks.map((block) => (
@@ -148,135 +220,23 @@ export default function PublicDiscussion({
               </option>
             ))}
           </select>
-        </label>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={resolved}
-            onChange={(event) => setResolved(event.target.checked)}
+          <ChatComposer
+            busy={busy || !name.trim()}
+            label={t(
+              "Votre question ou commentaire",
+              "Your question or comment",
+            )}
+            placeholder={
+              name.trim()
+                ? t(
+                    "Posez une question, laissez un commentaire…",
+                    "Ask a question, leave a comment…",
+                  )
+                : t("Indiquez d’abord votre nom", "Enter your name first")
+            }
+            onSend={(text) => send(text, null)}
           />
-          {t("Afficher les échanges résolus", "Show resolved discussions")}
-        </label>
-      </div>
-      <div className="comments-list">
-        {roots.length ? (
-          roots.map((root) => (
-            <div
-              className={`discussion-thread ${root.resolved ? "resolved" : ""}`}
-              key={root.id}
-            >
-              {root.blockId && (
-                <small className="tag">
-                  {blocks.find((block) => block.id === root.blockId)?.title ??
-                    t("Ancien bloc", "Previous block")}
-                </small>
-              )}
-              {commentView(root)}
-              <div className="discussion-replies">
-                {comments
-                  .filter((comment) => comment.parentId === root.id)
-                  .map(commentView)}
-              </div>
-              <div className="button-row">
-                <button
-                  type="button"
-                  className="button secondary small"
-                  disabled={readOnly}
-                  onClick={() => {
-                    setReply(root);
-                    setBlockId(root.blockId ?? "");
-                  }}
-                >
-                  <Reply size={14} />
-                  {t("Répondre", "Reply")}
-                </button>
-                {root.resolved && (
-                  <span className="tag">
-                    <Check size={13} />
-                    {t("Résolu", "Resolved")}
-                  </span>
-                )}
-                {canResolve && (
-                  <button
-                    className="button secondary small"
-                    onClick={async () => {
-                      try {
-                        await request(`/${root.id}`, {
-                          method: "PATCH",
-                          body: JSON.stringify({ resolved: !root.resolved }),
-                        });
-                        await load();
-                      } catch (e) {
-                        setError((e as Error).message);
-                      }
-                    }}
-                  >
-                    {root.resolved
-                      ? t("Rouvrir", "Reopen")
-                      : t("Résoudre", "Resolve")}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="muted">
-            {t("Aucun échange dans cette vue.", "No discussions in this view.")}
-          </p>
-        )}
-      </div>
-      {readOnly && (
-        <p className="muted">
-          {t(
-            "Séance clôturée : les échanges sont en lecture seule.",
-            "Closed session: discussions are read-only.",
-          )}
-        </p>
-      )}
-      {!readOnly && (token || reply) && (
-        <form onSubmit={submit}>
-          {reply && (
-            <div className="privacy-explainer">
-              <span>
-                {t("Réponse à", "Reply to")} {reply.author}
-              </span>
-              <button
-                type="button"
-                className="button secondary small"
-                onClick={() => setReply(null)}
-              >
-                {t("Annuler", "Cancel")}
-              </button>
-            </div>
-          )}
-          {token && (
-            <label>
-              {t("Votre nom", "Your name")}
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                maxLength={80}
-              />
-            </label>
-          )}
-          <label>
-            {t("Votre commentaire", "Your comment")}
-            <textarea
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              required
-              maxLength={4000}
-              rows={3}
-            />
-          </label>
-          <button
-            className="button primary"
-            disabled={busy || !text.trim() || (!!token && !name.trim())}
-          >
-            {t("Publier le commentaire", "Post comment")}
-          </button>
-        </form>
+        </div>
       )}
     </section>
   );

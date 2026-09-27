@@ -7,7 +7,7 @@
 // the freed slots would silently be spent by the next warning.
 import { ESLint } from "eslint";
 
-const BUDGET = 77;
+const BUDGET = 76;
 
 const eslint = new ESLint();
 const results = await eslint.lintFiles(["."]);

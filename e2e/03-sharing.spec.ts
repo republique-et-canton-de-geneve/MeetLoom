@@ -45,3 +45,72 @@ test("a visitor link shows the agenda but never the team's private notes", async
     new RegExp(`/s/${share.token}$`),
   );
 });
+
+test("participants and organizers talk in one conversation, answers marked as the team's", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.getByText("Atelier E2E").first().click();
+  await expect(page.locator(".display-time-control")).toBeVisible();
+  const sessionId = page.url().split("/").pop();
+  const created = await page.request.post(`/api/sessions/${sessionId}/shares`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { label: "Salle E2E", mode: "visitor", allowComments: true },
+  });
+  const { share } = await created.json();
+
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto(`/s/${share.token}`);
+  const discussion = visitor.locator(".visitor-discussion");
+  await discussion.getByLabel("Votre nom").fill("Toto");
+  await discussion
+    .getByLabel("Votre question ou commentaire")
+    .fill("À quelle heure est la pause ?");
+  await discussion.getByLabel("Votre question ou commentaire").press("Enter");
+  await expect(discussion).toContainText("À quelle heure est la pause ?");
+  // The name is remembered: no form to fill again.
+  await expect(discussion).toContainText("Vous écrivez en tant que Toto");
+
+  // Back on their window, the organizers see the new comment on the bell
+  // without reloading the page.
+  await page.bringToFront();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator(".notification-count")).toBeVisible();
+  // Organizers can silence the chime that announces it.
+  await page.locator(".notification-bell").click();
+  const sound = page.getByRole("button", { name: /Son des notifications/ });
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await sound.click();
+  await expect(sound).toHaveText("Son des notifications coupé");
+  await page.keyboard.press("Escape");
+
+  // The organizers answer right under the question.
+  await page.getByTitle("Discussion", { exact: true }).click();
+  const panel = page.locator(".discussion");
+  const thread = panel.locator(".chat-thread", {
+    hasText: "À quelle heure est la pause ?",
+  });
+  await expect(thread).toContainText("Salle E2E");
+  await thread.getByRole("button", { name: "Répondre" }).click();
+  await thread.getByLabel("Votre réponse").fill("À 10 h 30.");
+  await thread.getByLabel("Votre réponse").press("Enter");
+  await expect(thread).toContainText("À 10 h 30.");
+  await thread.getByRole("button", { name: "Marquer comme résolu" }).click();
+  await expect(thread).toContainText("Résolu");
+
+  // The visitor sees the answer as the team's, and the resolved exchange
+  // stays visible, folded.
+  const answered = discussion.locator(".chat-thread", {
+    hasText: "À quelle heure est la pause ?",
+  });
+  await expect(answered).toContainText("Résolu", { timeout: 15_000 });
+  const answer = answered.locator(".chat-message.is-team", {
+    hasText: "À 10 h 30.",
+  });
+  // Open on screen, it stays open; on the next visit it is folded.
+  await expect(answer).toContainText("Équipe");
+  await visitor.reload();
+  await expect(answer).toHaveCount(0);
+  await answered.locator(".chat-folded").click();
+  await expect(answer).toContainText("Équipe");
+});

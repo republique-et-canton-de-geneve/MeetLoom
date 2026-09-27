@@ -42,7 +42,7 @@ Authorized session members can read team columns. Roles:
 
 From **Share**, the owner can generate a link, set its expiry and revoke it. **Show link** gives an existing link's address, QR code and preview again at any time. Links created before version 0.1.2, or imported from another installation, cannot show their address: **New address** replaces it while keeping the link's scope and comments (the previous address stops working). The preview uses the actual visitor page. After revocation, a browser viewing it clears the agenda on the next refresh.
 
-Visitor comments reach the team in the **Comments** panel of the editor, under **Visitor conversation**: reply or resolve them there, without opening the visitor link.
+**Discussion** (the speech-bubble button in the editor) gathers every conversation of the session in one chat-like list, the latest by the composer. Each conversation says who can read it: **Participants · link name** (people with that visitor link; comments must be allowed on the link) or **Team** (the session's collaborators only). Filter by Participants or Team, reply under the message you answer, and mark a conversation resolved: it stays visible, folded, for everyone. The composer chooses the audience of a new conversation (Participants by default when a link accepts comments), the link and the block it is about; Enter sends, Shift+Enter starts a new line, @ mentions a collaborator in team conversations. Visitors see the organizers' messages marked **Team**, and their name is remembered after the first message. Organizers get one notification per session for new visitor comments, which grows ("3 new visitor comments") until read. The bell updates within seconds and when you come back to the window, with a short chime for team members only (visitors never hear it); **Notification sound off** in the notifications panel silences it on that browser. Browsers only play it once you have clicked or typed in the page.
 
 Administrators create account invitations in **My account & team → Accounts and invitations**. Send an invitation through your normal internal channel. It is single-use and expires after 72 hours. Once the account exists, the owner can add it to a session with the appropriate role.
 
@@ -50,11 +50,13 @@ Administrators create account invitations in **My account & team → Accounts an
 
 Choose the day, then **Run session**. Timer timestamps are stored on the server, so reloading the tab does not reset it. Pause, resume, previous/next block and extensions are shared across views. Network updates can lag by approximately three seconds.
 
-Durations planned at startup are retained to calculate schedule deviation. The default reference is the actual start: starting at 10:00 for an agenda planned at 09:00 does not automatically add an hour of delay. The timer shows the **projected end** against that plan ("Expected to end 2 min late"): time already spent, pauses included, plus what is left of the current block and the current durations of the blocks still to come. Overruns, moving on early, extensions and durations edited during the run (for example two more minutes on the last block) change it immediately; a block added during the run counts in full.
+Durations planned at startup are retained to calculate schedule deviation. The default reference is the actual start: starting at 10:00 for an agenda planned at 09:00 does not automatically add an hour of delay. The timer shows the **projected end** against that plan ("Expected to end 2 min late"): time already spent, pauses included, plus what is left of the current block and the current durations of the blocks still to come. Overruns, moving on early, extensions and durations edited during the run (for example two more minutes on the last block) change it immediately; a block added during the run counts in full, and a block removed before it is reached saves its planned time.
 
 Moved on too early? Use **previous block**: the clock kept running for the earlier block, so it resumes with its own time plus the detour. Leave a block with 30 seconds left and come back 10 seconds later: 20 seconds remain. The countdown uses the block's current duration, so time added in the agenda (or with **+1**/**+5** once back) is taken into account. The block you left becomes upcoming again and starts fresh when you reach it.
 
 Once the timer has passed a block, the agenda shows its **actual duration** (whole minutes, “< 1 min” under a minute) in a distinct amber style; hover for the exact time and the planned duration, click to edit the planned duration. **Use actual durations** at the end rounds each block down to whole minutes. For parallel activities, the longest room takes the actual time (its activities scaled proportionally) and shorter rooms keep their plan unless the actual time is shorter.
+
+Every finished run is kept: **Versions & activity › Runs** (or **See past runs** when the timer ends) lists them with the planned and actual time of each step and the overall gap. The first run of a day is marked **Initial plan**: whatever durations are applied afterwards, it keeps the plan the day was designed with. **Restore this plan** or **Apply these actual durations** puts a run's durations back into the agenda, like any edit (Undo reverts it).
 
 **From scheduled time** is always available: before the day's start time the timer counts down (“Starts in”), then the first block runs on time; after it, the timer catches up the elapsed time. A **parallel** block is one timer step lasting as long as its longest room; +1/+5 add time to the last activity of that room.
 
@@ -62,7 +64,7 @@ Did the timer advance automatically while discussion was still going? Increase t
 
 Locked times help plan the agenda and identify conflicts. Automatic advancement runs activities consecutively without waiting through gaps between locked times. Add an explicit break block or pause the timer to reserve that time during delivery.
 
-The projected end is a badge under the progress bar: neutral with a check mark on schedule, amber when late, red from five minutes late, blue when early.
+Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. In a thin always-on-top window, the current block stays on the left of the countdown and the badge with the expected end on its right.
 
 The progress bar turns orange at 20% remaining and red at 5%. The active minimap segment shows progress as well. These visual thresholds are independent of the sound setting below.
 
@@ -84,12 +86,14 @@ When the API is unavailable, MeetLoom opens a separate window and explains that 
 
 **My account & team** (the dashboard menu, or your name at the bottom of the sidebar) is a page of its own: profile, password and **Report a problem**, plus, for administrators, current activity, accounts and invitations, installation settings (including the announcement), backups and data, user feedback and logs.
 
-- **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. Anyone can close it; it comes back when an administrator changes it. It is public: never put anything confidential in it.
+- **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. It stays until an administrator removes it; nobody can close it. It is public: never put anything confidential in it.
 - **Report a problem** (dashboard, the editor's More actions menu, or the account page): describe a problem or suggest an idea; the page concerned is filled in for you. You follow what became of your reports on the same page. No GitHub account is needed.
 - **User feedback** (administrators): triage reports (received, in progress, done, dismissed). **Create a GitHub issue** opens a draft in your own browser, without the author's name, for you to review; the server never contacts GitHub.
 - **Logs** (administrators): the server messages of every pod, by level and text, kept 14 days by default. They say what failed and why (a route, an SMTP or AI error code), never passwords, content or answers.
 
 ## AI, exports and history
+
+**+ Feedback (ROTI)**, next to **+ Form** in the session contents, adds a ready-made end-of-session form: “Was this time together worth it?” rated 1 (wasted time) to 5 (excellent investment), and an optional comment. Edit or publish it like any form.
 
 Forms also offer an **Image** question. Respondents can select PNG, JPEG or WebP; the browser reduces the file and removes its metadata before upload. Received images are visible only in response details for owners and editors. They are not sent to AI summaries or included in CSV. In anonymous mode, avoid photos that identify their author. After resizing, limits are 256 KiB per image and 512 KiB per response.
 

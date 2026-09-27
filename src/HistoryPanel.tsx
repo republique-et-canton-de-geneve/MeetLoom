@@ -4,6 +4,7 @@ import {
   BookmarkPlus,
   Copy,
   Eye,
+  Flag,
   History,
   ListChecks,
   Pencil,
@@ -18,19 +19,25 @@ import type {
   HistoryChange,
   JournalEntry,
   NamedVersion,
+  RunRecord,
   VersionPreview,
 } from "../shared/history";
-import { allBlocks, blockDuration } from "../shared/domain";
+import { allBlocks, blockDuration, withStepDurations } from "../shared/domain";
 import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { durationLabel, ErrorBanner, Inspector, Loading } from "./ui";
 import { RichText } from "./RichText";
+import RunsHistory from "./RunsHistory";
 import "./history.css";
 
+type Tab = "versions" | "journal" | "runs" | "deleted";
 type Props = {
   session: Session;
   editable: boolean;
   reload: () => Promise<void>;
+  /** Undoable agenda change, like any edit. */
+  update: (change: (session: Session) => Session) => void;
+  initialTab?: Tab;
   close: () => void;
 };
 type Restore = {
@@ -39,11 +46,17 @@ type Restore = {
   targetDayId: string;
   mode: "replace" | "copy";
 };
-function HistoryPanel({ session, editable, reload, close }: Props) {
+function HistoryPanel({
+  session,
+  editable,
+  reload,
+  update,
+  initialTab = "versions",
+  close,
+}: Props) {
   const { t, locale } = useI18n();
-  const [tab, setTab] = useState<"versions" | "journal" | "deleted">(
-    "versions",
-  );
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [runs, setRuns] = useState<RunRecord[]>([]);
   const [versions, setVersions] = useState<NamedVersion[]>([]);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [deleted, setDeleted] = useState<DeletedElement[]>([]);
@@ -106,6 +119,10 @@ function HistoryPanel({ session, editable, reload, close }: Props) {
             `/sessions/${session.id}/versions`,
           )
         ).versions,
+      );
+    else if (tab === "runs")
+      setRuns(
+        (await api<{ runs: RunRecord[] }>(`/sessions/${session.id}/runs`)).runs,
       );
     else if (tab === "journal") {
       const result = await api<{
@@ -260,8 +277,8 @@ function HistoryPanel({ session, editable, reload, close }: Props) {
     <Inspector
       title={t("Versions & activité", "Versions & activity")}
       subtitle={t(
-        "Versions nommées, changements de l’équipe et éléments supprimés.",
-        "Named versions, team changes and deleted items.",
+        "Versions nommées, changements de l’équipe, déroulés passés et éléments supprimés.",
+        "Named versions, team changes, past runs and deleted items.",
       )}
       close={close}
     >
@@ -271,29 +288,34 @@ function HistoryPanel({ session, editable, reload, close }: Props) {
           role="tablist"
           aria-label={t("Historique", "History")}
         >
-          {(["versions", "journal", "deleted"] as const).map((value) => (
-            <button
-              key={value}
-              role="tab"
-              aria-selected={tab === value}
-              onClick={() => setTab(value)}
-            >
-              {value === "versions" ? (
-                <History size={15} />
-              ) : value === "journal" ? (
-                <ListChecks size={15} />
-              ) : (
-                <Trash2 size={15} />
-              )}
-              {
+          {(["versions", "journal", "runs", "deleted"] as const).map(
+            (value) => (
+              <button
+                key={value}
+                role="tab"
+                aria-selected={tab === value}
+                onClick={() => setTab(value)}
+              >
+                {value === "versions" ? (
+                  <History size={15} />
+                ) : value === "journal" ? (
+                  <ListChecks size={15} />
+                ) : value === "runs" ? (
+                  <Flag size={15} />
+                ) : (
+                  <Trash2 size={15} />
+                )}
                 {
-                  versions: t("Versions", "Versions"),
-                  journal: t("Journal", "Activity"),
-                  deleted: t("Supprimés", "Deleted"),
-                }[value]
-              }
-            </button>
-          ))}
+                  {
+                    versions: t("Versions", "Versions"),
+                    journal: t("Journal", "Activity"),
+                    runs: t("Déroulés", "Runs"),
+                    deleted: t("Supprimés", "Deleted"),
+                  }[value]
+                }
+              </button>
+            ),
+          )}
         </div>
         {error && <ErrorBanner message={error} />}
         {notice && (
@@ -710,6 +732,45 @@ function HistoryPanel({ session, editable, reload, close }: Props) {
               </section>
             )}
           </>
+        ) : tab === "runs" ? (
+          <RunsHistory
+            runs={runs}
+            session={session}
+            editable={editable}
+            apply={(run, durations) => {
+              setError("");
+              try {
+                update((current) => ({
+                  ...current,
+                  days: withStepDurations(
+                    current.days,
+                    run.dayId,
+                    durations === "plan"
+                      ? run.plan
+                      : Object.fromEntries(
+                          run.blocks
+                            .filter((block) => block.actual > 0)
+                            .map((block) => [block.id, block.actual]),
+                        ),
+                    durations === "actual",
+                  ),
+                }));
+                setNotice(
+                  durations === "plan"
+                    ? t(
+                        "Plan rétabli dans l’agenda. Le bouton Annuler le défait.",
+                        "Plan restored in the agenda. Undo reverts it.",
+                      )
+                    : t(
+                        "Durées réelles appliquées à l’agenda. Le bouton Annuler le défait.",
+                        "Actual durations applied to the agenda. Undo reverts it.",
+                      ),
+                );
+              } catch (cause) {
+                setError((cause as Error).message);
+              }
+            }}
+          />
         ) : tab === "journal" ? (
           <>
             <p className="muted">

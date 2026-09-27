@@ -37,6 +37,7 @@ import { assistAgenda, generateAgenda, type AiConfig } from "./ai.js";
 import { createPresenceRouter } from "./presence.js";
 import { registerOperations } from "./operations.js";
 import { registerAnnouncement } from "./announcement.js";
+import { createRunTables, installRunsApi, recordFinishedRun } from "./runs.js";
 import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
 import { log } from "./log.js";
 import { registerLogs, type LogConfig } from "./logs.js";
@@ -938,6 +939,7 @@ async function assembleWith(db: Database, config: AppConfig) {
         );
       }
       await recordMentionNotifications(sql, previous, next, author);
+      await recordFinishedRun(sql, previous, next);
       if (commit) await commit(sql, next);
     };
     if (transaction) await write(transaction);
@@ -1075,11 +1077,15 @@ async function assembleWith(db: Database, config: AppConfig) {
         "ACTIVE_BLOCK_REMOVED",
         "Stop the timer before deleting its active block.",
       );
+    const runDay = candidate.days.find((day) => day.id === candidate.run.dayId);
+    // A finished run points at no block; it stays, with its actual
+    // durations, as long as its day exists.
     if (
-      !runnableBlocks(
-        candidate.days.find((day) => day.id === candidate.run.dayId)?.blocks ??
-          [],
-      ).some((block) => block.id === candidate.run.blockId)
+      candidate.run.status === "finished"
+        ? !runDay
+        : !runnableBlocks(runDay?.blocks ?? []).some(
+            (block) => block.id === candidate.run.blockId,
+          )
     )
       candidate.run = {
         ...INITIAL_RUN,
@@ -1230,6 +1236,8 @@ async function assembleWith(db: Database, config: AppConfig) {
     version: config.version ?? appVersion(),
   });
   const logs = await registerLogs(app, { db, admin, config: config.logs });
+  await createRunTables(db);
+  installRunsApi(app, { db, authenticated, accessible });
   registerAnnouncement(app, { db, admin });
   await registerFeedback(app, {
     db,

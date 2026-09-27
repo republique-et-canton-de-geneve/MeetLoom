@@ -1,20 +1,42 @@
-import { expect, type Browser, type Page } from "@playwright/test";
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 
 export const password = "e2e-correct-horse-battery";
 export const admin = { name: "Alex Admin", email: "alex@example.test" };
 export const member = { name: "Camille Membre", email: "camille@example.test" };
 
+type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
+/** Sign-in cookies per account: journeys reuse them instead of signing in
+ * again, which would exhaust the server's sign-in budget (20 attempts per
+ * 15 minutes from one address). */
+const signedIn = new Map<string, StorageState>();
+
 /** A fresh browser context signed in with the given account. */
 export async function signIn(
   browser: Browser,
   account: { email: string },
+  { fresh = false } = {},
 ): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+  const saved = fresh ? undefined : signedIn.get(account.email);
+  const page = await (
+    await browser.newContext(saved ? { storageState: saved } : {})
+  ).newPage();
   await page.goto("/");
-  await page.locator("input[name=email]").fill(account.email);
-  await page.locator("input[name=password]").fill(password);
-  await page.getByRole("button", { name: /Se connecter/ }).click();
-  await expect(page.locator("#workspace-switcher")).toBeVisible();
+  const dashboard = page.locator("#workspace-switcher");
+  const form = page.locator("input[name=email]");
+  await expect(dashboard.or(form)).toBeVisible();
+  // A saved sign-in may have ended (password change, data import).
+  if (await form.isVisible()) {
+    await form.fill(account.email);
+    await page.locator("input[name=password]").fill(password);
+    await page.getByRole("button", { name: /Se connecter/ }).click();
+    await expect(dashboard).toBeVisible();
+    signedIn.set(account.email, await page.context().storageState());
+  }
   return page;
 }
 

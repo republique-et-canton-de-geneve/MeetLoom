@@ -174,8 +174,10 @@ export default function ImportPanel({
   const apply = () => {
     if (!incoming) return;
     try {
-      mergeImportedAgenda(session, incoming);
-      update((current) => mergeImportedAgenda(current, incoming));
+      mergeImportedAgenda(session, incoming, { fillEmptyDays: true });
+      update((current) =>
+        mergeImportedAgenda(current, incoming, { fillEmptyDays: true }),
+      );
       close();
     } catch (error) {
       setError(report(error));
