@@ -129,6 +129,28 @@ test("on a phone the editor fits the screen and days keep their names", async ({
   ).toBe(true);
 });
 
+test("zoomed in, the whole sidebar can still be scrolled to", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  // A laptop browser zoomed to 150% leaves about this much room.
+  await page.setViewportSize({ width: 900, height: 480 });
+  const sidebar = page.locator(".sidebar");
+  for (const target of [
+    sidebar.getByRole("button", { name: "Signaler un problème" }),
+    sidebar.locator(".sidebar-user"),
+  ]) {
+    await target.scrollIntoViewIfNeeded();
+    await expect(target).toBeInViewport({ ratio: 0.9 });
+  }
+  // The editor's sidebar too: contents, duration and account.
+  await page.getByText("Atelier E2E").first().click();
+  await expect(page.locator(".display-time-control")).toBeVisible();
+  const footer = page.locator(".sidebar .sidebar-user");
+  await footer.scrollIntoViewIfNeeded();
+  await expect(footer).toBeInViewport({ ratio: 0.9 });
+});
+
 test("without a configured LLM no AI feature shows, and MCP connectors stay reachable", async ({
   browser,
 }) => {

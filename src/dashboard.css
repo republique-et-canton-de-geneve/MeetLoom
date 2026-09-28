@@ -11,6 +11,8 @@
   .dashboard-shell .dashboard-folders {
     flex: 1 1 auto;
     overflow-y: auto;
+    /* Short windows: a few folders stay visible; the sidebar scrolls. */
+    min-height: 120px;
   }
 }
 .dashboard-folders .nav-caption {

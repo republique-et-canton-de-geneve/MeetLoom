@@ -413,6 +413,11 @@ hr {
   top: 0;
   display: flex;
   flex-direction: column;
+  /* A zoomed-in browser leaves less height than the sidebar needs: it
+     scrolls instead of cutting off its bottom. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .workspace-card {
   margin: 0 18px 30px;
@@ -2888,6 +2893,7 @@ hr {
   .sidebar {
     width: 100%;
     height: auto;
+    overflow-y: visible;
     position: static;
     display: flex;
     flex-direction: row;
