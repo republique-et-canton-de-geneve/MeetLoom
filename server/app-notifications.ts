@@ -8,7 +8,12 @@ import { sessionCollaborators } from "./collaborators.js";
  * flood the bell: while a notification is unread, new events of the same
  * kind and session add to its count instead of creating another one.
  */
-export type GroupedKind = "visitor-comments" | "feedback" | "feedback-status";
+export type GroupedKind =
+  | "visitor-comments"
+  | "feedback"
+  | "feedback-status"
+  | "run-overdue"
+  | "run-stopped";
 
 export async function createAppNotifications(db: Database) {
   await db.run(
@@ -74,6 +79,25 @@ export async function notifyVisitorComment(
     targetId: comment.id,
     actor: comment.author,
   });
+}
+
+/** The organizers who can stop a timer nobody stopped: owner, editors and
+ * facilitators (forgotten-runs.ts). */
+export async function notifyForgottenRun(
+  sql: Sql,
+  sessionId: string,
+  kind: "run-overdue" | "run-stopped",
+) {
+  const organizers = (await sessionCollaborators(sql, sessionId))
+    .filter((member) => member.role !== "viewer")
+    .map((member) => member.id);
+  await notifyGrouped(sql, organizers, {
+    kind,
+    sessionId,
+    targetId: null,
+    actor: "MeetLoom",
+  });
+  return organizers;
 }
 
 /** Every active administrator but the author. */

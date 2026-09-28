@@ -616,6 +616,40 @@ export async function installMailApi(
       `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
     );
   };
+  /** A timer nobody stopped (forgotten-runs.ts): a reminder during the day,
+   * then word that it was stopped at night. Call inside that transaction. */
+  const forgottenRun = async (
+    sql: Sql,
+    session: { id: string; title: string },
+    kind: "remind" | "stop",
+    recipients: string[],
+  ) => {
+    if (!config) return;
+    for (const id of recipients) {
+      const [recipient] = await currentRecipient(sql, id);
+      if (!recipient) continue;
+      const french = recipient.locale === "fr",
+        title = short(session.title, 150);
+      await enqueue(
+        sql,
+        recipient,
+        kind === "remind"
+          ? french
+            ? `MeetLoom — le minuteur tourne encore : ${title}`
+            : `MeetLoom — the timer is still running: ${title}`
+          : french
+            ? `MeetLoom — minuteur arrêté automatiquement : ${title}`
+            : `MeetLoom — timer stopped automatically: ${title}`,
+        kind === "remind"
+          ? french
+            ? `Le minuteur de « ${title} » tourne encore, plus d’une heure après la fin prévue. Si la séance est terminée, pensez à l’arrêter :\n${origin}/session/${session.id}\n\nS’il tourne encore dans la nuit, MeetLoom l’arrêtera automatiquement.`
+            : `The timer of “${title}” is still running, more than an hour past its planned end. If the session is over, remember to stop it:\n${origin}/session/${session.id}\n\nIf it is still running at night, MeetLoom will stop it automatically.`
+          : french
+            ? `Le minuteur de « ${title} » tournait encore cette nuit : MeetLoom l’a arrêté. L’étape en cours est comptée avec sa durée prévue ; le déroulé est dans l’historique de la séance.\n${origin}/session/${session.id}`
+            : `The timer of “${title}” was still running at night: MeetLoom stopped it. The current step counts for its planned duration; the run is in the session history.\n${origin}/session/${session.id}`,
+      );
+    }
+  };
   // Every pod sweeps the queue, so an email outlives the pod that queued it.
   const outboxInterval = config
     ? setInterval(() => background(() => drainOutbox()), 60000)
@@ -630,6 +664,7 @@ export async function installMailApi(
     scheduled,
     feedbackReceived,
     feedbackStatusChanged,
+    forgottenRun,
     /** Sends what the queue holds now, in the background; `now` lets tests
      * pass the retry delay. Awaiting it waits for that send. */
     deliverQueued(now?: number) {

@@ -38,6 +38,13 @@ import { createPresenceRouter } from "./presence.js";
 import { registerOperations } from "./operations.js";
 import { registerAnnouncement } from "./announcement.js";
 import { createRunTables, installRunsApi, recordFinishedRun } from "./runs.js";
+import {
+  claimForgottenRun,
+  createForgottenRunTables,
+  forgottenRun,
+  stopForgotten,
+} from "./forgotten-runs.js";
+import { notifyForgottenRun } from "./app-notifications.js";
 import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
 import { log } from "./log.js";
 import { registerLogs, type LogConfig } from "./logs.js";
@@ -1257,6 +1264,52 @@ async function assembleWith(db: Database, config: AppConfig) {
   const logs = await registerLogs(app, { db, admin, config: config.logs });
   await createRunTables(db);
   installRunsApi(app, { db, authenticated, accessible });
+  await createForgottenRunTables(db);
+  /** Timers nobody stopped (forgotten-runs.ts): every pod looks every five
+   * minutes; the claim and the version check make each action happen once. */
+  async function sweepForgottenRuns(now = Date.now()) {
+    const rows = await db.all<SessionRow & { workspace_id: string | null }>(
+      `SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL AND (s.payload LIKE '%"status":"running"%' OR s.payload LIKE '%"status":"paused"%')`,
+    );
+    for (const row of rows) {
+      const session = mappedSession(row),
+        verdict = forgottenRun(session, now);
+      if (!verdict) continue;
+      try {
+        await db.transaction(async (sql) => {
+          if (!(await claimForgottenRun(sql, session, verdict))) return;
+          if (verdict === "stop")
+            await save(
+              session,
+              stopForgotten(session, now),
+              session.ownerId,
+              undefined,
+              undefined,
+              sql,
+            );
+          const organizers = await notifyForgottenRun(
+            sql,
+            session.id,
+            verdict === "stop" ? "run-stopped" : "run-overdue",
+          );
+          await mail.forgottenRun(sql, session, verdict, organizers);
+        });
+      } catch (error) {
+        // Someone acted on the timer meanwhile: the next sweep decides again.
+        if (!(error instanceof HttpError && error.status === 409))
+          log.warn("Forgotten timer check failed", {
+            session: session.id,
+            error: (error as Error).message,
+          });
+      }
+    }
+    await mail.deliverQueued();
+  }
+  const forgottenInterval = setInterval(
+    () => void sweepForgottenRuns().catch(() => undefined),
+    5 * 60 * 1000,
+  );
+  forgottenInterval.unref();
   registerAnnouncement(app, { db, admin });
   await registerFeedback(app, {
     db,
@@ -1490,7 +1543,9 @@ async function assembleWith(db: Database, config: AppConfig) {
     mail,
     backups,
     logs,
+    runs: { sweep: sweepForgottenRuns },
     close: async () => {
+      clearInterval(forgottenInterval);
       backups.close();
       await logs.close();
       await mail.close();
