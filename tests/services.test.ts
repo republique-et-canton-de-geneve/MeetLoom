@@ -476,6 +476,69 @@ test("invitations are emailed with their link when SMTP is configured", async (t
   void existing;
 });
 
+test("report emails survive a failed send and profiles saved before the option existed", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const second = await h.account("second-admin@example.test");
+  assert.equal(
+    (
+      await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+        isAdmin: true,
+      })
+    ).status,
+    200,
+  );
+  // A profile saved by an earlier version, without the report-email option.
+  await h.db.run(
+    "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
+    [
+      second.user.id,
+      JSON.stringify({
+        preferences: {
+          displayTimezone: "",
+          hour12: false,
+          inAppMentions: true,
+          emailDigest: false,
+          emailReminder: false,
+        },
+      }),
+    ],
+  );
+  assert.equal(
+    (await second.client.request("/account")).body.profile.preferences
+      .emailFeedback,
+    true,
+  );
+  await h.mail.flush();
+  // The SMTP server is down when the report arrives: the email waits in the
+  // database, not in one pod's memory.
+  await h.owner.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige.",
+  });
+  await h.mail.flush();
+  assert.equal(messages.length, 0);
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 1);
+  // Any pod retries it once the server is back.
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
+  assert.deepEqual(
+    messages.map((message) => message.to),
+    ["second-admin@example.test"],
+  );
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,

@@ -34,9 +34,13 @@ export async function accountProfile(
     "SELECT payload FROM account_profiles WHERE user_id=$1",
     [userId],
   );
-  return row
-    ? JSON.parse(row.payload)
-    : { preferences: { ...DEFAULT_ACCOUNT_PREFERENCES } };
+  if (!row) return { preferences: { ...DEFAULT_ACCOUNT_PREFERENCES } };
+  // Profiles saved before an option existed get its default.
+  const profile = JSON.parse(row.payload) as AccountProfile;
+  return {
+    ...profile,
+    preferences: { ...DEFAULT_ACCOUNT_PREFERENCES, ...profile.preferences },
+  };
 }
 export async function installAccountsApi(
   app: Express,

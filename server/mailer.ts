@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import type { Database, Sql } from "./db.js";
@@ -113,6 +114,9 @@ export async function installMailApi(
   );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_recovery_requests (email_hash TEXT PRIMARY KEY,requested_at BIGINT NOT NULL)",
+  );
+  await db.run(
+    "CREATE TABLE IF NOT EXISTS mail_outbox (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
   );
   if (config && !origin)
     throw new Error("APP_ORIGIN is required when SMTP is enabled.");
@@ -474,78 +478,149 @@ export async function installMailApi(
       );
     });
   };
-  /** Each problem report or idea, emailed at once to the other active
-   * administrators who keep that preference on. The in-app notification
-   * remains when mail is off or fails. */
-  const feedbackReceived = (report: {
-    authorId: string;
-    authorName: string;
-    authorEmail: string;
-    kind: "bug" | "idea" | "other";
-    message: string;
-    page: string | null;
-  }) => {
-    if (!config || !transport) return;
-    background(async () => {
-      const admins = await db.all<Recipient>(
-        "SELECT id,email,name,locale FROM users WHERE is_admin=1 AND id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id) ORDER BY id LIMIT 100",
-        [report.authorId],
-      );
-      for (const admin of admins) {
-        if (!(await accountProfile(db, admin.id)).preferences.emailFeedback)
-          continue;
-        const french = admin.locale === "fr",
-          kind = {
-            bug: french ? "Problème" : "Problem",
-            idea: french ? "Idée" : "Idea",
-            other: french ? "Autre" : "Other",
-          }[report.kind];
-        try {
-          await send(
-            admin,
-            `MeetLoom — ${kind} : ${short(report.message, 80)}`,
-            `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${origin}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
-          );
-        } catch (error) {
-          log.warn("Feedback email failed", smtpFailure(error));
-        }
-      }
-    });
-  };
-  /** The author of a report, when an administrator moves it on. */
-  const feedbackStatusChanged = (change: {
-    authorId: string;
-    kind: "bug" | "idea" | "other";
-    message: string;
-    status: "new" | "in-progress" | "done" | "dismissed";
-  }) => {
-    if (!config || !transport) return;
-    background(async () => {
-      const [author] = await currentRecipient(db, change.authorId);
+  /**
+   * Event emails (problem reports) go through a durable queue: written in the
+   * transaction of the event itself, then sent by whichever pod claims them
+   * under a lease, and retried after a failure or a pod restart. Delivered
+   * rows are deleted, so message bodies do not linger. Invitations are not
+   * queued: their links must never be stored in clear (see `invitation`).
+   */
+  const enqueue = (
+    sql: Sql,
+    recipient: Recipient,
+    subject: string,
+    text: string,
+  ) =>
+    sql.run(
+      "INSERT INTO mail_outbox(id,user_id,email,subject,body,lease_until,attempts,created_at) VALUES($1,$2,$3,$4,$5,0,0,$6)",
+      [
+        randomUUID(),
+        recipient.id,
+        recipient.email,
+        short(subject),
+        text,
+        Date.now(),
+      ],
+    );
+  async function drainOutbox(now = Date.now()) {
+    if (!config || !transport || closing) return;
+    const rows = await db.all<{
+      id: string;
+      user_id: string;
+      email: string;
+      subject: string;
+      body: string;
+    }>(
+      "SELECT id,user_id,email,subject,body FROM mail_outbox WHERE lease_until<=$1 AND attempts<5 ORDER BY created_at,id LIMIT 50",
+      [now],
+    );
+    for (const row of rows) {
+      if (closing) break;
+      // One pod sends each email: the others see the lease and skip it.
       if (
-        !author ||
-        !(await accountProfile(db, author.id)).preferences.emailFeedback
+        !(await db.run(
+          "UPDATE mail_outbox SET lease_until=$1,attempts=attempts+1 WHERE id=$2 AND lease_until<=$3 AND attempts<5",
+          [now + 60000, row.id, now],
+        ))
       )
-        return;
-      const french = author.locale === "fr",
-        status = {
-          new: french ? "reçu" : "received",
-          "in-progress": french ? "en cours de traitement" : "in progress",
-          done: french ? "traité" : "done",
-          dismissed: french ? "classé sans suite" : "closed without action",
-        }[change.status],
-        what = {
-          bug: french ? "Votre signalement" : "Your report",
-          idea: french ? "Votre idée" : "Your idea",
-          other: french ? "Votre message" : "Your message",
-        }[change.kind];
-      await send(
-        author,
-        `MeetLoom — ${what} : ${status}`,
-        `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+        continue;
+      try {
+        const [active] = await currentRecipient(db, row.user_id);
+        // An account since disabled or readdressed gets nothing.
+        if (active && active.email === row.email)
+          await send(active, row.subject, row.body);
+        await db.run("DELETE FROM mail_outbox WHERE id=$1", [row.id]);
+      } catch (error) {
+        await db.run("UPDATE mail_outbox SET lease_until=$1 WHERE id=$2", [
+          now + 5 * 60 * 1000,
+          row.id,
+        ]);
+        log.warn("SMTP delivery failed", smtpFailure(error));
+      }
+    }
+    // Given up after five attempts: kept a week for the logs, then dropped.
+    await db.run(
+      "DELETE FROM mail_outbox WHERE attempts>=5 AND created_at<$1",
+      [now - 7 * day],
+    );
+  }
+  /** Each problem report or idea, for the other active administrators who
+   * keep that preference on. Call inside the report's transaction. */
+  const feedbackReceived = async (
+    sql: Sql,
+    report: {
+      authorId: string;
+      authorName: string;
+      authorEmail: string;
+      kind: "bug" | "idea" | "other";
+      message: string;
+      page: string | null;
+    },
+  ) => {
+    if (!config) return;
+    const admins = await sql.all<Recipient>(
+      "SELECT id,email,name,locale FROM users WHERE is_admin=1 AND id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id) ORDER BY id",
+      [report.authorId],
+    );
+    for (const admin of admins) {
+      if (!(await accountProfile(sql, admin.id)).preferences.emailFeedback)
+        continue;
+      const french = admin.locale === "fr",
+        kind = {
+          bug: french ? "Problème" : "Problem",
+          idea: french ? "Idée" : "Idea",
+          other: french ? "Autre" : "Other",
+        }[report.kind];
+      await enqueue(
+        sql,
+        admin,
+        `MeetLoom — ${kind} : ${short(report.message, 80)}`,
+        `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${origin}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
       );
-    });
+    }
   };
+  /** The author of a report, when an administrator moves it on. Call inside
+   * the status change's transaction. */
+  const feedbackStatusChanged = async (
+    sql: Sql,
+    change: {
+      authorId: string;
+      kind: "bug" | "idea" | "other";
+      message: string;
+      status: "new" | "in-progress" | "done" | "dismissed";
+    },
+  ) => {
+    if (!config) return;
+    const [author] = await currentRecipient(sql, change.authorId);
+    if (
+      !author ||
+      !(await accountProfile(sql, author.id)).preferences.emailFeedback
+    )
+      return;
+    const french = author.locale === "fr",
+      status = {
+        new: french ? "reçu" : "received",
+        "in-progress": french ? "en cours de traitement" : "in progress",
+        done: french ? "traité" : "done",
+        dismissed: french ? "classé sans suite" : "closed without action",
+      }[change.status],
+      what = {
+        bug: french ? "Votre signalement" : "Your report",
+        idea: french ? "Votre idée" : "Your idea",
+        other: french ? "Votre message" : "Your message",
+      }[change.kind];
+    await enqueue(
+      sql,
+      author,
+      `MeetLoom — ${what} : ${status}`,
+      `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+    );
+  };
+  // Every pod sweeps the queue, so an email outlives the pod that queued it.
+  const outboxInterval = config
+    ? setInterval(() => background(() => drainOutbox()), 60000)
+    : undefined;
+  outboxInterval?.unref();
   const interval = config?.scheduled
     ? setInterval(() => background(() => scheduled()), 60000)
     : undefined;
@@ -555,6 +630,16 @@ export async function installMailApi(
     scheduled,
     feedbackReceived,
     feedbackStatusChanged,
+    /** Sends what the queue holds now, in the background; `now` lets tests
+     * pass the retry delay. Awaiting it waits for that send. */
+    deliverQueued(now?: number) {
+      let sent: Promise<void> = Promise.resolve();
+      background(() => {
+        sent = drainOutbox(now);
+        return sent;
+      });
+      return sent;
+    },
     invitation,
     async flush() {
       while (pending.size) await Promise.allSettled([...pending]);
@@ -562,6 +647,7 @@ export async function installMailApi(
     async close() {
       closing = true;
       if (interval) clearInterval(interval);
+      if (outboxInterval) clearInterval(outboxInterval);
       while (pending.size) await Promise.allSettled([...pending]);
       transport?.close?.();
     },

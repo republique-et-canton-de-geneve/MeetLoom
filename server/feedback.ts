@@ -2,7 +2,7 @@ import type { Express, RequestHandler, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { User } from "../shared/model.js";
-import type { Database } from "./db.js";
+import type { Database, Sql } from "./db.js";
 import { rateLimit } from "./security.js";
 import { notifyFeedback, notifyFeedbackStatus } from "./app-notifications.js";
 import type { AppVersion } from "./version.js";
@@ -27,8 +27,7 @@ export async function registerFeedback(
     version,
     issuesUrl,
     rateLimits,
-    onReport,
-    onStatus,
+    mail,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -37,22 +36,30 @@ export async function registerFeedback(
     /** Null hides the GitHub link. */
     issuesUrl: string | null;
     rateLimits?: boolean;
-    /** After the report is stored (the administrators' email). */
-    onReport?: (report: {
-      authorId: string;
-      authorName: string;
-      authorEmail: string;
-      kind: "bug" | "idea" | "other";
-      message: string;
-      page: string | null;
-    }) => void;
-    /** After an administrator moved a report on (the author's email). */
-    onStatus?: (change: {
-      authorId: string;
-      kind: "bug" | "idea" | "other";
-      message: string;
-      status: (typeof FEEDBACK_STATUSES)[number];
-    }) => void;
+    /** Report emails, queued inside the same transactions (mailer.ts). */
+    mail?: {
+      feedbackReceived: (
+        sql: Sql,
+        report: {
+          authorId: string;
+          authorName: string;
+          authorEmail: string;
+          kind: "bug" | "idea" | "other";
+          message: string;
+          page: string | null;
+        },
+      ) => Promise<void>;
+      feedbackStatusChanged: (
+        sql: Sql,
+        change: {
+          authorId: string;
+          kind: "bug" | "idea" | "other";
+          message: string;
+          status: (typeof FEEDBACK_STATUSES)[number];
+        },
+      ) => Promise<void>;
+      deliverQueued: () => Promise<void>;
+    };
   },
 ) {
   await db.run(
@@ -110,15 +117,16 @@ export async function registerFeedback(
           ],
         );
         await notifyFeedback(sql, who(response).id, who(response).name);
+        await mail?.feedbackReceived(sql, {
+          authorId: who(response).id,
+          authorName: who(response).name,
+          authorEmail: who(response).email,
+          kind: item.kind,
+          message: item.message,
+          page: item.page,
+        });
       });
-      onReport?.({
-        authorId: who(response).id,
-        authorName: who(response).name,
-        authorEmail: who(response).email,
-        kind: item.kind,
-        message: item.message,
-        page: item.page,
-      });
+      void mail?.deliverQueued();
       response.status(201).json({ feedback: item });
     },
   );
@@ -151,42 +159,41 @@ export async function registerFeedback(
       .strict()
       .parse(request.body);
     const id = z.string().max(120).parse(request.params.id);
-    const report = await db.transaction(async (sql) => {
+    const found = await db.transaction(async (sql) => {
       const [current] = await sql.all<{
         user_id: string;
         kind: "bug" | "idea" | "other";
         message: string;
-        status: string;
-      }>("SELECT user_id,kind,message,status FROM feedback WHERE id=$1", [id]);
-      if (!current || current.status === status) return current;
-      await sql.run("UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3", [
-        status,
-        new Date().toISOString(),
-        id,
-      ]);
+      }>("SELECT user_id,kind,message FROM feedback WHERE id=$1", [id]);
+      if (!current) return false;
+      // Only the request that actually changes the status notifies: two
+      // administrators setting the same one at once tell the author once.
+      const changed = await sql.run(
+        "UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3 AND status<>$1",
+        [status, new Date().toISOString(), id],
+      );
       // Its author hears about it, unless they moved it on themselves.
-      if (current.user_id !== who(response).id) {
+      if (changed && current.user_id !== who(response).id) {
         await notifyFeedbackStatus(
           sql,
           current.user_id,
           id,
           who(response).name,
         );
-        return { ...current, notify: true };
+        await mail?.feedbackStatusChanged(sql, {
+          authorId: current.user_id,
+          kind: current.kind,
+          message: current.message,
+          status,
+        });
       }
-      return current;
+      return true;
     });
-    if (!report)
+    if (!found)
       return void response
         .status(404)
         .json({ error: "This report does not exist.", code: "NOT_FOUND" });
-    if ("notify" in report)
-      onStatus?.({
-        authorId: report.user_id,
-        kind: report.kind,
-        message: report.message,
-        status,
-      });
+    void mail?.deliverQueued();
     response.json({ ok: true });
   });
 }
