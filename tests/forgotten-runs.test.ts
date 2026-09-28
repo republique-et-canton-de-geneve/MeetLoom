@@ -47,6 +47,14 @@ test("a timer left running is recalled after an hour and stopped at night", () =
     stoppedPaused.run.actualDurations?.[session.days[0].blocks[0].id],
     600,
   );
+  // Time added during the run moves the end: an evening session extended
+  // until one in the morning is not stopped at half past eleven.
+  let extended = createSession("owner", "Prolongée", "fr");
+  extended.timezone = "UTC";
+  extended.days[0].blocks = [newBlock("fr", { title: "Débat", duration: 60 })];
+  extended = transitionRun(extended, "start", {}, nextUtcHour(start, 21));
+  extended.days[0].blocks[0].duration = 240;
+  assert.equal(forgottenRun(extended, nextUtcHour(start, 23, 30)), null);
   // Finished or idle timers are left alone.
   assert.equal(
     forgottenRun(

@@ -21,7 +21,7 @@ function localHour(timezone: string, now: number) {
 
 /**
  * A timer nobody stopped: still running or paused an hour past the end of
- * its plan. During the day its organizers are reminded once; from 23:00 to
+ * its plan, extensions included. During the day its organizers are reminded once; from 23:00 to
  * 05:00 in the session's time zone it is stopped. A session still within
  * its plan is never interrupted, whatever the hour.
  */
@@ -36,12 +36,15 @@ export function forgottenRun(
   )
     return null;
   const day = session.days.find((value) => value.id === run.dayId);
-  const planned =
-    run.plannedTotal ??
+  // Time added during the run (extensions, longer steps) moves the end: the
+  // longer of the plan at the start and the day as it stands now.
+  const planned = Math.max(
+    run.plannedTotal ?? 0,
     runnableBlocks(day?.blocks ?? []).reduce(
       (sum, block) => sum + block.duration * 60,
       0,
-    );
+    ),
+  );
   if (now - (run.runStartedAt + planned * 1000) < HOUR) return null;
   const hour = localHour(session.timezone, now);
   return hour >= 23 || hour < 5 ? "stop" : "remind";
@@ -73,11 +76,32 @@ export function stopForgotten(session: Session, now: number): Session {
   );
 }
 
-/** One reminder and one stop per run, whichever pod gets there first. */
+/** One reminder and one stop per run, whichever pod gets there first;
+ * `active_runs` lists the sessions whose timer runs, so the sweep reads
+ * those instead of every agenda. */
 export async function createForgottenRunTables(db: Database) {
   await db.run(
     "CREATE TABLE IF NOT EXISTS run_reminders (session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, run_started_at BIGINT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(session_id,run_started_at,kind))",
   );
+  await db.run(
+    "CREATE TABLE IF NOT EXISTS active_runs (session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, since TEXT NOT NULL)",
+  );
+  // Timers started before this table existed, or restored from a backup:
+  // one scan at startup, then every save keeps the list current.
+  await db.run(
+    `INSERT INTO active_runs(session_id,since) SELECT id,$1 FROM sessions WHERE (payload LIKE '%"status":"running"%' OR payload LIKE '%"status":"paused"%') AND id NOT IN (SELECT session_id FROM active_runs)`,
+    [new Date().toISOString()],
+  );
+}
+
+/** Inside every session save: lists or unlists the session's timer. */
+export async function trackActiveRun(sql: Sql, next: Session) {
+  if (next.run.status === "running" || next.run.status === "paused")
+    await sql.run(
+      "INSERT INTO active_runs(session_id,since) VALUES($1,$2) ON CONFLICT(session_id) DO NOTHING",
+      [next.id, new Date().toISOString()],
+    );
+  else await sql.run("DELETE FROM active_runs WHERE session_id=$1", [next.id]);
 }
 
 export const claimForgottenRun = (

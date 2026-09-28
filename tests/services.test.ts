@@ -582,6 +582,20 @@ test("invitation emails are sent before answering, in the recipient's language, 
   assert.equal(again.status, 201);
   assert.equal(again.body.emailed, false);
   assert.equal(messages.length, 1);
+  // A new invitation replaces the previous link: the new one is always sent.
+  const renew = () =>
+    h.owner.request(`/sessions/${session.id}/invitations`, "POST", {
+      name: "Newcomer",
+      email: "newcomer@example.test",
+      role: "viewer",
+    });
+  assert.equal((await renew()).body.emailed, true);
+  const renewed = await renew();
+  assert.equal(renewed.body.emailed, true);
+  assert.match(
+    messages.at(-1)!.text,
+    new RegExp(`/join/${renewed.body.token}`),
+  );
   void english;
 });
 

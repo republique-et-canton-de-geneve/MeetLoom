@@ -4,7 +4,7 @@ import {
   DEFAULT_ACCOUNT_PREFERENCES,
   type AccountProfile,
 } from "../shared/accounts";
-import { api, post } from "./api";
+import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
 
@@ -270,10 +270,27 @@ export default function ProfileSettings({
             onChange={(event) => {
               const enabled = event.target.checked;
               preference("emailFeedback", enabled);
-              void api("/account/email-feedback", {
-                method: "PUT",
-                body: JSON.stringify({ enabled }),
-              }).catch((cause) => {
+              // During an update, a server from the previous version does not
+              // know this route yet: try again shortly before giving up.
+              const save = async (attempt: number): Promise<void> => {
+                try {
+                  await api("/account/email-feedback", {
+                    method: "PUT",
+                    body: JSON.stringify({ enabled }),
+                  });
+                } catch (cause) {
+                  if (
+                    cause instanceof ApiError &&
+                    cause.status === 404 &&
+                    attempt < 5
+                  ) {
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    return save(attempt + 1);
+                  }
+                  throw cause;
+                }
+              };
+              void save(1).catch((cause) => {
                 preference("emailFeedback", !enabled);
                 setError((cause as Error).message);
               });

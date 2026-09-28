@@ -43,6 +43,7 @@ import {
   createForgottenRunTables,
   forgottenRun,
   stopForgotten,
+  trackActiveRun,
 } from "./forgotten-runs.js";
 import { notifyForgottenRun } from "./app-notifications.js";
 import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
@@ -969,6 +970,7 @@ async function assembleWith(db: Database, config: AppConfig) {
       }
       await recordMentionNotifications(sql, previous, next, author);
       await recordFinishedRun(sql, previous, next);
+      await trackActiveRun(sql, next);
       if (commit) await commit(sql, next);
     };
     if (transaction) await write(transaction);
@@ -1272,7 +1274,7 @@ async function assembleWith(db: Database, config: AppConfig) {
    * minutes; the claim and the version check make each action happen once. */
   async function sweepForgottenRuns(now = Date.now()) {
     const rows = await db.all<SessionRow & { workspace_id: string | null }>(
-      `SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL AND (s.payload LIKE '%"status":"running"%' OR s.payload LIKE '%"status":"paused"%')`,
+      "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
     );
     for (const row of rows) {
       const session = mappedSession(row),
@@ -1293,6 +1295,16 @@ async function assembleWith(db: Database, config: AppConfig) {
           );
           if (!fresh) return;
           const current = mappedSession(fresh);
+          // Listed but no longer running (a restore, an older pod's save).
+          if (
+            current.run.status !== "running" &&
+            current.run.status !== "paused"
+          ) {
+            await sql.run("DELETE FROM active_runs WHERE session_id=$1", [
+              current.id,
+            ]);
+            return;
+          }
           if (
             current.run.runStartedAt !== session.run.runStartedAt ||
             forgottenRun(current, now) !== verdict ||

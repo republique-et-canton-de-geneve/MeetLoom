@@ -458,14 +458,19 @@ export async function installMailApi(
    * for someone without an account, the place to find it otherwise. Sent
    * before the request answers, so "emailed" is true only once the SMTP
    * server accepted it; the join link is never stored, and the inviter keeps
-   * it to pass on otherwise. The same person hears about the same thing at
-   * most every 15 minutes, and one person sends at most 50 an hour.
+   * it to pass on otherwise. Being added again with an account emails the
+   * same person about the same thing at most every 15 minutes; a new join
+   * link always goes out, since it replaces the previous one. One person
+   * sends at most 50 invitation emails an hour.
    */
   const invitation: InvitationMail = async (invite) => {
     if (!config || !transport || closing) return false;
     const now = Date.now(),
       key = hashToken(`${invite.email}\n${invite.kind}\n${invite.target}`);
     const claimed = await db.transaction(async (sql) => {
+      // The sender's row serializes their invitations across pods, so the
+      // hourly count below cannot be outrun by simultaneous requests.
+      await sql.run("UPDATE users SET id=id WHERE id=$1", [invite.inviterId]);
       await sql.run("DELETE FROM mail_invitation_log WHERE sent_at<$1", [
         now - day,
       ]);
@@ -480,7 +485,12 @@ export async function installMailApi(
       );
       return !!(await sql.run(
         "UPDATE mail_invitation_log SET sender=$1,sent_at=$2 WHERE key=$3 AND sent_at<=$4",
-        [invite.inviterId, now, key, now - 15 * 60 * 1000],
+        [
+          invite.inviterId,
+          now,
+          key,
+          invite.existing ? now - 15 * 60 * 1000 : now,
+        ],
       ));
     });
     if (!claimed) return false;

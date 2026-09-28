@@ -77,6 +77,7 @@ export const TRANSIENT_TABLES = [
   "mail_outbox",
   "mail_invitation_log",
   "run_reminders",
+  "active_runs",
   "mail_recovery_requests",
   "server_logs",
 ] as const;

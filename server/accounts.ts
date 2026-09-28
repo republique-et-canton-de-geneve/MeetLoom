@@ -87,6 +87,8 @@ export async function installAccountsApi(
       .strict()
       .parse(req.body);
     await db.transaction(async (sql) => {
+      // Serialized with profile saves by the account row.
+      await sql.run("UPDATE users SET id=id WHERE id=$1", [who(res).id]);
       const profile = await accountProfile(sql, who(res).id);
       await sql.run(
         "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
@@ -150,12 +152,9 @@ export async function installAccountsApi(
           "ACCOUNT_EXISTS",
           "An account already exists for this email.",
         );
-      // The report-email option has its own route: a profile save keeps it.
-      const { emailFeedback } = (await accountProfile(db, who(res).id))
-        .preferences;
       const profile: AccountProfile = {
         ...(input.avatar ? { avatar: input.avatar } : {}),
-        preferences: { ...input.preferences, emailFeedback },
+        preferences: { ...input.preferences },
       };
       await db.transaction(async (sql) => {
         if (
@@ -182,6 +181,11 @@ export async function installAccountsApi(
           await sql.run("DELETE FROM account_resets WHERE user_id=$1", [
             who(res).id,
           ]);
+        // The report-email option has its own route: a profile save keeps
+        // it, read under the account row locked by the update above.
+        profile.preferences.emailFeedback = (
+          await accountProfile(sql, who(res).id)
+        ).preferences.emailFeedback;
         await sql.run(
           "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
           [who(res).id, JSON.stringify(profile)],
