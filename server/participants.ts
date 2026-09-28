@@ -9,6 +9,7 @@ import { sessionCollaborators } from "./collaborators.js";
 import { allBlocks } from "../shared/domain.js";
 import { guardSessionLifecycle } from "./lifecycle.js";
 import { fail, hashToken, token } from "./security.js";
+import type { InvitationMail } from "./mailer.js";
 
 type Person = {
   id: string;
@@ -190,6 +191,7 @@ export async function installParticipantsApi(
     db,
     accessible,
     authenticated,
+    invite,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -198,6 +200,8 @@ export async function installParticipantsApi(
       userId: string,
       roles?: Role[],
     ) => Promise<{ session: Session; role: Role }>;
+    /** Emails the invitation when SMTP is configured (mailer.ts). */
+    invite?: InvitationMail;
   },
 ) {
   await db.run(
@@ -343,7 +347,18 @@ export async function installParticipantsApi(
         expiresAt: new Date(expires).toISOString(),
       };
     });
-    res.status(201).json(result);
+    const emailed =
+      result.participant.role !== "owner" &&
+      !!invite?.({
+        email: input.email,
+        locale: user.locale,
+        inviter: user.name,
+        kind: "session",
+        title: session.title,
+        path: result.token ? `/join/${result.token}` : `/session/${session.id}`,
+        existing: !result.token,
+      });
+    res.status(201).json({ ...result, emailed });
   });
   app.delete(
     "/api/sessions/:id/invitations/:personId",

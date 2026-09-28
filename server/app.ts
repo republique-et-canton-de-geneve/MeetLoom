@@ -390,7 +390,20 @@ async function assembleWith(db: Database, config: AppConfig) {
             ),
           );
     });
-  await installWorkspacesApi(app, { db, authenticated, accessible });
+  // Before the APIs that email invitations.
+  const mail = await installMailApi(app, {
+    db,
+    config: config.mail,
+    origin: config.origin,
+    transport: config.mailTransport,
+    rateLimits: config.rateLimits,
+  });
+  await installWorkspacesApi(app, {
+    db,
+    authenticated,
+    accessible,
+    invite: mail.invitation,
+  });
   await initializeFolders(db);
   await installFoldersApi(app, { db, authenticated });
   await installActivityApi(app, { db, authenticated, accessible });
@@ -403,7 +416,12 @@ async function assembleWith(db: Database, config: AppConfig) {
     setAuth,
     rateLimits: config.rateLimits,
   });
-  await installParticipantsApi(app, { db, authenticated, accessible });
+  await installParticipantsApi(app, {
+    db,
+    authenticated,
+    accessible,
+    invite: mail.invitation,
+  });
   await installOidcApi(app, {
     db,
     config: config.oidc,
@@ -417,13 +435,6 @@ async function assembleWith(db: Database, config: AppConfig) {
       await acceptWorkspaceInvite(sql, hash, userId);
       await acceptParticipantInvite(sql, hash, userId);
     },
-  });
-  const mail = await installMailApi(app, {
-    db,
-    config: config.mail,
-    origin: config.origin,
-    transport: config.mailTransport,
-    rateLimits: config.rateLimits,
   });
   const authLimiter =
     config.rateLimits === false
@@ -765,9 +776,17 @@ async function assembleWith(db: Database, config: AppConfig) {
         detail: { role: input.role ?? null },
       });
     });
-    response
-      .status(201)
-      .json({ token: raw, expiresAt: new Date(expires).toISOString() });
+    response.status(201).json({
+      token: raw,
+      expiresAt: new Date(expires).toISOString(),
+      emailed: mail.invitation({
+        email: input.email,
+        locale: user(response).locale,
+        inviter: user(response).name,
+        kind: "account",
+        path: `/join/${raw}`,
+      }),
+    });
   });
   app.post(
     "/api/auth/accept-invite",

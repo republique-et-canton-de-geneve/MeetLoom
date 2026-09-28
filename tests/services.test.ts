@@ -285,6 +285,9 @@ test("a problem report is emailed to the other administrators who keep that pref
       ).status,
       200,
     );
+  // Their invitations were emailed too.
+  await h.mail.flush();
+  messages.length = 0;
   // One administrator turned these emails off.
   await h.db.run(
     "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
@@ -392,6 +395,85 @@ test("the author of a report hears when its status changes, in the app and by em
     ),
     false,
   );
+});
+
+test("invitations are emailed with their link when SMTP is configured", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const session = await h.session();
+  const existing = await h.account("existing@example.test");
+  await h.mail.flush();
+  messages.length = 0;
+  const to = (address: string) =>
+    messages.find((message) => message.to === address);
+
+  // Someone without an account: the private link to join.
+  const newcomer = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    {
+      name: "Nouvelle animatrice",
+      email: "newcomer@example.test",
+      role: "facilitator",
+    },
+  );
+  assert.equal(newcomer.status, 201);
+  assert.equal(newcomer.body.emailed, true);
+  // An existing account: added at once, and told where to find the session.
+  const added = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    { name: "Existing", email: "existing@example.test", role: "editor" },
+  );
+  assert.equal(added.status, 201);
+  // An account invitation from the administration.
+  const account = await h.owner.request("/auth/invites", "POST", {
+    name: "Colleague",
+    email: "colleague@example.test",
+  });
+  assert.equal(account.status, 201);
+  assert.equal(account.body.emailed, true);
+  // A workspace invitation.
+  const workspace = (
+    await h.owner.request("/workspaces", "POST", { name: "Équipe projet" })
+  ).body.workspace;
+  const joined = await h.owner.request(
+    `/workspaces/${workspace.id}/members`,
+    "POST",
+    { email: "teammate@example.test", role: "editor" },
+  );
+  assert.equal(joined.status, 201, JSON.stringify(joined.body));
+  await h.mail.flush();
+
+  assert.match(
+    to("newcomer@example.test")!.text,
+    new RegExp(`/join/${newcomer.body.token}`),
+  );
+  assert.match(to("newcomer@example.test")!.text, new RegExp(session.title));
+  assert.match(
+    to("existing@example.test")!.text,
+    new RegExp(`/session/${session.id}`),
+  );
+  assert.equal(to("existing@example.test")!.text.includes("/join/"), false);
+  assert.match(
+    to("colleague@example.test")!.text,
+    new RegExp(`/join/${account.body.token}`),
+  );
+  assert.match(
+    to("teammate@example.test")!.text,
+    new RegExp(`/join/${joined.body.token}`),
+  );
+  assert.match(to("teammate@example.test")!.text, /Équipe projet/);
+  assert.equal(messages.length, 4);
+  void existing;
 });
 
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {

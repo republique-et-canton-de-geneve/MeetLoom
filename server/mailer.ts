@@ -21,6 +21,18 @@ const smtpFailure = (error: unknown) => {
   };
 };
 
+export type InvitationMail = (invite: {
+  email: string;
+  locale: "fr" | "en";
+  inviter: string;
+  kind: "session" | "workspace" | "account";
+  /** The session or workspace name. */
+  title?: string;
+  /** Absolute path in the application, such as /join/<token>. */
+  path: string;
+  /** Already has an account: no link to accept. */
+  existing?: boolean;
+}) => boolean;
 export interface MailConfig {
   host: string;
   port: number;
@@ -429,6 +441,39 @@ export async function installMailApi(
       running = false;
     }
   }
+  /** An invitation, emailed to the person invited: the private link to join
+   * for someone without an account, the place to find it otherwise. Returns
+   * whether an email is on its way. */
+  const invitation: InvitationMail = (invite) => {
+    if (!config || !transport) return false;
+    const french = invite.locale === "fr",
+      inviter = short(invite.inviter, 120),
+      title = invite.title ? short(invite.title, 150) : "",
+      what = {
+        session: french
+          ? `à préparer ou animer la séance « ${title} »`
+          : `to prepare or run the session “${title}”`,
+        workspace: french
+          ? `à rejoindre l’espace de travail « ${title} »`
+          : `to join the workspace “${title}”`,
+        account: french ? "à rejoindre MeetLoom" : "to join MeetLoom",
+      }[invite.kind];
+    return background(async () => {
+      await send(
+        { id: "", email: invite.email, name: "", locale: invite.locale },
+        invite.existing
+          ? french
+            ? `MeetLoom — ${inviter} vous a ajouté${title ? ` : ${title}` : ""}`
+            : `MeetLoom — ${inviter} added you${title ? `: ${title}` : ""}`
+          : french
+            ? `MeetLoom — ${inviter} vous invite${title ? ` : ${title}` : ""}`
+            : `MeetLoom — ${inviter} invites you${title ? `: ${title}` : ""}`,
+        invite.existing
+          ? `${inviter} ${french ? "vous a ajouté" : "added you"} ${what}.\n\n${origin}${invite.path}`
+          : `${inviter} ${french ? "vous invite" : "invites you"} ${what}.\n\n${french ? "Ce lien personnel est valable 72 heures ; il vous permet de créer votre compte :" : "This personal link is valid for 72 hours and lets you create your account:"}\n${origin}${invite.path}\n\n${french ? "Ne le transférez pas. Si vous n’attendiez pas cette invitation, ignorez ce message." : "Do not forward it. If you did not expect this invitation, you can ignore this message."}`,
+      );
+    });
+  };
   /** Each problem report or idea, emailed at once to the other active
    * administrators who keep that preference on. The in-app notification
    * remains when mail is off or fails. */
@@ -510,6 +555,7 @@ export async function installMailApi(
     scheduled,
     feedbackReceived,
     feedbackStatusChanged,
+    invitation,
     async flush() {
       while (pending.size) await Promise.allSettled([...pending]);
     },

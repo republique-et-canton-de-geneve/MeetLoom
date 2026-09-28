@@ -13,6 +13,7 @@ import { cloneContent } from "../shared/content.js";
 import { fail, hashToken, token } from "./security.js";
 import { lifecycleMetadata, guardSessionLifecycle } from "./lifecycle.js";
 import { recordSessionFolders } from "./folders.js";
+import type { InvitationMail } from "./mailer.js";
 
 const id = z.string().min(1).max(120);
 const role = z.enum(["admin", "editor", "viewer"]);
@@ -228,6 +229,7 @@ export async function installWorkspacesApi(
     db,
     authenticated,
     accessible,
+    invite,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -236,6 +238,8 @@ export async function installWorkspacesApi(
       userId: string,
       allowed?: Role[],
     ) => Promise<{ session: Session; role: Role }>;
+    /** Emails the invitation when SMTP is configured (mailer.ts). */
+    invite?: InvitationMail;
   },
 ) {
   await db.transaction(async (sql) => {
@@ -497,7 +501,21 @@ export async function installWorkspacesApi(
       );
       return { added: false, token: raw, expiresAt };
     });
-    res.status(201).json(result);
+    const [workspace] = await db.all<{ name: string }>(
+        "SELECT name FROM workspaces WHERE id=$1",
+        [wid],
+      ),
+      inviter = res.locals.user as User;
+    const emailed = !!invite?.({
+      email: input.email,
+      locale: inviter.locale,
+      inviter: inviter.name,
+      kind: "workspace",
+      title: workspace?.name,
+      path: result.token ? `/join/${result.token}` : "/",
+      existing: !result.token,
+    });
+    res.status(201).json({ ...result, emailed });
   });
   app.patch(
     "/api/workspaces/:id/members/:userId",

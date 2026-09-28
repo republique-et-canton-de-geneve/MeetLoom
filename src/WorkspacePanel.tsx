@@ -606,14 +606,32 @@ export default function WorkspacePanel({
               const data = new FormData(e.currentTarget),
                 form = e.currentTarget;
               void action(async () => {
-                const result = await post<{ added: boolean; token?: string }>(
-                  `/workspaces/${id}/members`,
-                  { email: data.get("email"), role: data.get("role") },
-                );
+                const result = await post<{
+                  added: boolean;
+                  token?: string;
+                  emailed?: boolean;
+                }>(`/workspaces/${id}/members`, {
+                  email: data.get("email"),
+                  role: data.get("role"),
+                });
                 if (result.token) {
                   setInvitation(`${location.origin}/join/${result.token}`);
                   setCopied(false);
-                } else setNotice(t("Membre ajouté.", "Member added."));
+                }
+                if (result.emailed)
+                  setNotice(
+                    result.token
+                      ? t(
+                          `Invitation envoyée par e-mail à ${String(data.get("email"))}.`,
+                          `Invitation emailed to ${String(data.get("email"))}.`,
+                        )
+                      : t(
+                          "Membre ajouté et prévenu par e-mail.",
+                          "Member added and told by email.",
+                        ),
+                  );
+                else if (!result.token)
+                  setNotice(t("Membre ajouté.", "Member added."));
                 form.reset();
                 await loadMembers();
                 onChanged();
