@@ -429,6 +429,44 @@ export async function installMailApi(
       running = false;
     }
   }
+  /** Each problem report or idea, emailed at once to the other active
+   * administrators who keep that preference on. The in-app notification
+   * remains when mail is off or fails. */
+  const feedbackReceived = (report: {
+    authorId: string;
+    authorName: string;
+    authorEmail: string;
+    kind: "bug" | "idea" | "other";
+    message: string;
+    page: string | null;
+  }) => {
+    if (!config || !transport) return;
+    background(async () => {
+      const admins = await db.all<Recipient>(
+        "SELECT id,email,name,locale FROM users WHERE is_admin=1 AND id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id) ORDER BY id LIMIT 100",
+        [report.authorId],
+      );
+      for (const admin of admins) {
+        if (!(await accountProfile(db, admin.id)).preferences.emailFeedback)
+          continue;
+        const french = admin.locale === "fr",
+          kind = {
+            bug: french ? "Problème" : "Problem",
+            idea: french ? "Idée" : "Idea",
+            other: french ? "Autre" : "Other",
+          }[report.kind];
+        try {
+          await send(
+            admin,
+            `MeetLoom — ${kind} : ${short(report.message, 80)}`,
+            `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${origin}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+          );
+        } catch (error) {
+          log.warn("Feedback email failed", smtpFailure(error));
+        }
+      }
+    });
+  };
   const interval = config?.scheduled
     ? setInterval(() => background(() => scheduled()), 60000)
     : undefined;
@@ -436,6 +474,7 @@ export async function installMailApi(
   return {
     enabled: !!config,
     scheduled,
+    feedbackReceived,
     async flush() {
       while (pending.size) await Promise.allSettled([...pending]);
     },

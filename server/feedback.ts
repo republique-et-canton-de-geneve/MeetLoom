@@ -27,6 +27,7 @@ export async function registerFeedback(
     version,
     issuesUrl,
     rateLimits,
+    onReport,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -35,6 +36,15 @@ export async function registerFeedback(
     /** Null hides the GitHub link. */
     issuesUrl: string | null;
     rateLimits?: boolean;
+    /** After the report is stored (the administrators' email). */
+    onReport?: (report: {
+      authorId: string;
+      authorName: string;
+      authorEmail: string;
+      kind: "bug" | "idea" | "other";
+      message: string;
+      page: string | null;
+    }) => void;
   },
 ) {
   await db.run(
@@ -92,6 +102,14 @@ export async function registerFeedback(
           ],
         );
         await notifyFeedback(sql, who(response).id, who(response).name);
+      });
+      onReport?.({
+        authorId: who(response).id,
+        authorName: who(response).name,
+        authorEmail: who(response).email,
+        kind: item.kind,
+        message: item.message,
+        page: item.page,
       });
       response.status(201).json({ feedback: item });
     },

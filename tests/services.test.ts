@@ -262,6 +262,67 @@ test("SMTP recovery is non-enumerating, rate-limited per address, hash-only and 
   assert.equal((await h.owner.request("/account")).status, 401);
 });
 
+test("a problem report is emailed to the other administrators who keep that preference on", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  const owner = await h.setup();
+  const second = await h.account("second-admin@example.test"),
+    quiet = await h.account("quiet-admin@example.test"),
+    member = await h.account("member@example.test");
+  for (const admin of [second, quiet])
+    assert.equal(
+      (
+        await h.owner.request(`/admin/accounts/${admin.user.id}`, "PATCH", {
+          isAdmin: true,
+        })
+      ).status,
+      200,
+    );
+  // One administrator turned these emails off.
+  await h.db.run(
+    "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
+    [
+      quiet.user.id,
+      JSON.stringify({
+        preferences: { ...DEFAULT_ACCOUNT_PREFERENCES, emailFeedback: false },
+      }),
+    ],
+  );
+  const sent = await member.client.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige quand je change d’onglet.",
+    page: "/session/abc",
+  });
+  assert.equal(sent.status, 201);
+  await h.mail.flush();
+  assert.deepEqual(messages.map((message) => message.to).sort(), [
+    owner.email,
+    "second-admin@example.test",
+  ]);
+  assert.match(messages[0].text, /Le minuteur se fige/);
+  assert.match(messages[0].text, /\/account\/feedback-inbox/);
+  assert.match(messages[0].text, /member@example\.test/);
+
+  // The author of a report is never emailed about their own report.
+  messages.length = 0;
+  await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Un mode sombre.",
+  });
+  await h.mail.flush();
+  assert.deepEqual(
+    messages.map((message) => message.to),
+    ["second-admin@example.test"],
+  );
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,

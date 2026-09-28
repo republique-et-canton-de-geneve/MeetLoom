@@ -18,6 +18,8 @@ export const accountPreferencesSchema = z
     inAppMentions: z.boolean().default(true),
     emailDigest: z.boolean().default(false),
     emailReminder: z.boolean().default(false),
+    /** Administrators: an email for each problem report or idea. */
+    emailFeedback: z.boolean().default(true),
   })
   .strict();
 export type AccountPreferences = z.infer<typeof accountPreferencesSchema>;
@@ -27,6 +29,7 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   inAppMentions: true,
   emailDigest: false,
   emailReminder: false,
+  emailFeedback: true,
 };
 export interface AccountProfile {
   avatar?: string;
