@@ -64,7 +64,7 @@ Did the timer advance automatically while discussion was still going? Increase t
 
 Locked times help plan the agenda and identify conflicts. Automatic advancement runs activities consecutively without waiting through gaps between locked times. Add an explicit break block or pause the timer to reserve that time during delivery.
 
-Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. In a thin always-on-top window, the current block stays on the left of the countdown and the badge with the expected end on its right.
+Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. In a thin always-on-top window, the current block stays on the left of the countdown and the badge with the expected end on its right. Facilitators also get **previous block**, **pause/resume** and **next block** in that window, so they can move on without leaving a slideshow; visitors' windows show the progress only.
 
 The progress bar turns orange at 20% remaining and red at 5%. The active minimap segment shows progress as well. These visual thresholds are independent of the sound setting below.
 
@@ -88,7 +88,7 @@ When the API is unavailable, MeetLoom opens a separate window and explains that 
 
 - **Announcement:** administrators write a short message (information or warning) shown at the top of every page for accounts, sign-in included. It stays until an administrator removes it; nobody can close it. It is public: never put anything confidential in it.
 - **Report a problem** (dashboard, the editor's More actions menu, or the account page): describe a problem or suggest an idea; the page concerned is filled in for you. You follow what became of your reports on the same page. No GitHub account is needed.
-- **User feedback** (administrators): triage reports (received, in progress, done, dismissed). **Create a GitHub issue** opens a draft in your own browser, without the author's name, for you to review; the server never contacts GitHub.
+- **User feedback** (administrators): triage reports (received, in progress, done, dismissed). When SMTP is configured, each new report is emailed to the other administrators, and its author is told (in the app and by email) whenever its status changes. Nobody is emailed about their own action: to try it, report from one account and triage from another. The matching option in your profile turns these emails off. **Create a GitHub issue** opens a draft in your own browser, without the author's name, for you to review; the server never contacts GitHub.
 - **Logs** (administrators): the server messages of every pod, by level and text, kept 14 days by default. They say what failed and why (a route, an SMTP or AI error code), never passwords, content or answers.
 
 ## AI, exports and history

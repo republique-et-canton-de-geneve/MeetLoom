@@ -4,6 +4,17 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-28
+
+### Added
+
+- Facilitators move to the previous or next block, and pause or resume, from the always-on-top window, without leaving a slideshow. Visitors' windows have no controls.
+- Administrators receive an email for each problem report or idea (when SMTP is configured), and authors are told in the app and by email when an administrator moves their report on. Nobody is emailed about their own action; each person can turn these emails off in their profile.
+
+### Fixed
+
+- The sidebar scrolls when a zoomed-in browser leaves too little height; its bottom (account, report a problem) was cut off.
+
 ## [0.1.3] - 2026-09-25
 
 ### Added

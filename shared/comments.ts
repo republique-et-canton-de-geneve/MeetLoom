@@ -43,7 +43,8 @@ export interface TeamNotification {
     | "block-mention"
     | "task-completed"
     | "visitor-comments"
-    | "feedback";
+    | "feedback"
+    | "feedback-status";
   /** How many events a grouped notification stands for. */
   count?: number;
   createdAt: string;

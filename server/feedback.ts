@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { User } from "../shared/model.js";
 import type { Database } from "./db.js";
 import { rateLimit } from "./security.js";
-import { notifyFeedback } from "./app-notifications.js";
+import { notifyFeedback, notifyFeedbackStatus } from "./app-notifications.js";
 import type { AppVersion } from "./version.js";
 
 /** Where administrators forward a report, from their own browser. */
@@ -28,6 +28,7 @@ export async function registerFeedback(
     issuesUrl,
     rateLimits,
     onReport,
+    onStatus,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -44,6 +45,13 @@ export async function registerFeedback(
       kind: "bug" | "idea" | "other";
       message: string;
       page: string | null;
+    }) => void;
+    /** After an administrator moved a report on (the author's email). */
+    onStatus?: (change: {
+      authorId: string;
+      kind: "bug" | "idea" | "other";
+      message: string;
+      status: (typeof FEEDBACK_STATUSES)[number];
     }) => void;
   },
 ) {
@@ -142,18 +150,43 @@ export async function registerFeedback(
       .object({ status: z.enum(FEEDBACK_STATUSES) })
       .strict()
       .parse(request.body);
-    const changed = await db.run(
-      "UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3",
-      [
+    const id = z.string().max(120).parse(request.params.id);
+    const report = await db.transaction(async (sql) => {
+      const [current] = await sql.all<{
+        user_id: string;
+        kind: "bug" | "idea" | "other";
+        message: string;
+        status: string;
+      }>("SELECT user_id,kind,message,status FROM feedback WHERE id=$1", [id]);
+      if (!current || current.status === status) return current;
+      await sql.run("UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3", [
         status,
         new Date().toISOString(),
-        z.string().max(120).parse(request.params.id),
-      ],
-    );
-    if (!changed)
+        id,
+      ]);
+      // Its author hears about it, unless they moved it on themselves.
+      if (current.user_id !== who(response).id) {
+        await notifyFeedbackStatus(
+          sql,
+          current.user_id,
+          id,
+          who(response).name,
+        );
+        return { ...current, notify: true };
+      }
+      return current;
+    });
+    if (!report)
       return void response
         .status(404)
         .json({ error: "This report does not exist.", code: "NOT_FOUND" });
+    if ("notify" in report)
+      onStatus?.({
+        authorId: report.user_id,
+        kind: report.kind,
+        message: report.message,
+        status,
+      });
     response.json({ ok: true });
   });
 }

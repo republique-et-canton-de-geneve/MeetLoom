@@ -1250,6 +1250,7 @@ async function assembleWith(db: Database, config: AppConfig) {
         : config.feedbackIssuesUrl || null,
     rateLimits: config.rateLimits,
     onReport: mail.feedbackReceived,
+    onStatus: mail.feedbackStatusChanged,
   });
   await registerSharing(app, {
     db,

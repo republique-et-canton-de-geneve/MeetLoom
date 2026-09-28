@@ -8,7 +8,7 @@ import { sessionCollaborators } from "./collaborators.js";
  * flood the bell: while a notification is unread, new events of the same
  * kind and session add to its count instead of creating another one.
  */
-export type GroupedKind = "visitor-comments" | "feedback";
+export type GroupedKind = "visitor-comments" | "feedback" | "feedback-status";
 
 export async function createAppNotifications(db: Database) {
   await db.run(
@@ -91,4 +91,19 @@ export async function notifyFeedback(
     admins.map((row) => row.id),
     { kind: "feedback", sessionId: null, targetId: null, actor: authorName },
   );
+}
+
+/** The author of a report, when an administrator moves it on. */
+export async function notifyFeedbackStatus(
+  sql: Sql,
+  authorId: string,
+  feedbackId: string,
+  adminName: string,
+) {
+  await notifyGrouped(sql, [authorId], {
+    kind: "feedback-status",
+    sessionId: null,
+    targetId: feedbackId,
+    actor: adminName,
+  });
 }

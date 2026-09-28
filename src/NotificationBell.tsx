@@ -158,6 +158,20 @@ export default function NotificationBell({
           )}
         </>
       );
+    if (notification.kind === "feedback-status")
+      return count > 1 ? (
+        <strong>
+          {t(
+            `${count} évolutions de vos retours`,
+            `${count} updates on your reports`,
+          )}
+        </strong>
+      ) : (
+        <>
+          <strong>{notification.actor}</strong>{" "}
+          {t("a fait avancer votre retour", "moved your report on")}
+        </>
+      );
     return (
       <>
         <strong>{notification.actor}</strong> {descriptions[notification.kind]}
@@ -165,7 +179,10 @@ export default function NotificationBell({
     );
   };
   const descriptions: Record<
-    Exclude<TeamNotification["kind"], "visitor-comments" | "feedback">,
+    Exclude<
+      TeamNotification["kind"],
+      "visitor-comments" | "feedback" | "feedback-status"
+    >,
     string
   > = {
     comment: t("a ajouté un commentaire", "added a comment"),
@@ -271,6 +288,8 @@ export default function NotificationBell({
                     setOpen(false);
                     if (notification.kind === "feedback")
                       navigate("/account/feedback-inbox");
+                    else if (notification.kind === "feedback-status")
+                      navigate("/account/feedback");
                     else if (notification.sessionId)
                       onNavigate(
                         notification.sessionId,
@@ -286,7 +305,9 @@ export default function NotificationBell({
                 <b>
                   {notification.kind === "feedback"
                     ? t("Retours des utilisateurs", "User feedback")
-                    : notification.sessionTitle}
+                    : notification.kind === "feedback-status"
+                      ? t("Mes retours", "My reports")
+                      : notification.sessionTitle}
                 </b>
                 <time dateTime={notification.createdAt}>
                   {new Date(notification.createdAt).toLocaleString(locale)}

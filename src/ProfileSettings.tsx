@@ -258,21 +258,24 @@ export default function ProfileSettings({
             "Receive a preparation reminder three days before my sessions (when SMTP is configured)",
           )}
         </label>
-        {user.isAdmin && (
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={profile.preferences.emailFeedback}
-              onChange={(event) =>
-                preference("emailFeedback", event.target.checked)
-              }
-            />
-            {t(
-              "Recevoir un e-mail à chaque problème ou idée signalé (si SMTP est configuré)",
-              "Receive an email for each reported problem or idea (when SMTP is configured)",
-            )}
-          </label>
-        )}
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={profile.preferences.emailFeedback}
+            onChange={(event) =>
+              preference("emailFeedback", event.target.checked)
+            }
+          />
+          {user.isAdmin
+            ? t(
+                "Recevoir un e-mail à chaque problème ou idée signalé, et quand mes propres retours avancent (si SMTP est configuré)",
+                "Receive an email for each reported problem or idea, and when my own reports move on (when SMTP is configured)",
+              )
+            : t(
+                "Recevoir un e-mail quand mes signalements et idées avancent (si SMTP est configuré)",
+                "Receive an email when my reports and ideas move on (when SMTP is configured)",
+              )}
+        </label>
         <button className="button primary" disabled={busy}>
           {t("Enregistrer mon profil", "Save profile")}
         </button>

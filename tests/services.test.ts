@@ -323,6 +323,77 @@ test("a problem report is emailed to the other administrators who keep that pref
   );
 });
 
+test("the author of a report hears when its status changes, in the app and by email", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  const owner = await h.setup();
+  const member = await h.account("member@example.test");
+  const sent = await member.client.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige quand je change d’onglet.",
+  });
+  await h.mail.flush();
+  messages.length = 0;
+  const id = sent.body.feedback.id;
+  const status = async (value: string) =>
+    assert.equal(
+      (
+        await h.owner.request(`/admin/feedback/${id}`, "PATCH", {
+          status: value,
+        })
+      ).status,
+      200,
+    );
+  await status("in-progress");
+  await h.mail.flush();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, "member@example.test");
+  assert.match(messages[0].text, /Le minuteur se fige/);
+  assert.match(messages[0].text, /\/account\/feedback/);
+  const bell = (await member.client.request("/notifications")).body;
+  assert.equal(bell.unread, 1);
+  assert.equal(bell.notifications[0].kind, "feedback-status");
+  assert.equal(bell.notifications[0].actor, owner.name);
+
+  // Setting the same status again says nothing new.
+  await status("in-progress");
+  await h.mail.flush();
+  assert.equal(messages.length, 1);
+
+  // Further changes group in the bell while unread; each one is emailed.
+  await status("done");
+  await h.mail.flush();
+  assert.equal(messages.length, 2);
+  const grouped = (await member.client.request("/notifications")).body;
+  assert.equal(grouped.unread, 1);
+  assert.equal(grouped.notifications[0].count, 2);
+
+  // An administrator updating their own report is not notified.
+  const own = await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Un mode sombre.",
+  });
+  messages.length = 0;
+  await h.owner.request(`/admin/feedback/${own.body.feedback.id}`, "PATCH", {
+    status: "done",
+  });
+  await h.mail.flush();
+  assert.equal(messages.length, 0);
+  assert.equal(
+    (await h.owner.request("/notifications")).body.notifications.some(
+      (item: { kind: string }) => item.kind === "feedback-status",
+    ),
+    false,
+  );
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,

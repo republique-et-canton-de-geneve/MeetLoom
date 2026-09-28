@@ -467,6 +467,40 @@ export async function installMailApi(
       }
     });
   };
+  /** The author of a report, when an administrator moves it on. */
+  const feedbackStatusChanged = (change: {
+    authorId: string;
+    kind: "bug" | "idea" | "other";
+    message: string;
+    status: "new" | "in-progress" | "done" | "dismissed";
+  }) => {
+    if (!config || !transport) return;
+    background(async () => {
+      const [author] = await currentRecipient(db, change.authorId);
+      if (
+        !author ||
+        !(await accountProfile(db, author.id)).preferences.emailFeedback
+      )
+        return;
+      const french = author.locale === "fr",
+        status = {
+          new: french ? "reçu" : "received",
+          "in-progress": french ? "en cours de traitement" : "in progress",
+          done: french ? "traité" : "done",
+          dismissed: french ? "classé sans suite" : "closed without action",
+        }[change.status],
+        what = {
+          bug: french ? "Votre signalement" : "Your report",
+          idea: french ? "Votre idée" : "Your idea",
+          other: french ? "Votre message" : "Your message",
+        }[change.kind];
+      await send(
+        author,
+        `MeetLoom — ${what} : ${status}`,
+        `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+      );
+    });
+  };
   const interval = config?.scheduled
     ? setInterval(() => background(() => scheduled()), 60000)
     : undefined;
@@ -475,6 +509,7 @@ export async function installMailApi(
     enabled: !!config,
     scheduled,
     feedbackReceived,
+    feedbackStatusChanged,
     async flush() {
       while (pending.size) await Promise.allSettled([...pending]);
     },
