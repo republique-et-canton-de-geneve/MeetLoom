@@ -472,6 +472,10 @@ export default function Timer({
     if (result.end) void chime(session.sound, true);
     else if (result.warning) void chime(session.sound);
   }, [now, session, sound, run]);
+  const atFirstBlock =
+    runnableBlocks(
+      session.days.find((day) => day.id === run.dayId)?.blocks ?? [],
+    ).findIndex((block) => block.id === run.blockId) <= 0;
   const runAction = async (name: string, input?: Record<string, unknown>) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -558,14 +562,7 @@ export default function Timer({
               <button
                 className="timer-control"
                 onClick={() => void runAction("previous")}
-                disabled={
-                  busy ||
-                  run.status === "finished" ||
-                  runnableBlocks(
-                    session.days.find((day) => day.id === run.dayId)?.blocks ??
-                      [],
-                  ).findIndex((block) => block.id === run.blockId) <= 0
-                }
+                disabled={busy || run.status === "finished" || atFirstBlock}
                 title={t(
                   "Bloc précédent : il reprend là où il en était",
                   "Previous block: it resumes where it was left",
@@ -744,7 +741,62 @@ export default function Timer({
       {floatingNotice && <p className="notice">{floatingNotice}</p>}
       {floating &&
         createPortal(
-          <TimerContent session={session} now={now} compact />,
+          <div className="floating-layout">
+            <TimerContent session={session} now={now} compact />
+            {/* Facilitators move on without leaving the slideshow; visitors'
+                windows (PublicAgenda) have no controls. */}
+            {canRun && (
+              <div
+                className="floating-controls"
+                role="group"
+                aria-label={t("Animation", "Facilitation")}
+              >
+                <button
+                  className="timer-control"
+                  onClick={() => void runAction("previous")}
+                  disabled={busy || run.status === "finished" || atFirstBlock}
+                  title={t("Bloc précédent", "Previous block")}
+                  aria-label={t("Bloc précédent", "Previous block")}
+                >
+                  <SkipBack size={18} />
+                </button>
+                <button
+                  className="timer-control"
+                  onClick={() =>
+                    void runAction(
+                      run.status === "running" ? "pause" : "resume",
+                    )
+                  }
+                  disabled={busy || run.status === "finished"}
+                  title={
+                    run.status === "running"
+                      ? t("Pause", "Pause")
+                      : t("Reprendre", "Resume")
+                  }
+                  aria-label={
+                    run.status === "running"
+                      ? t("Pause", "Pause")
+                      : t("Reprendre", "Resume")
+                  }
+                >
+                  {run.status === "running" ? (
+                    <Pause size={18} />
+                  ) : (
+                    <Play size={18} />
+                  )}
+                </button>
+                <button
+                  className="timer-control"
+                  onClick={() => void runAction("next")}
+                  disabled={busy || run.status === "finished"}
+                  title={t("Bloc suivant", "Next block")}
+                  aria-label={t("Bloc suivant", "Next block")}
+                >
+                  <SkipForward size={18} />
+                </button>
+              </div>
+            )}
+          </div>,
           floating.document.body,
         )}
     </div>

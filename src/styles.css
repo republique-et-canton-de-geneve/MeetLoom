@@ -2234,6 +2234,33 @@ hr {
     width: 100%;
   }
 }
+/* Facilitator controls beside the progress, big enough to hit while a
+   slideshow runs underneath. */
+.floating-layout {
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 2vw, 14px);
+  width: 100%;
+  min-width: 0;
+}
+.floating-layout > .timer-content {
+  flex: 1;
+  min-width: 0;
+}
+.floating-controls {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  border-left: 1px solid #4b6c59;
+  padding-left: clamp(4px, 1.5vw, 10px);
+}
+.floating-controls .timer-control {
+  width: clamp(26px, min(8vw, 24vh), 38px);
+  height: clamp(26px, min(8vw, 24vh), 38px);
+}
+.floating-controls .timer-control:disabled {
+  opacity: 0.35;
+}
 .modal {
   width: min(550px, calc(100vw - 36px));
   max-height: 90vh;
