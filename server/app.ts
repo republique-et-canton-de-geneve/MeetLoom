@@ -783,16 +783,19 @@ async function assembleWith(db: Database, config: AppConfig) {
         detail: { role: input.role ?? null },
       });
     });
+    const emailed = await mail.invitation({
+      email: input.email,
+      locale: user(response).locale,
+      inviter: user(response).name,
+      inviterId: user(response).id,
+      target: "account",
+      kind: "account",
+      path: `/join/${raw}`,
+    });
     response.status(201).json({
       token: raw,
       expiresAt: new Date(expires).toISOString(),
-      emailed: mail.invitation({
-        email: input.email,
-        locale: user(response).locale,
-        inviter: user(response).name,
-        kind: "account",
-        path: `/join/${raw}`,
-      }),
+      emailed,
     });
   });
   app.post(
@@ -1277,12 +1280,30 @@ async function assembleWith(db: Database, config: AppConfig) {
       if (!verdict) continue;
       try {
         await db.transaction(async (sql) => {
-          if (!(await claimForgottenRun(sql, session, verdict))) return;
+          // Decide again on the locked, current session: someone may have
+          // stopped, reset or closed it since the scan.
+          await sql.run("UPDATE sessions SET version=version WHERE id=$1", [
+            session.id,
+          ]);
+          const [fresh] = await sql.all<
+            SessionRow & { workspace_id: string | null }
+          >(
+            "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE s.id=$1 AND l.deleted_at IS NULL AND l.closed_at IS NULL",
+            [session.id],
+          );
+          if (!fresh) return;
+          const current = mappedSession(fresh);
+          if (
+            current.run.runStartedAt !== session.run.runStartedAt ||
+            forgottenRun(current, now) !== verdict ||
+            !(await claimForgottenRun(sql, current, verdict))
+          )
+            return;
           if (verdict === "stop")
             await save(
-              session,
-              stopForgotten(session, now),
-              session.ownerId,
+              current,
+              stopForgotten(current, now),
+              current.ownerId,
               undefined,
               undefined,
               sql,
@@ -1292,7 +1313,7 @@ async function assembleWith(db: Database, config: AppConfig) {
             session.id,
             verdict === "stop" ? "run-stopped" : "run-overdue",
           );
-          await mail.forgottenRun(sql, session, verdict, organizers);
+          await mail.forgottenRun(sql, current, verdict, organizers);
         });
       } catch (error) {
         // Someone acted on the timer meanwhile: the next sweep decides again.

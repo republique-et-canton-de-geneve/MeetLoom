@@ -35,6 +35,7 @@ export default function WorkspacePanel({
     [busy, setBusy] = useState(false),
     [source, setSource] = useState(""),
     [invitation, setInvitation] = useState(""),
+    [invitationEmailed, setInvitationEmailed] = useState(false),
     [copied, setCopied] = useState(false),
     [confirm, setConfirm] = useState("");
   const loadMembers = async () => {
@@ -616,6 +617,7 @@ export default function WorkspacePanel({
                 });
                 if (result.token) {
                   setInvitation(`${location.origin}/join/${result.token}`);
+                  setInvitationEmailed(!!result.emailed);
                   setCopied(false);
                 }
                 if (result.emailed)
@@ -665,10 +667,15 @@ export default function WorkspacePanel({
           {invitation && (
             <div className="workspace-invitation">
               <p>
-                {t(
-                  "Transmettez ce lien à la personne invitée. Il expire après 72 heures. Aucun e-mail n’a été envoyé.",
-                  "Send this link to the invited person. It expires after 72 hours. No email has been sent.",
-                )}
+                {invitationEmailed
+                  ? t(
+                      "Ce lien a été envoyé par e-mail à la personne invitée ; vous pouvez aussi le lui transmettre. Il expire après 72 heures.",
+                      "This link was emailed to the invited person; you can also send it yourself. It expires after 72 hours.",
+                    )
+                  : t(
+                      "Transmettez ce lien à la personne invitée. Il expire après 72 heures. Aucun e-mail n’a été envoyé.",
+                      "Send this link to the invited person. It expires after 72 hours. No email has been sent.",
+                    )}
               </p>
               <input
                 aria-label={t("Lien d’invitation", "Invitation link")}

@@ -95,6 +95,11 @@ export default function ProfileSettings({
                 email,
                 locale: language,
                 ...profile,
+                // Saved on its own (see the checkbox).
+                preferences: {
+                  ...profile.preferences,
+                  emailFeedback: undefined,
+                },
                 currentPassword:
                   new FormData(event.currentTarget).get("currentPassword") ||
                   undefined,
@@ -261,10 +266,18 @@ export default function ProfileSettings({
         <label className="checkbox-label">
           <input
             type="checkbox"
-            checked={profile.preferences.emailFeedback}
-            onChange={(event) =>
-              preference("emailFeedback", event.target.checked)
-            }
+            checked={profile.preferences.emailFeedback !== false}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              preference("emailFeedback", enabled);
+              void api("/account/email-feedback", {
+                method: "PUT",
+                body: JSON.stringify({ enabled }),
+              }).catch((cause) => {
+                preference("emailFeedback", !enabled);
+                setError((cause as Error).message);
+              });
+            }}
           />
           {user.isAdmin
             ? t(

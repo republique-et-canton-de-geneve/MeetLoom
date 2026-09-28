@@ -24,8 +24,13 @@ const smtpFailure = (error: unknown) => {
 
 export type InvitationMail = (invite: {
   email: string;
+  /** The inviter's language, for someone without an account yet. */
   locale: "fr" | "en";
   inviter: string;
+  inviterId: string;
+  /** What the invitation is for (a session or workspace id, or "account"):
+   * the same person is emailed about it at most every 15 minutes. */
+  target: string;
   kind: "session" | "workspace" | "account";
   /** The session or workspace name. */
   title?: string;
@@ -33,7 +38,7 @@ export type InvitationMail = (invite: {
   path: string;
   /** Already has an account: no link to accept. */
   existing?: boolean;
-}) => boolean;
+}) => Promise<boolean>;
 export interface MailConfig {
   host: string;
   port: number;
@@ -114,6 +119,9 @@ export async function installMailApi(
   );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_recovery_requests (email_hash TEXT PRIMARY KEY,requested_at BIGINT NOT NULL)",
+  );
+  await db.run(
+    "CREATE TABLE IF NOT EXISTS mail_invitation_log (key TEXT PRIMARY KEY,sender TEXT NOT NULL,sent_at BIGINT NOT NULL)",
   );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_outbox (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
@@ -445,12 +453,45 @@ export async function installMailApi(
       running = false;
     }
   }
-  /** An invitation, emailed to the person invited: the private link to join
-   * for someone without an account, the place to find it otherwise. Returns
-   * whether an email is on its way. */
-  const invitation: InvitationMail = (invite) => {
-    if (!config || !transport) return false;
-    const french = invite.locale === "fr",
+  /**
+   * An invitation, emailed to the person invited: the private link to join
+   * for someone without an account, the place to find it otherwise. Sent
+   * before the request answers, so "emailed" is true only once the SMTP
+   * server accepted it; the join link is never stored, and the inviter keeps
+   * it to pass on otherwise. The same person hears about the same thing at
+   * most every 15 minutes, and one person sends at most 50 an hour.
+   */
+  const invitation: InvitationMail = async (invite) => {
+    if (!config || !transport || closing) return false;
+    const now = Date.now(),
+      key = hashToken(`${invite.email}\n${invite.kind}\n${invite.target}`);
+    const claimed = await db.transaction(async (sql) => {
+      await sql.run("DELETE FROM mail_invitation_log WHERE sent_at<$1", [
+        now - day,
+      ]);
+      const [{ count }] = await sql.all<{ count: string | number }>(
+        "SELECT COUNT(*) AS count FROM mail_invitation_log WHERE sender=$1 AND sent_at>$2",
+        [invite.inviterId, now - hour],
+      );
+      if (Number(count) >= 50) return false;
+      await sql.run(
+        "INSERT INTO mail_invitation_log(key,sender,sent_at) VALUES($1,$2,0) ON CONFLICT(key) DO NOTHING",
+        [key, invite.inviterId],
+      );
+      return !!(await sql.run(
+        "UPDATE mail_invitation_log SET sender=$1,sent_at=$2 WHERE key=$3 AND sent_at<=$4",
+        [invite.inviterId, now, key, now - 15 * 60 * 1000],
+      ));
+    });
+    if (!claimed) return false;
+    // Someone with an account reads it in their own language.
+    const [account] = invite.existing
+      ? await db.all<{ locale: string }>(
+          "SELECT locale FROM users WHERE email=$1",
+          [invite.email],
+        )
+      : [];
+    const french = (account?.locale ?? invite.locale) === "fr",
       inviter = short(invite.inviter, 120),
       title = invite.title ? short(invite.title, 150) : "",
       what = {
@@ -462,9 +503,9 @@ export async function installMailApi(
           : `to join the workspace “${title}”`,
         account: french ? "à rejoindre MeetLoom" : "to join MeetLoom",
       }[invite.kind];
-    return background(async () => {
+    try {
       await send(
-        { id: "", email: invite.email, name: "", locale: invite.locale },
+        { id: "", email: invite.email, name: "", locale: french ? "fr" : "en" },
         invite.existing
           ? french
             ? `MeetLoom — ${inviter} vous a ajouté${title ? ` : ${title}` : ""}`
@@ -476,7 +517,15 @@ export async function installMailApi(
           ? `${inviter} ${french ? "vous a ajouté" : "added you"} ${what}.\n\n${origin}${invite.path}`
           : `${inviter} ${french ? "vous invite" : "invites you"} ${what}.\n\n${french ? "Ce lien personnel est valable 72 heures ; il vous permet de créer votre compte :" : "This personal link is valid for 72 hours and lets you create your account:"}\n${origin}${invite.path}\n\n${french ? "Ne le transférez pas. Si vous n’attendiez pas cette invitation, ignorez ce message." : "Do not forward it. If you did not expect this invitation, you can ignore this message."}`,
       );
-    });
+      return true;
+    } catch (error) {
+      log.warn("SMTP delivery failed", smtpFailure(error));
+      // Not sent: a new attempt may email them.
+      await db.run("UPDATE mail_invitation_log SET sent_at=0 WHERE key=$1", [
+        key,
+      ]);
+      return false;
+    }
   };
   /**
    * Event emails (problem reports) go through a durable queue: written in the
@@ -563,7 +612,10 @@ export async function installMailApi(
       [report.authorId],
     );
     for (const admin of admins) {
-      if (!(await accountProfile(sql, admin.id)).preferences.emailFeedback)
+      if (
+        (await accountProfile(sql, admin.id)).preferences.emailFeedback ===
+        false
+      )
         continue;
       const french = admin.locale === "fr",
         kind = {
@@ -594,7 +646,7 @@ export async function installMailApi(
     const [author] = await currentRecipient(sql, change.authorId);
     if (
       !author ||
-      !(await accountProfile(sql, author.id)).preferences.emailFeedback
+      (await accountProfile(sql, author.id)).preferences.emailFeedback === false
     )
       return;
     const french = author.locale === "fr",

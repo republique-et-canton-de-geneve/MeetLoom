@@ -539,6 +539,80 @@ test("report emails survive a failed send and profiles saved before the option e
   assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
 });
 
+test("invitation emails are sent before answering, in the recipient's language, and not repeated", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const session = await h.session();
+  const english = await h.account("english@example.test");
+  // The SMTP server is down: the inviter is told to pass the link on.
+  const unsent = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    { name: "Newcomer", email: "newcomer@example.test", role: "viewer" },
+  );
+  assert.equal(unsent.status, 201);
+  assert.equal(unsent.body.emailed, false);
+  assert.ok(unsent.body.token);
+
+  failing = false;
+  const invite = () =>
+    h.owner.request(`/sessions/${session.id}/invitations`, "POST", {
+      name: "English",
+      email: "english@example.test",
+      role: "editor",
+    });
+  const first = await invite();
+  assert.equal(first.body.emailed, true);
+  // Sent before the answer, in the English account's own language.
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, "english@example.test");
+  assert.match(messages[0].subject, /added you/);
+  // Adding the same person again does not email them again.
+  const again = await invite();
+  assert.equal(again.status, 201);
+  assert.equal(again.body.emailed, false);
+  assert.equal(messages.length, 1);
+  void english;
+});
+
+test("the report-email option is saved on its own, so older servers keep accepting profile saves", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const account = (await h.owner.request("/account")).body;
+  const { emailFeedback, ...older } = account.profile.preferences;
+  assert.equal(emailFeedback, true);
+  assert.equal(
+    (
+      await h.owner.request("/account/email-feedback", "PUT", {
+        enabled: false,
+      })
+    ).status,
+    200,
+  );
+  // A profile save without the option, as older servers expect it, keeps it.
+  const saved = await h.owner.request("/account", "PUT", {
+    name: account.user.name,
+    email: account.user.email,
+    locale: account.user.locale,
+    preferences: older,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(
+    (await h.owner.request("/account")).body.profile.preferences.emailFeedback,
+    false,
+  );
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,

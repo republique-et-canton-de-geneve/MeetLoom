@@ -81,6 +81,26 @@ export async function installAccountsApi(
       "CREATE TABLE IF NOT EXISTS account_resets(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at BIGINT NOT NULL)",
     );
   });
+  app.put("/api/account/email-feedback", authenticated, async (req, res) => {
+    const { enabled } = z
+      .object({ enabled: z.boolean() })
+      .strict()
+      .parse(req.body);
+    await db.transaction(async (sql) => {
+      const profile = await accountProfile(sql, who(res).id);
+      await sql.run(
+        "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
+        [
+          who(res).id,
+          JSON.stringify({
+            ...profile,
+            preferences: { ...profile.preferences, emailFeedback: enabled },
+          }),
+        ],
+      );
+    });
+    res.json({ ok: true });
+  });
   app.get("/api/account", authenticated, async (_req, res) =>
     res.json({
       user: who(res),
@@ -130,9 +150,12 @@ export async function installAccountsApi(
           "ACCOUNT_EXISTS",
           "An account already exists for this email.",
         );
+      // The report-email option has its own route: a profile save keeps it.
+      const { emailFeedback } = (await accountProfile(db, who(res).id))
+        .preferences;
       const profile: AccountProfile = {
         ...(input.avatar ? { avatar: input.avatar } : {}),
-        preferences: input.preferences,
+        preferences: { ...input.preferences, emailFeedback },
       };
       await db.transaction(async (sql) => {
         if (

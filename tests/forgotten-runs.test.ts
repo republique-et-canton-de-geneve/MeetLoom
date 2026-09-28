@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { harness } from "./support.js";
 import { createSession, newBlock, transitionRun } from "../shared/domain.js";
-import { forgottenRun } from "../server/forgotten-runs.js";
+import { forgottenRun, stopForgotten } from "../server/forgotten-runs.js";
 import type { MailMessage } from "../server/mailer.js";
 import type { RunRecord } from "../shared/history.js";
 
@@ -40,6 +40,13 @@ test("a timer left running is recalled after an hour and stopped at night", () =
   evening.days[0].blocks = [newBlock("fr", { title: "Long", duration: 240 })];
   evening = transitionRun(evening, "start", {}, nextUtcHour(start, 21));
   assert.equal(forgottenRun(evening, nextUtcHour(start, 23, 30)), null);
+  // Stopped, a forgotten step counts for its planned time, paused or not.
+  const stoppedPaused = stopForgotten(paused, nextUtcHour(start, 23, 30));
+  assert.equal(stoppedPaused.run.status, "finished");
+  assert.equal(
+    stoppedPaused.run.actualDurations?.[session.days[0].blocks[0].id],
+    600,
+  );
   // Finished or idle timers are left alone.
   assert.equal(
     forgottenRun(

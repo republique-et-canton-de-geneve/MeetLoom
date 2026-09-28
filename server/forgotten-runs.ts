@@ -1,9 +1,5 @@
 import type { Session } from "../shared/model.js";
-import {
-  elapsedSeconds,
-  runnableBlocks,
-  transitionRun,
-} from "../shared/domain.js";
+import { runnableBlocks, transitionRun } from "../shared/domain.js";
 import type { Database, Sql } from "./db.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -51,8 +47,9 @@ export function forgottenRun(
   return hour >= 23 || hour < 5 ? "stop" : "remind";
 }
 
-/** Stops a forgotten timer. When the current block really ended is unknown,
- * so it is credited with its planned time, not with the whole night. */
+/** Stops a forgotten timer. When the current step really ended is unknown,
+ * so it counts for its planned time, running or paused, rather than the
+ * whole night or wherever a pause left it. */
 export function stopForgotten(session: Session, now: number): Session {
   const synced = transitionRun(session, "sync", {}, now);
   const run = synced.run;
@@ -60,13 +57,20 @@ export function stopForgotten(session: Session, now: number): Session {
   const block = runnableBlocks(
     synced.days.find((day) => day.id === run.dayId)?.blocks ?? [],
   ).find((value) => value.id === run.blockId);
-  const planned = (block?.duration ?? 0) * 60,
-    elapsed = elapsedSeconds(run, now);
-  const at =
-    run.status === "running" && run.startedAt !== null && elapsed > planned
-      ? Math.max(run.startedAt, now - (elapsed - planned) * 1000)
-      : now;
-  return transitionRun(synced, "stop", {}, at);
+  return transitionRun(
+    {
+      ...synced,
+      run: {
+        ...run,
+        status: "paused",
+        startedAt: null,
+        elapsedBeforePause: (block?.duration ?? 0) * 60,
+      },
+    },
+    "stop",
+    {},
+    now,
+  );
 }
 
 /** One reminder and one stop per run, whichever pod gets there first. */

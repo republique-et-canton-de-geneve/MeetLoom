@@ -506,15 +506,17 @@ export async function installWorkspacesApi(
         [wid],
       ),
       inviter = res.locals.user as User;
-    const emailed = !!invite?.({
+    const emailed = !!(await invite?.({
       email: input.email,
       locale: inviter.locale,
       inviter: inviter.name,
+      inviterId: inviter.id,
+      target: wid,
       kind: "workspace",
       title: workspace?.name,
       path: result.token ? `/join/${result.token}` : "/",
       existing: !result.token,
-    });
+    }));
     res.status(201).json({ ...result, emailed });
   });
   app.patch(
