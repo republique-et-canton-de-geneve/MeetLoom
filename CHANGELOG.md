@@ -10,8 +10,12 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 - Facilitators move to the previous or next block, and pause or resume, from the always-on-top window, without leaving a slideshow. Visitors' windows have no controls.
 - Invitations are emailed when SMTP is configured: account, workspace and session invitations send their personal link to someone without an account, and a person who already has one is told where to find what they were added to. Without SMTP, the link is still shown to copy.
-- Forgotten timers: a timer still running or paused an hour past the end of its plan reminds its organizers (owner, editors, facilitators) once, in the app and by email; if it is still going between 23:00 and 05:00 in the session's time zone, it is stopped automatically, with the current step counted for its planned duration. A session still within its plan is never interrupted.
+- Forgotten timers are stopped automatically: a timer whose current step is 24 hours past its time, with nothing changed on the session for 24 hours (the last step never marked as done, a test left running), or a paused timer untouched for 7 days. The current step counts for its planned duration and the organizers see it in their notifications. A session still in use, over several days included, is never interrupted.
 - Administrators receive an email for each problem report or idea (when SMTP is configured), and authors are told in the app and by email when an administrator moves their report on. Nobody is emailed about their own action; each person can turn these emails off in their profile.
+
+### Changed
+
+- The report form offers its three kinds (a problem, an idea or a request, something else) as labelled cards instead of loose radio buttons.
 
 ### Fixed
 

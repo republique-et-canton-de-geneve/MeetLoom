@@ -9,11 +9,7 @@ import { sessionCollaborators } from "./collaborators.js";
  * kind and session add to its count instead of creating another one.
  */
 export type GroupedKind =
-  | "visitor-comments"
-  | "feedback"
-  | "feedback-status"
-  | "run-overdue"
-  | "run-stopped";
+  "visitor-comments" | "feedback" | "feedback-status" | "run-stopped";
 
 export async function createAppNotifications(db: Database) {
   await db.run(
@@ -81,23 +77,18 @@ export async function notifyVisitorComment(
   });
 }
 
-/** The organizers who can stop a timer nobody stopped: owner, editors and
- * facilitators (forgotten-runs.ts). */
-export async function notifyForgottenRun(
-  sql: Sql,
-  sessionId: string,
-  kind: "run-overdue" | "run-stopped",
-) {
+/** A forgotten timer was stopped (forgotten-runs.ts): its organizers,
+ * owner, editors and facilitators, see why. */
+export async function notifyForgottenRun(sql: Sql, sessionId: string) {
   const organizers = (await sessionCollaborators(sql, sessionId))
     .filter((member) => member.role !== "viewer")
     .map((member) => member.id);
   await notifyGrouped(sql, organizers, {
-    kind,
+    kind: "run-stopped",
     sessionId,
     targetId: null,
     actor: "MeetLoom",
   });
-  return organizers;
 }
 
 /** Every active administrator but the author. */

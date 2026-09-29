@@ -10,7 +10,6 @@ import { accountProfile } from "./accounts.js";
 import { hashToken, rateLimit, token } from "./security.js";
 import { getSessionLifecycle } from "./lifecycle.js";
 import { log } from "./log.js";
-import { sessionCollaborators } from "./collaborators.js";
 
 /** The SMTP error codes (connection, authentication, rejection), never the
  * message or its recipients. */
@@ -548,12 +547,9 @@ export async function installMailApi(
    * rows are deleted, so message bodies do not linger. Invitations are not
    * queued: their links must never be stored in clear (see `invitation`).
    */
-  /** What a queued email is about, rechecked when it is sent: an
-   * administrator's report, one's own report, or a session's organizers. */
-  type Scope =
-    | { purpose: "administrator" }
-    | { purpose: "author" }
-    | { purpose: "organizer"; target: string };
+  /** What a queued email is about, rechecked when it is sent: a report for
+   * administrators, or one's own report. */
+  type Scope = { purpose: "administrator" } | { purpose: "author" };
   const enqueue = async (
     sql: Sql,
     recipient: Recipient,
@@ -568,13 +564,14 @@ export async function installMailApi(
     );
     await sql.run(
       "INSERT INTO mail_outbox_scope(id,purpose,target) VALUES($1,$2,$3)",
-      [id, scope.purpose, "target" in scope ? scope.target : null],
+      [id, scope.purpose, null],
     );
   };
-  /** Whether the recipient still has the access the email is about. */
+  /** Whether the recipient still has the access the email is about. The
+   * `target` column is kept for later purposes tied to a session. */
   async function stillEntitled(id: string, userId: string) {
-    const [scope] = await db.all<{ purpose: string; target: string | null }>(
-      "SELECT purpose,target FROM mail_outbox_scope WHERE id=$1",
+    const [scope] = await db.all<{ purpose: string }>(
+      "SELECT purpose FROM mail_outbox_scope WHERE id=$1",
       [id],
     );
     if (scope?.purpose === "administrator")
@@ -584,10 +581,6 @@ export async function installMailApi(
             userId,
           ])
         ).length > 0
-      );
-    if (scope?.purpose === "organizer")
-      return (await sessionCollaborators(db, scope.target ?? "")).some(
-        (member) => member.id === userId && member.role !== "viewer",
       );
     return true;
   }
@@ -720,41 +713,6 @@ export async function installMailApi(
       { purpose: "author" },
     );
   };
-  /** A timer nobody stopped (forgotten-runs.ts): a reminder during the day,
-   * then word that it was stopped at night. Call inside that transaction. */
-  const forgottenRun = async (
-    sql: Sql,
-    session: { id: string; title: string },
-    kind: "remind" | "stop",
-    recipients: string[],
-  ) => {
-    if (!config) return;
-    for (const id of recipients) {
-      const [recipient] = await currentRecipient(sql, id);
-      if (!recipient) continue;
-      const french = recipient.locale === "fr",
-        title = short(session.title, 150);
-      await enqueue(
-        sql,
-        recipient,
-        kind === "remind"
-          ? french
-            ? `MeetLoom — le minuteur tourne encore : ${title}`
-            : `MeetLoom — the timer is still running: ${title}`
-          : french
-            ? `MeetLoom — minuteur arrêté automatiquement : ${title}`
-            : `MeetLoom — timer stopped automatically: ${title}`,
-        kind === "remind"
-          ? french
-            ? `Le minuteur de « ${title} » tourne encore, plus d’une heure après la fin prévue. Si la séance est terminée, pensez à l’arrêter :\n${origin}/session/${session.id}\n\nS’il tourne encore dans la nuit, MeetLoom l’arrêtera automatiquement.`
-            : `The timer of “${title}” is still running, more than an hour past its planned end. If the session is over, remember to stop it:\n${origin}/session/${session.id}\n\nIf it is still running at night, MeetLoom will stop it automatically.`
-          : french
-            ? `Le minuteur de « ${title} » tournait encore cette nuit : MeetLoom l’a arrêté. L’étape en cours est comptée avec sa durée prévue ; le déroulé est dans l’historique de la séance.\n${origin}/session/${session.id}`
-            : `The timer of “${title}” was still running at night: MeetLoom stopped it. The current step counts for its planned duration; the run is in the session history.\n${origin}/session/${session.id}`,
-        { purpose: "organizer", target: session.id },
-      );
-    }
-  };
   // Every pod sweeps the queue, so an email outlives the pod that queued it.
   const outboxInterval = config
     ? setInterval(() => background(() => drainOutbox()), 60000)
@@ -769,7 +727,6 @@ export async function installMailApi(
     scheduled,
     feedbackReceived,
     feedbackStatusChanged,
-    forgottenRun,
     /** Sends what the queue holds now, in the background; `now` lets tests
      * pass the retry delay. Awaiting it waits for that send. */
     deliverQueued(now?: number) {

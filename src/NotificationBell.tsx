@@ -158,21 +158,12 @@ export default function NotificationBell({
           )}
         </>
       );
-    if (notification.kind === "run-overdue")
-      return (
-        <strong>
-          {t(
-            "Le minuteur tourne encore, plus d’une heure après la fin prévue : pensez à l’arrêter",
-            "The timer is still running, over an hour past the planned end: remember to stop it",
-          )}
-        </strong>
-      );
     if (notification.kind === "run-stopped")
       return (
         <strong>
           {t(
-            "Minuteur oublié, arrêté automatiquement dans la nuit",
-            "Forgotten timer, stopped automatically at night",
+            "Minuteur oublié, arrêté automatiquement",
+            "Forgotten timer, stopped automatically",
           )}
         </strong>
       );
@@ -199,11 +190,7 @@ export default function NotificationBell({
   const descriptions: Record<
     Exclude<
       TeamNotification["kind"],
-      | "visitor-comments"
-      | "feedback"
-      | "feedback-status"
-      | "run-overdue"
-      | "run-stopped"
+      "visitor-comments" | "feedback" | "feedback-status" | "run-stopped"
     >,
     string
   > = {

@@ -45,7 +45,6 @@ export interface TeamNotification {
     | "visitor-comments"
     | "feedback"
     | "feedback-status"
-    | "run-overdue"
     | "run-stopped";
   /** How many events a grouped notification stands for. */
   count?: number;

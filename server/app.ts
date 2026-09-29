@@ -1277,9 +1277,8 @@ async function assembleWith(db: Database, config: AppConfig) {
       "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
     );
     for (const row of rows) {
-      const session = mappedSession(row),
-        verdict = forgottenRun(session, now);
-      if (!verdict) continue;
+      const session = mappedSession(row);
+      if (!forgottenRun(session, now)) continue;
       try {
         await db.transaction(async (sql) => {
           // Decide again on the locked, current session: someone may have
@@ -1307,25 +1306,20 @@ async function assembleWith(db: Database, config: AppConfig) {
           }
           if (
             current.run.runStartedAt !== session.run.runStartedAt ||
-            forgottenRun(current, now) !== verdict ||
-            !(await claimForgottenRun(sql, current, verdict))
+            !forgottenRun(current, now) ||
+            !(await claimForgottenRun(sql, current))
           )
             return;
-          if (verdict === "stop")
-            await save(
-              current,
-              stopForgotten(current, now),
-              current.ownerId,
-              undefined,
-              undefined,
-              sql,
-            );
-          const organizers = await notifyForgottenRun(
+          await save(
+            current,
+            stopForgotten(current, now),
+            current.ownerId,
+            undefined,
+            undefined,
             sql,
-            session.id,
-            verdict === "stop" ? "run-stopped" : "run-overdue",
           );
-          await mail.forgottenRun(sql, current, verdict, organizers);
+          // Its organizers see why the timer shows as finished.
+          await notifyForgottenRun(sql, session.id);
         });
       } catch (error) {
         // Someone acted on the timer meanwhile: the next sweep decides again.
@@ -1336,7 +1330,6 @@ async function assembleWith(db: Database, config: AppConfig) {
           });
       }
     }
-    await mail.deliverQueued();
   }
   const forgottenInterval = setInterval(
     () => void sweepForgottenRuns().catch(() => undefined),

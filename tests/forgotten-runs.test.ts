@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { harness } from "./support.js";
 import { createSession, newBlock, transitionRun } from "../shared/domain.js";
 import { forgottenRun, stopForgotten } from "../server/forgotten-runs.js";
-import type { MailMessage } from "../server/mailer.js";
 import type { RunRecord } from "../shared/history.js";
 import {
   replaceWithSnapshot,
@@ -19,7 +18,7 @@ const nextUtcHour = (from: number, hour: number, minutes = 0) => {
   return date.getTime() >= from ? date.getTime() : date.getTime() + 24 * HOUR;
 };
 
-test("a timer left running is recalled after an hour and stopped at night", () => {
+test("only a timer left alone for hours is forgotten, never a session still going", () => {
   let session = createSession("owner", "Atelier", "fr");
   session.timezone = "UTC";
   session.days[0].blocks = [
@@ -28,85 +27,65 @@ test("a timer left running is recalled after an hour and stopped at night", () =
   ];
   const start = nextUtcHour(Date.now(), 9);
   session = transitionRun(session, "start", {}, start);
-  // Within the plan, or less than an hour past it: nothing.
-  assert.equal(forgottenRun(session, start + 30 * 60 * 1000), null);
-  assert.equal(forgottenRun(session, start + 90 * 60 * 1000), null);
-  // An hour past the 40 planned minutes, during the day: a reminder.
-  assert.equal(forgottenRun(session, start + 101 * 60 * 1000), "remind");
-  // Still going at night: stopped.
-  assert.equal(forgottenRun(session, nextUtcHour(start, 23, 30)), "stop");
-  assert.equal(forgottenRun(session, nextUtcHour(start, 3)), "stop");
-  // A paused timer is forgotten just the same.
-  const paused = transitionRun(session, "pause", {}, start + 5 * 60 * 1000);
-  assert.equal(forgottenRun(paused, nextUtcHour(start, 23, 30)), "stop");
-  // An evening session still within its plan runs on.
-  let evening = createSession("owner", "Soirée", "fr");
-  evening.timezone = "UTC";
-  evening.days[0].blocks = [newBlock("fr", { title: "Long", duration: 240 })];
-  evening = transitionRun(evening, "start", {}, nextUtcHour(start, 21));
-  assert.equal(forgottenRun(evening, nextUtcHour(start, 23, 30)), null);
+  session.updatedAt = new Date(start).toISOString();
+  const minutes = (value: number) => start + value * 60 * 1000;
+  // The step's 10 minutes, then less than a day of overrun: kept, even
+  // overnight.
+  assert.equal(forgottenRun(session, minutes(30)), false);
+  assert.equal(forgottenRun(session, nextUtcHour(start, 23, 30)), false);
+  assert.equal(forgottenRun(session, minutes(10 + 24 * 60 - 1)), false);
+  // 24 hours past the step with nothing happening on the session: forgotten.
+  assert.equal(forgottenRun(session, minutes(10 + 24 * 60 + 1)), true);
+  // Anything happening on the session (an edit, next, an extension) counts
+  // as someone still there.
+  assert.equal(
+    forgottenRun(
+      { ...session, updatedAt: new Date(minutes(120)).toISOString() },
+      minutes(10 + 24 * 60 + 1),
+    ),
+    false,
+  );
+  // Time added to the step moves its end.
+  const extended = structuredClone(session);
+  extended.days[0].blocks[0].duration = 240;
+  assert.equal(forgottenRun(extended, minutes(10 + 24 * 60 + 1)), false);
+  // A scheduled start still ahead is waiting, not forgotten.
+  const later = createSession("owner", "Plus tard", "fr");
+  later.days[0].blocks = [newBlock("fr", { title: "Ouverture", duration: 10 })];
+  const waiting = transitionRun(later, "start", {}, minutes(24 * 60));
+  waiting.updatedAt = new Date(start).toISOString();
+  assert.equal(forgottenRun(waiting, minutes(10 * 60)), false);
+
+  // A paused timer no longer counts: kept for a week without changes, so a
+  // session paused overnight or over a weekend resumes where it was.
+  const paused = transitionRun(session, "pause", {}, minutes(5));
+  paused.updatedAt = new Date(minutes(5)).toISOString();
+  assert.equal(forgottenRun(paused, minutes(3 * 24 * 60)), false);
+  assert.equal(forgottenRun(paused, minutes(6 * 24 * 60)), false);
+  assert.equal(forgottenRun(paused, minutes(8 * 24 * 60)), true);
   // Stopped, a forgotten step counts for its planned time, paused or not.
-  const stoppedPaused = stopForgotten(paused, nextUtcHour(start, 23, 30));
+  const stoppedPaused = stopForgotten(paused, minutes(8 * 24 * 60));
   assert.equal(stoppedPaused.run.status, "finished");
   assert.equal(
     stoppedPaused.run.actualDurations?.[session.days[0].blocks[0].id],
     600,
   );
-  // Time added during the run moves the end: an evening session extended
-  // until one in the morning is not stopped at half past eleven.
-  let extended = createSession("owner", "Prolongée", "fr");
-  extended.timezone = "UTC";
-  extended.days[0].blocks = [newBlock("fr", { title: "Débat", duration: 60 })];
-  extended = transitionRun(extended, "start", {}, nextUtcHour(start, 21));
-  extended.days[0].blocks[0].duration = 240;
-  assert.equal(forgottenRun(extended, nextUtcHour(start, 23, 30)), null);
-  // Started on the last step: the steps skipped before it do not delay the
-  // reminder.
-  let late = createSession("owner", "Fin de journée", "fr");
-  late.timezone = "UTC";
-  late.days[0].blocks = [
-    newBlock("fr", { title: "Matin", duration: 420 }),
-    newBlock("fr", { title: "Clôture", duration: 10 }),
-  ];
-  const lateStart = nextUtcHour(start, 9);
-  late = transitionRun(
-    late,
-    "start",
-    { blockId: late.days[0].blocks[1].id },
-    lateStart,
-  );
-  assert.equal(forgottenRun(late, lateStart + 71 * 60 * 1000), "remind");
   // Finished or idle timers are left alone.
   assert.equal(
     forgottenRun(
-      transitionRun(session, "stop", {}, start + HOUR),
-      start + 20 * HOUR,
+      transitionRun(session, "stop", {}, minutes(60)),
+      minutes(9999),
     ),
-    null,
+    false,
   );
 });
 
-test("forgotten timers: one reminder to the organizers, then a stop that keeps the run history sensible", async (t) => {
-  const messages: MailMessage[] = [],
-    h = await harness(t, {
-      mail: {
-        host: "smtp.example.test",
-        port: 587,
-        secure: false,
-        from: "meetloom@example.test",
-        scheduled: false,
-      },
-      mailTransport: {
-        async send(message) {
-          messages.push(message);
-        },
-      },
-    });
+test("a forgotten timer is stopped once, keeps a sensible run history and tells its organizers", async (t) => {
+  const h = await harness(t);
   await h.setup();
   const facilitator = await h.account("facilitator@example.test"),
     viewer = await h.account("viewer@example.test");
   let session = await h.session();
-  session.timezone = "UTC";
   session.days[0].blocks = [
     newBlock("fr", { title: "Accueil", duration: 10 }),
     newBlock("fr", { title: "Atelier", duration: 30 }),
@@ -131,40 +110,16 @@ test("forgotten timers: one reminder to the organizers, then a stop that keeps t
     })
   ).body.session;
   const start = session.run.runStartedAt!;
-  await h.mail.flush();
-  messages.length = 0;
 
-  // Two hours later, during the day: one reminder, not repeated.
-  const day =
-    new Date(start + 2 * HOUR).getUTCHours() >= 5 &&
-    new Date(start + 2 * HOUR).getUTCHours() < 23
-      ? start + 2 * HOUR
-      : nextUtcHour(start + 2 * HOUR, 9);
-  await h.runs.sweep(day);
-  await h.runs.sweep(day + 10 * 60 * 1000);
-  await h.mail.deliverQueued(day);
-  assert.deepEqual(messages.map((message) => message.to).sort(), [
-    "facilitator@example.test",
-    "owner@example.test",
-  ]);
-  assert.match(messages[0].text, new RegExp(`/session/${session.id}`));
-  const bell = (await facilitator.client.request("/notifications")).body;
-  assert.equal(bell.notifications[0].kind, "run-overdue");
-  assert.equal(
-    (await viewer.client.request("/notifications")).body.notifications.length,
-    0,
-  );
+  // Overnight, the timer is still simply overrunning: kept.
+  await h.runs.sweep(start + 12 * HOUR);
   assert.equal(
     (await h.owner.request(`/sessions/${session.id}`)).body.session.run.status,
     "running",
   );
-
-  // Still running at night: stopped, the current block credited with its
-  // planned time rather than the whole night.
-  messages.length = 0;
-  const night = nextUtcHour(day, 23, 30);
-  await h.runs.sweep(night);
-  await h.mail.deliverQueued(night);
+  // Left alone for a day past the step: stopped.
+  const late = start + 25 * HOUR;
+  await h.runs.sweep(late);
   const stopped = (await h.owner.request(`/sessions/${session.id}`)).body
     .session;
   assert.equal(stopped.run.status, "finished");
@@ -172,16 +127,24 @@ test("forgotten timers: one reminder to the organizers, then a stop that keeps t
     .runs as RunRecord[];
   assert.equal(runs.length, 1);
   assert.equal(runs[0].blocks[0].actual, 600);
-  assert.equal(messages.length, 2);
-  assert.match(messages[0].subject, /arrêté|stopped/);
+  // Organizers see why in their notifications; viewers are not bothered.
   assert.equal(
-    (await h.owner.request("/notifications")).body.notifications[0].kind,
+    (await facilitator.client.request("/notifications")).body.notifications[0]
+      .kind,
     "run-stopped",
   );
-  // Nothing more to do on the next sweep.
-  await h.runs.sweep(night + 10 * 60 * 1000);
-  await h.mail.deliverQueued(night + 10 * 60 * 1000);
-  assert.equal(messages.length, 2);
+  assert.equal(
+    (await viewer.client.request("/notifications")).body.notifications.length,
+    0,
+  );
+  // Nothing more on the next sweep.
+  await h.runs.sweep(late + 10 * 60 * 1000);
+  assert.equal(
+    (await h.owner.request("/notifications")).body.notifications.filter(
+      (item: { kind: string }) => item.kind === "run-stopped",
+    )[0].count ?? 1,
+    1,
+  );
 });
 
 test("restoring data lists the timers it brings back", async (t) => {
