@@ -4,6 +4,10 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+### Changed
+
+- undici 8.11.2 (from 7.30.0). With a self-signed LLM certificate allowed (`LLM_ALLOW_SELF_SIGNED`), requests go through undici's own `fetch`, because Node's built-in `fetch` refuses an undici 8 agent.
+
 ## [0.1.4] - 2026-09-28
 
 ### Added
