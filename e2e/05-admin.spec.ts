@@ -51,6 +51,17 @@ test("an announcement reaches everyone, and a reported problem reaches the admin
   await expect(banner).toContainText("Maintenance ce soir à 18 h.");
   await colleague.getByRole("button", { name: "Signaler un problème" }).click();
   await expect(colleague).toHaveURL(/\/account\/feedback$/);
+  // Each kind is a card named by its own label; clicking it selects it.
+  const idea = colleague.getByRole("radio", {
+    name: /Une idée ou une demande/,
+  });
+  await colleague.getByText("Une idée ou une demande").click();
+  await expect(idea).toBeChecked();
+  await expect(colleague.getByLabel("Votre message")).toBeVisible();
+  await colleague.getByText("Un problème", { exact: true }).click();
+  await expect(
+    colleague.getByRole("radio", { name: /Un problème/ }),
+  ).toBeChecked();
   await colleague
     .getByLabel("Que s’est-il passé ? Qu’attendiez-vous ?")
     .fill("Le bouton Exporter ne répond pas.");
