@@ -1294,6 +1294,15 @@ async function assembleWith(db: Database, config: AppConfig) {
     );
     for (const row of rows) {
       const session = mappedSession(row);
+      const status = transitionRun(session, "sync", {}, Date.now()).run.status;
+      // Stopped or reset by an older pod, or finished by its own schedule:
+      // no longer a timer to watch, so it leaves the list.
+      if (status !== "running" && status !== "paused") {
+        await db.run("DELETE FROM active_runs WHERE session_id=$1", [
+          session.id,
+        ]);
+        continue;
+      }
       if (!forgottenRun(session, now)) continue;
       try {
         await db.transaction(async (sql) => {

@@ -42,6 +42,13 @@ export async function accountProfile(
     preferences: { ...DEFAULT_ACCOUNT_PREFERENCES, ...profile.preferences },
   };
 }
+/** A profile as 0.1.3 knew it: its pages send it back as is, so the
+ * report-email option travels apart until no such page remains. */
+function legacyShape(profile: AccountProfile) {
+  const { emailFeedback: _omitted, ...preferences } = profile.preferences;
+  void _omitted;
+  return { ...profile, preferences };
+}
 export async function installAccountsApi(
   app: Express,
   {
@@ -103,12 +110,14 @@ export async function installAccountsApi(
     });
     res.json({ ok: true });
   });
-  app.get("/api/account", authenticated, async (_req, res) =>
+  app.get("/api/account", authenticated, async (_req, res) => {
+    const profile = await accountProfile(db, who(res).id);
     res.json({
       user: who(res),
-      profile: await accountProfile(db, who(res).id),
-    }),
-  );
+      profile: legacyShape(profile),
+      emailFeedback: profile.preferences.emailFeedback !== false,
+    });
+  });
   app.put(
     "/api/account",
     authenticated,
@@ -199,7 +208,7 @@ export async function installAccountsApi(
           locale: input.locale,
           avatar: input.avatar,
         },
-        profile,
+        profile: legacyShape(profile),
       });
     },
   );

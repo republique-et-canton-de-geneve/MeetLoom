@@ -255,3 +255,16 @@ test("timers restored by an older pod are found during the rollout", async (t) =
     "finished",
   );
 });
+
+test("a listed session whose timer no longer runs leaves the list", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session();
+  // Stopped by an older pod, which does not unlist it.
+  await h.db.run("INSERT INTO active_runs(session_id,since) VALUES($1,$2)", [
+    session.id,
+    new Date().toISOString(),
+  ]);
+  await h.runs.sweep();
+  assert.deepEqual(await h.db.all("SELECT session_id FROM active_runs"), []);
+});

@@ -26,8 +26,16 @@ export default function ProfileSettings({
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    void api<{ profile: AccountProfile }>("/account")
-      .then((data) => setProfile(data.profile))
+    void api<{ profile: AccountProfile; emailFeedback?: boolean }>("/account")
+      .then((data) =>
+        setProfile({
+          ...data.profile,
+          preferences: {
+            ...data.profile.preferences,
+            emailFeedback: data.emailFeedback ?? true,
+          },
+        }),
+      )
       .catch((error) => setError(error.message));
   }, []);
   // Report-email toggles are saved one after the other; a newer click

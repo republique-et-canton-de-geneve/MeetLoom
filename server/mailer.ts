@@ -596,6 +596,9 @@ export async function installMailApi(
       "SELECT purpose FROM mail_outbox_scope WHERE id=$1",
       [id],
     );
+    // Both purposes are report emails: turned off since, they are dropped.
+    if ((await accountProfile(db, userId)).preferences.emailFeedback === false)
+      return false;
     if (scope?.purpose === "administrator")
       return (
         (

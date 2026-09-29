@@ -524,8 +524,7 @@ test("report emails survive a failed send and profiles saved before the option e
     ],
   );
   assert.equal(
-    (await second.client.request("/account")).body.profile.preferences
-      .emailFeedback,
+    (await second.client.request("/account")).body.emailFeedback,
     true,
   );
   await h.mail.flush();
@@ -641,8 +640,11 @@ test("the report-email option is saved on its own, so older servers keep accepti
   const h = await harness(t);
   await h.setup();
   const account = (await h.owner.request("/account")).body;
-  const { emailFeedback, ...older } = account.profile.preferences;
-  assert.equal(emailFeedback, true);
+  // The profile keeps the shape older pages send back as is; the option
+  // travels beside it.
+  const older = account.profile.preferences;
+  assert.equal("emailFeedback" in older, false);
+  assert.equal(account.emailFeedback, true);
   assert.equal(
     (
       await h.owner.request("/account/email-feedback", "PUT", {
@@ -659,10 +661,8 @@ test("the report-email option is saved on its own, so older servers keep accepti
     preferences: older,
   });
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
-  assert.equal(
-    (await h.owner.request("/account")).body.profile.preferences.emailFeedback,
-    false,
-  );
+  assert.equal("emailFeedback" in saved.body.profile.preferences, false);
+  assert.equal((await h.owner.request("/account")).body.emailFeedback, false);
 });
 
 test("a queued email is dropped when its recipient lost the access it was about", async (t) => {
@@ -696,6 +696,23 @@ test("a queued email is dropped when its recipient lost the access it was about"
   await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
   assert.equal(messages.length, 0);
   assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
+
+  // Turned off while it waited: not sent either.
+  failing = true;
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: true,
+  });
+  await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Une autre idée.",
+  });
+  await h.mail.flush();
+  await second.client.request("/account/email-feedback", "PUT", {
+    enabled: false,
+  });
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 12 * 60 * 1000);
+  assert.equal(messages.length, 0);
 });
 
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
