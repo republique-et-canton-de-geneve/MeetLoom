@@ -4,6 +4,8 @@ Last updated: September 25, 2026. Read this file first when continuing in Codex,
 
 ## Current stopping point
 
+**Dependency note (September 29, 2026).** undici 8 (Dependabot PR) changed its handler API: Node's built-in `fetch`, which bundles an older undici, rejects an undici 8 `Agent` as dispatcher (`UND_ERR_INVALID_ARG: invalid onRequestStart method`). `server/ai.ts` therefore sends through undici's own `fetch` when the self-signed agent is used; `tests/ai-transport.test.ts` covers it.
+
 **State on September 28, 2026.**
 
 - **Released:** `v0.1.3` (September 27, PR #16: one Discussion, grouped notifications with a chime, past runs keeping the initial plan, expected end in the timer, ROTI feedback form, finished runs surviving edits, schedule delta against the plan captured at the start). Before it: `v0.1.2` (PR #15), `v0.1.1`, `v0.1.0`, the review (PR #9, see [architecture-review.md](architecture-review.md)).

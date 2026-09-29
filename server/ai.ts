@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import { blockSchema } from "../shared/validation.js";
 import type { Block, Locale, Session } from "../shared/model.js";
@@ -74,7 +74,12 @@ export async function complete(
   try {
     let response: Response;
     try {
-      response = await fetch(endpoint, {
+      // Node's own fetch bundles an older undici that refuses a dispatcher
+      // from this one: the self-signed agent goes with undici's fetch.
+      const send = (
+        config.allowSelfSigned ? undiciFetch : fetch
+      ) as typeof fetch;
+      response = await send(endpoint, {
         method: "POST",
         signal: controller.signal,
         headers: {
