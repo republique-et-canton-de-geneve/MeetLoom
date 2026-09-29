@@ -212,3 +212,46 @@ test("a timer an older pod started is still found, and a planned run started aga
   await h.runs.sweep(Date.now() + 25 * HOUR);
   assert.equal(await status(), "finished");
 });
+
+test("an auto-advancing run is judged on the step it has really reached", () => {
+  let session = createSession("owner", "Atelier", "fr");
+  session.timezone = "UTC";
+  session.days[0].blocks = [
+    newBlock("fr", { title: "Accueil", duration: 10 }),
+    newBlock("fr", { title: "Journée", duration: 24 * 60 }),
+    newBlock("fr", { title: "Clôture", duration: 10 }),
+  ];
+  const start = nextUtcHour(Date.now(), 9);
+  session = transitionRun(session, "start", { autoAdvance: true }, start);
+  session.updatedAt = new Date(start).toISOString();
+  // Nobody polled: the saved step is still the first one, a day behind.
+  const closing = start + (10 + 24 * 60 + 1) * 60 * 1000;
+  assert.equal(forgottenRun(session, closing), false);
+});
+
+test("timers restored by an older pod are found during the rollout", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session();
+  session.days[0].blocks = [newBlock("fr", { title: "Accueil", duration: 10 })];
+  const saved = (
+    await h.owner.request(`/sessions/${session.id}`, "PUT", {
+      session,
+      version: session.version,
+    })
+  ).body.session;
+  await h.owner.request(`/sessions/${saved.id}/run`, "POST", {
+    action: "start",
+  });
+  // An older pod's restore: dates from the archive, and nothing relisted.
+  await h.db.run("DELETE FROM active_runs");
+  await h.db.run("UPDATE sessions SET updated_at=$1 WHERE id=$2", [
+    "2020-01-01T00:00:00.000Z",
+    saved.id,
+  ]);
+  await h.runs.sweep(Date.now() + 25 * HOUR);
+  assert.equal(
+    (await h.owner.request(`/sessions/${saved.id}`)).body.session.run.status,
+    "finished",
+  );
+});

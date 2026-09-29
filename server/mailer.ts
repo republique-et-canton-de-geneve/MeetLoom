@@ -499,6 +499,17 @@ export async function installMailApi(
       ));
     });
     if (!claimed) return false;
+    // A join link replaced meanwhile (the same invitation sent again from
+    // another tab) is not reported as emailed: only the current one counts.
+    const link = /^\/join\/([^/]+)$/.exec(invite.path)?.[1];
+    const current = async () =>
+      !link ||
+      (await db
+        .all("SELECT token_hash FROM invites WHERE token_hash=$1", [
+          hashToken(link),
+        ])
+        .then((rows) => rows.length > 0));
+    if (!(await current())) return false;
     // Someone with an account reads it in their own language.
     const [account] = invite.existing
       ? await db.all<{ locale: string }>(
@@ -541,7 +552,7 @@ export async function installMailApi(
           ? `${inviter} ${french ? "vous a ajouté" : "added you"} ${what}.\n\n${origin}${invite.path}`
           : `${inviter} ${french ? "vous invite" : "invites you"} ${what}.\n\n${french ? "Ce lien personnel est valable 72 heures ; il vous permet de créer votre compte :" : "This personal link is valid for 72 hours and lets you create your account:"}\n${origin}${invite.path}\n\n${french ? "Ne le transférez pas. Si vous n’attendiez pas cette invitation, ignorez ce message." : "Do not forward it. If you did not expect this invitation, you can ignore this message."}`,
       );
-      return true;
+      return await current();
     } catch (error) {
       log.warn("SMTP delivery failed", smtpFailure(error));
       // Not sent: a new attempt may email them.
@@ -609,11 +620,14 @@ export async function installMailApi(
     );
     for (const row of rows) {
       if (closing) break;
+      // Each lease starts when its row is claimed: a slow backlog must not
+      // hand out leases already expired.
+      const at = Math.max(now, Date.now());
       // One pod sends each email: the others see the lease and skip it.
       if (
         !(await db.run(
           "UPDATE mail_outbox SET lease_until=$1,attempts=attempts+1 WHERE id=$2 AND lease_until<=$3 AND attempts<5",
-          [now + 60000, row.id, now],
+          [at + 60000, row.id, at],
         ))
       )
         continue;
@@ -631,7 +645,7 @@ export async function installMailApi(
         await db.run("DELETE FROM mail_outbox WHERE id=$1", [row.id]);
       } catch (error) {
         await db.run("UPDATE mail_outbox SET lease_until=$1 WHERE id=$2", [
-          now + 5 * 60 * 1000,
+          Math.max(now, Date.now()) + 5 * 60 * 1000,
           row.id,
         ]);
         log.warn("SMTP delivery failed", smtpFailure(error));

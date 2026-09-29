@@ -98,8 +98,8 @@ export default function ParticipantInvitePanel({
                     )
                   : result.token
                     ? t(
-                        "Aucun e-mail n’est envoyé (SMTP non configuré) : transmettez-lui ce lien.",
-                        "No email is sent (SMTP not configured): send them this link.",
+                        "Aucun e-mail n’a été envoyé : transmettez-lui ce lien.",
+                        "No email was sent: send them this link.",
                       )
                     : ""),
             );

@@ -614,6 +614,29 @@ test("invitation emails are sent before answering, in the recipient's language, 
   void english;
 });
 
+test("a join link replaced while its email was sent is not reported as emailed", async (t) => {
+  let replace: (() => Promise<void>) | undefined;
+  const h = await harness(t, {
+    mail,
+    mailTransport: {
+      async send() {
+        // The same invitation sent again from another tab meanwhile.
+        await replace?.();
+      },
+    },
+  });
+  await h.setup();
+  replace = async () => {
+    await h.db.run("DELETE FROM invites WHERE email=$1", ["late@example.test"]);
+  };
+  const invited = await h.owner.request("/auth/invites", "POST", {
+    name: "Late",
+    email: "late@example.test",
+  });
+  assert.equal(invited.status, 201);
+  assert.equal(invited.body.emailed, false);
+});
+
 test("the report-email option is saved on its own, so older servers keep accepting profile saves", async (t) => {
   const h = await harness(t);
   await h.setup();

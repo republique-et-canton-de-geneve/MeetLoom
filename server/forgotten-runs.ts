@@ -21,6 +21,9 @@ const PAUSED_QUIET = 7 * 24 * HOUR;
  * - paused: nothing changed on the session for 7 days.
  */
 export function forgottenRun(session: Session, now: number): boolean {
+  // An auto-advancing run not polled for a while is judged on the step it
+  // has really reached, not on the one last saved.
+  session = transitionRun(session, "sync", {}, now);
   const run = session.run;
   if (run.status !== "running" && run.status !== "paused") return false;
   const quiet = now - Date.parse(session.updatedAt);
