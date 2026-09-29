@@ -36,15 +36,26 @@ export function forgottenRun(
   )
     return null;
   const day = session.days.find((value) => value.id === run.dayId);
-  // Time added during the run (extensions, longer steps) moves the end: the
-  // longer of the plan at the start and the day as it stands now.
-  const planned = Math.max(
-    run.plannedTotal ?? 0,
-    runnableBlocks(day?.blocks ?? []).reduce(
-      (sum, block) => sum + block.duration * 60,
-      0,
-    ),
-  );
+  const blocks = runnableBlocks(day?.blocks ?? []);
+  // The plan from the starting step, plus the time added since (extensions,
+  // longer or new steps); steps skipped before the start do not count. It
+  // never ends earlier than the plan at the start.
+  const planned =
+    run.plannedTotal === undefined
+      ? blocks.reduce((sum, block) => sum + block.duration * 60, 0)
+      : run.plannedTotal +
+        Math.max(
+          0,
+          blocks.reduce(
+            (sum, block) =>
+              sum +
+              Math.max(
+                0,
+                block.duration * 60 - (run.plannedDurations?.[block.id] ?? 0),
+              ),
+            0,
+          ),
+        );
   if (now - (run.runStartedAt + planned * 1000) < HOUR) return null;
   const hour = localHour(session.timezone, now);
   return hour >= 23 || hour < 5 ? "stop" : "remind";
@@ -86,13 +97,17 @@ export async function createForgottenRunTables(db: Database) {
   await db.run(
     "CREATE TABLE IF NOT EXISTS active_runs (session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, since TEXT NOT NULL)",
   );
-  // Timers started before this table existed, or restored from a backup:
-  // one scan at startup, then every save keeps the list current.
-  await db.run(
+  // Timers started before this table existed: one scan at startup, then
+  // every save keeps the list current.
+  await rebuildActiveRuns(db);
+}
+
+/** Lists every running or paused timer again (startup, restore, import). */
+export const rebuildActiveRuns = (sql: Sql) =>
+  sql.run(
     `INSERT INTO active_runs(session_id,since) SELECT id,$1 FROM sessions WHERE (payload LIKE '%"status":"running"%' OR payload LIKE '%"status":"paused"%') AND id NOT IN (SELECT session_id FROM active_runs)`,
     [new Date().toISOString()],
   );
-}
 
 /** Inside every session save: lists or unlists the session's timer. */
 export async function trackActiveRun(sql: Sql, next: Session) {

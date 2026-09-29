@@ -7,6 +7,7 @@ import {
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { Database, Sql } from "./db.js";
 import type { AppVersion } from "./version.js";
+import { rebuildActiveRuns } from "./forgotten-runs.js";
 
 /**
  * Every table holding durable data, parents before children: a snapshot is
@@ -74,6 +75,7 @@ export const TRANSIENT_TABLES = [
   "presence_heartbeats",
   "share_activity",
   "mail_deliveries",
+  "mail_outbox_scope",
   "mail_outbox",
   "mail_invitation_log",
   "run_reminders",
@@ -247,6 +249,8 @@ export async function replaceWithSnapshot(
       );
     }
   }
+  // Transient, so emptied above: timers the new data brings back.
+  await rebuildActiveRuns(sql);
 }
 
 // ── Archives: gzip, then AES-256-GCM with a key derived from a passphrase.

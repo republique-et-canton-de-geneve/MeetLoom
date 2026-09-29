@@ -10,6 +10,7 @@ import { accountProfile } from "./accounts.js";
 import { hashToken, rateLimit, token } from "./security.js";
 import { getSessionLifecycle } from "./lifecycle.js";
 import { log } from "./log.js";
+import { sessionCollaborators } from "./collaborators.js";
 
 /** The SMTP error codes (connection, authentication, rejection), never the
  * message or its recipients. */
@@ -125,6 +126,9 @@ export async function installMailApi(
   );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_outbox (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
+  );
+  await db.run(
+    "CREATE TABLE IF NOT EXISTS mail_outbox_scope (id TEXT PRIMARY KEY REFERENCES mail_outbox(id) ON DELETE CASCADE,purpose TEXT NOT NULL,target TEXT)",
   );
   if (config && !origin)
     throw new Error("APP_ORIGIN is required when SMTP is enabled.");
@@ -465,8 +469,13 @@ export async function installMailApi(
    */
   const invitation: InvitationMail = async (invite) => {
     if (!config || !transport || closing) return false;
+    // Being added again shares one row per person and target, for the
+    // cooldown; each new link is a row of its own, so the hourly cap counts
+    // every email sent.
     const now = Date.now(),
-      key = hashToken(`${invite.email}\n${invite.kind}\n${invite.target}`);
+      key = invite.existing
+        ? hashToken(`${invite.email}\n${invite.kind}\n${invite.target}`)
+        : randomUUID();
     const claimed = await db.transaction(async (sql) => {
       // The sender's row serializes their invitations across pods, so the
       // hourly count below cannot be outrun by simultaneous requests.
@@ -485,12 +494,7 @@ export async function installMailApi(
       );
       return !!(await sql.run(
         "UPDATE mail_invitation_log SET sender=$1,sent_at=$2 WHERE key=$3 AND sent_at<=$4",
-        [
-          invite.inviterId,
-          now,
-          key,
-          invite.existing ? now - 15 * 60 * 1000 : now,
-        ],
+        [invite.inviterId, now, key, now - 15 * 60 * 1000],
       ));
     });
     if (!claimed) return false;
@@ -544,23 +548,49 @@ export async function installMailApi(
    * rows are deleted, so message bodies do not linger. Invitations are not
    * queued: their links must never be stored in clear (see `invitation`).
    */
-  const enqueue = (
+  /** What a queued email is about, rechecked when it is sent: an
+   * administrator's report, one's own report, or a session's organizers. */
+  type Scope =
+    | { purpose: "administrator" }
+    | { purpose: "author" }
+    | { purpose: "organizer"; target: string };
+  const enqueue = async (
     sql: Sql,
     recipient: Recipient,
     subject: string,
     text: string,
-  ) =>
-    sql.run(
+    scope: Scope,
+  ) => {
+    const id = randomUUID();
+    await sql.run(
       "INSERT INTO mail_outbox(id,user_id,email,subject,body,lease_until,attempts,created_at) VALUES($1,$2,$3,$4,$5,0,0,$6)",
-      [
-        randomUUID(),
-        recipient.id,
-        recipient.email,
-        short(subject),
-        text,
-        Date.now(),
-      ],
+      [id, recipient.id, recipient.email, short(subject), text, Date.now()],
     );
+    await sql.run(
+      "INSERT INTO mail_outbox_scope(id,purpose,target) VALUES($1,$2,$3)",
+      [id, scope.purpose, "target" in scope ? scope.target : null],
+    );
+  };
+  /** Whether the recipient still has the access the email is about. */
+  async function stillEntitled(id: string, userId: string) {
+    const [scope] = await db.all<{ purpose: string; target: string | null }>(
+      "SELECT purpose,target FROM mail_outbox_scope WHERE id=$1",
+      [id],
+    );
+    if (scope?.purpose === "administrator")
+      return (
+        (
+          await db.all("SELECT id FROM users WHERE id=$1 AND is_admin=1", [
+            userId,
+          ])
+        ).length > 0
+      );
+    if (scope?.purpose === "organizer")
+      return (await sessionCollaborators(db, scope.target ?? "")).some(
+        (member) => member.id === userId && member.role !== "viewer",
+      );
+    return true;
+  }
   async function drainOutbox(now = Date.now()) {
     if (!config || !transport || closing) return;
     const rows = await db.all<{
@@ -585,9 +615,15 @@ export async function installMailApi(
         continue;
       try {
         const [active] = await currentRecipient(db, row.user_id);
-        // An account since disabled or readdressed gets nothing.
-        if (active && active.email === row.email)
+        // An account since disabled, readdressed or no longer entitled
+        // (administrator rights, a role in the session) gets nothing.
+        if (
+          active &&
+          active.email === row.email &&
+          (await stillEntitled(row.id, row.user_id))
+        )
           await send(active, row.subject, row.body);
+        await db.run("DELETE FROM mail_outbox_scope WHERE id=$1", [row.id]);
         await db.run("DELETE FROM mail_outbox WHERE id=$1", [row.id]);
       } catch (error) {
         await db.run("UPDATE mail_outbox SET lease_until=$1 WHERE id=$2", [
@@ -598,6 +634,10 @@ export async function installMailApi(
       }
     }
     // Given up after five attempts: kept a week for the logs, then dropped.
+    await db.run(
+      "DELETE FROM mail_outbox_scope WHERE id IN (SELECT id FROM mail_outbox WHERE attempts>=5 AND created_at<$1)",
+      [now - 7 * day],
+    );
     await db.run(
       "DELETE FROM mail_outbox WHERE attempts>=5 AND created_at<$1",
       [now - 7 * day],
@@ -638,6 +678,7 @@ export async function installMailApi(
         admin,
         `MeetLoom — ${kind} : ${short(report.message, 80)}`,
         `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${origin}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+        { purpose: "administrator" },
       );
     }
   };
@@ -676,6 +717,7 @@ export async function installMailApi(
       author,
       `MeetLoom — ${what} : ${status}`,
       `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+      { purpose: "author" },
     );
   };
   /** A timer nobody stopped (forgotten-runs.ts): a reminder during the day,
@@ -709,6 +751,7 @@ export async function installMailApi(
           : french
             ? `Le minuteur de « ${title} » tournait encore cette nuit : MeetLoom l’a arrêté. L’étape en cours est comptée avec sa durée prévue ; le déroulé est dans l’historique de la séance.\n${origin}/session/${session.id}`
             : `The timer of “${title}” was still running at night: MeetLoom stopped it. The current step counts for its planned duration; the run is in the session history.\n${origin}/session/${session.id}`,
+        { purpose: "organizer", target: session.id },
       );
     }
   };

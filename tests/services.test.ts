@@ -627,6 +627,39 @@ test("the report-email option is saved on its own, so older servers keep accepti
   );
 });
 
+test("a queued email is dropped when its recipient lost the access it was about", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const second = await h.account("second-admin@example.test");
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: true,
+  });
+  await h.mail.flush();
+  await h.owner.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Détail privé du signalement.",
+  });
+  await h.mail.flush();
+  // No longer an administrator when the SMTP server comes back.
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: false,
+  });
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
+  assert.equal(messages.length, 0);
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,

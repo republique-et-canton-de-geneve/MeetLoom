@@ -5,6 +5,11 @@ import { createSession, newBlock, transitionRun } from "../shared/domain.js";
 import { forgottenRun, stopForgotten } from "../server/forgotten-runs.js";
 import type { MailMessage } from "../server/mailer.js";
 import type { RunRecord } from "../shared/history.js";
+import {
+  replaceWithSnapshot,
+  takeSnapshot,
+  dialectOf,
+} from "../server/snapshot.js";
 
 const HOUR = 60 * 60 * 1000;
 /** The first moment at or after `from` whose UTC hour is `hour`. */
@@ -55,6 +60,22 @@ test("a timer left running is recalled after an hour and stopped at night", () =
   extended = transitionRun(extended, "start", {}, nextUtcHour(start, 21));
   extended.days[0].blocks[0].duration = 240;
   assert.equal(forgottenRun(extended, nextUtcHour(start, 23, 30)), null);
+  // Started on the last step: the steps skipped before it do not delay the
+  // reminder.
+  let late = createSession("owner", "Fin de journée", "fr");
+  late.timezone = "UTC";
+  late.days[0].blocks = [
+    newBlock("fr", { title: "Matin", duration: 420 }),
+    newBlock("fr", { title: "Clôture", duration: 10 }),
+  ];
+  const lateStart = nextUtcHour(start, 9);
+  late = transitionRun(
+    late,
+    "start",
+    { blockId: late.days[0].blocks[1].id },
+    lateStart,
+  );
+  assert.equal(forgottenRun(late, lateStart + 71 * 60 * 1000), "remind");
   // Finished or idle timers are left alone.
   assert.equal(
     forgottenRun(
@@ -161,4 +182,28 @@ test("forgotten timers: one reminder to the organizers, then a stop that keeps t
   await h.runs.sweep(night + 10 * 60 * 1000);
   await h.mail.deliverQueued(night + 10 * 60 * 1000);
   assert.equal(messages.length, 2);
+});
+
+test("restoring data lists the timers it brings back", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session();
+  await h.owner.request(`/sessions/${session.id}/run`, "POST", {
+    action: "start",
+  });
+  const snapshot = await takeSnapshot(h.db, {
+    version: "test",
+    commit: null,
+  } as never);
+  // Like a restore: the database kind is known before the transaction.
+  const dialect = await dialectOf(h.db);
+  await h.db.transaction((sql) => replaceWithSnapshot(sql, dialect, snapshot));
+  assert.deepEqual(
+    (
+      await h.db.all<{ session_id: string }>(
+        "SELECT session_id FROM active_runs",
+      )
+    ).map((row) => row.session_id),
+    [session.id],
+  );
 });

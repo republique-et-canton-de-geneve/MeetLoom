@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "../shared/model";
 import {
   DEFAULT_ACCOUNT_PREFERENCES,
@@ -30,6 +30,12 @@ export default function ProfileSettings({
       .then((data) => setProfile(data.profile))
       .catch((error) => setError(error.message));
   }, []);
+  // Report-email toggles are saved one after the other; a newer click
+  // abandons an older one still waiting to retry.
+  const feedbackToggle = useRef({
+    generation: 0,
+    queue: Promise.resolve() as Promise<void>,
+  });
   const preference = <K extends keyof AccountProfile["preferences"]>(
     key: K,
     value: AccountProfile["preferences"][K],
@@ -268,11 +274,14 @@ export default function ProfileSettings({
             type="checkbox"
             checked={profile.preferences.emailFeedback !== false}
             onChange={(event) => {
-              const enabled = event.target.checked;
+              const enabled = event.target.checked,
+                toggle = feedbackToggle.current,
+                generation = ++toggle.generation;
               preference("emailFeedback", enabled);
               // During an update, a server from the previous version does not
               // know this route yet: try again shortly before giving up.
               const save = async (attempt: number): Promise<void> => {
+                if (generation !== toggle.generation) return;
                 try {
                   await api("/account/email-feedback", {
                     method: "PUT",
@@ -290,10 +299,13 @@ export default function ProfileSettings({
                   throw cause;
                 }
               };
-              void save(1).catch((cause) => {
-                preference("emailFeedback", !enabled);
-                setError((cause as Error).message);
-              });
+              toggle.queue = toggle.queue
+                .then(() => save(1))
+                .catch((cause) => {
+                  if (generation !== toggle.generation) return;
+                  preference("emailFeedback", !enabled);
+                  setError((cause as Error).message);
+                });
             }}
           />
           {user.isAdmin
