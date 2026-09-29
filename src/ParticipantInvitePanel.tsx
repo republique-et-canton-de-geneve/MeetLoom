@@ -73,7 +73,7 @@ export default function ParticipantInvitePanel({
           setLink("");
           setNotice("");
           try {
-            const result = await post<{ token?: string }>(
+            const result = await post<{ token?: string; emailed?: boolean }>(
               `/sessions/${sessionId}/invitations`,
               { name, email, role },
             );
@@ -81,7 +81,7 @@ export default function ParticipantInvitePanel({
               result.token ? `${location.origin}/join/${result.token}` : "",
             );
             setNotice(
-              result.token
+              (result.token
                 ? t(
                     "Invitation créée. La personne peut déjà être attribuée.",
                     "Invitation created. This person can already be assigned.",
@@ -89,7 +89,19 @@ export default function ParticipantInvitePanel({
                 : t(
                     "Collaborateur ajouté à la séance.",
                     "Collaborator added to the session.",
-                  ),
+                  )) +
+                " " +
+                (result.emailed
+                  ? t(
+                      `Un e-mail est envoyé à ${email}.`,
+                      `An email is on its way to ${email}.`,
+                    )
+                  : result.token
+                    ? t(
+                        "Aucun e-mail n’a été envoyé : transmettez-lui ce lien.",
+                        "No email was sent: send them this link.",
+                      )
+                    : ""),
             );
             setName("");
             setEmail("");

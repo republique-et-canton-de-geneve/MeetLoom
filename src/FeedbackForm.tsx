@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Bug, Lightbulb, MessageCircle } from "lucide-react";
 import { api, post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
@@ -93,17 +94,34 @@ export default function FeedbackForm({ page }: { page?: string }) {
         >
           <fieldset className="feedback-kinds">
             <legend>{t("Il s’agit…", "This is…")}</legend>
+            {/* One card per choice, the whole card clickable and the choice
+                framed, so each option reads with its own label. */}
             {(
               [
-                ["bug", t("d’un problème", "a problem")],
+                [
+                  "bug",
+                  Bug,
+                  t("Un problème", "A problem"),
+                  t("Quelque chose ne marche pas", "Something does not work"),
+                ],
                 [
                   "idea",
-                  t("d’une idée ou d’une demande", "an idea or a request"),
+                  Lightbulb,
+                  t("Une idée ou une demande", "An idea or a request"),
+                  t("Une amélioration, un besoin", "An improvement, a need"),
                 ],
-                ["other", t("d’autre chose", "something else")],
+                [
+                  "other",
+                  MessageCircle,
+                  t("Autre chose", "Something else"),
+                  t("Une question, un commentaire", "A question, a comment"),
+                ],
               ] as const
-            ).map(([value, label]) => (
-              <label className="checkbox-label" key={value}>
+            ).map(([value, Icon, label, hint]) => (
+              <label
+                className={`feedback-kind-option ${kind === value ? "selected" : ""}`}
+                key={value}
+              >
                 <input
                   type="radio"
                   name="kind"
@@ -111,7 +129,11 @@ export default function FeedbackForm({ page }: { page?: string }) {
                   checked={kind === value}
                   onChange={() => setKind(value)}
                 />
-                {label}
+                <Icon size={18} aria-hidden="true" />
+                <span>
+                  <strong>{label}</strong>
+                  <small>{hint}</small>
+                </span>
               </label>
             ))}
           </fieldset>

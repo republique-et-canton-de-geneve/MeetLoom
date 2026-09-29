@@ -206,9 +206,63 @@
   border: 0;
   padding: 0;
   margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+.feedback-kinds .feedback-kind-option {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+.feedback-kind-option:hover {
+  border-color: #b9ccbf;
+}
+/* The radio stays for keyboards and screen readers; the card shows it. */
+.feedback-kind-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.feedback-kind-option:has(input:focus-visible) {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.feedback-kind-option > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.feedback-kind-option span {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.feedback-kind-option strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.feedback-kind-option small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.feedback-kind-option.selected {
+  border-color: var(--green);
+  background: var(--green-pale);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+.feedback-kind-option.selected > svg,
+.feedback-kind-option.selected strong {
+  color: var(--green);
 }
 .feedback-kinds legend {
   font-size: 13px;

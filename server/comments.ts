@@ -522,7 +522,7 @@ export async function installCommentsApi(
       });
     },
   );
-  app.get("/api/notifications", authenticated, async (_request, response) => {
+  app.get("/api/notifications", authenticated, async (request, response) => {
     const user = actor(response);
     const profile = await accountProfile(db, user.id),
       filter = profile.preferences.inAppMentions
@@ -539,7 +539,13 @@ export async function installCommentsApi(
     );
     // Visitor comments and problem reports, grouped (app-notifications.ts):
     // shown only while the account still has the access they concern.
-    const groupedScope = `FROM app_notifications n LEFT JOIN sessions s ON s.id=n.session_id LEFT JOIN members m ON m.session_id=s.id AND m.user_id=$1 LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN workspace_members wm ON wm.workspace_id=sw.workspace_id AND wm.user_id=$1 WHERE n.user_id=$1 AND (n.session_id IS NULL AND n.kind='feedback' AND EXISTS(SELECT 1 FROM users a WHERE a.id=$1 AND a.is_admin=1) OR n.session_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM session_lifecycle l WHERE l.session_id=s.id AND l.deleted_at IS NOT NULL) AND (s.owner_id=$1 OR m.user_id=$1 OR wm.user_id=$1))`;
+    const groupedScope = `FROM app_notifications n LEFT JOIN sessions s ON s.id=n.session_id LEFT JOIN members m ON m.session_id=s.id AND m.user_id=$1 LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN workspace_members wm ON wm.workspace_id=sw.workspace_id AND wm.user_id=$1 WHERE n.user_id=$1 AND (n.session_id IS NULL AND n.kind='feedback' AND EXISTS(SELECT 1 FROM users a WHERE a.id=$1 AND a.is_admin=1) OR n.session_id IS NULL AND n.kind='feedback-status' OR n.session_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM session_lifecycle l WHERE l.session_id=s.id AND l.deleted_at IS NOT NULL) AND (s.owner_id=$1 OR m.user_id=$1 OR wm.user_id=$1))${
+      // Pages from 0.1.3, still open during a rollout, know neither kind and
+      // could not open them: only newer pages ask for them.
+      request.query.kinds === "2"
+        ? ""
+        : " AND n.kind NOT IN ('feedback-status','run-stopped')"
+    }`;
     const grouped = await db.all<Omit<TeamNotification, "sessionTitle">>(
       `SELECT DISTINCT n.id,n.session_id AS "sessionId",NULL AS "blockId",n.target_id AS "commentId",n.kind,n.count,n.updated_at AS "createdAt",n.read_at AS "readAt",n.actor ${groupedScope} ORDER BY n.updated_at DESC LIMIT 50`,
       [user.id],
@@ -594,10 +600,15 @@ export async function installCommentsApi(
           .parse(request.body),
         user = actor(response),
         now = new Date().toISOString();
+      // "All" from a 0.1.3 page covers only the kinds it was shown.
+      const shown = (table: string) =>
+        table === "app_notifications" && request.query.kinds !== "2"
+          ? " AND kind NOT IN ('feedback-status','run-stopped')"
+          : "";
       for (const table of ["notifications", "app_notifications"])
         if (input.all)
           await db.run(
-            `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL`,
+            `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL${shown(table)}`,
             [now, user.id],
           );
         else

@@ -1,6 +1,25 @@
 import { expect, test } from "@playwright/test";
 import { duration, member, signIn } from "./helpers";
 
+/** Headless Chromium has no always-on-top window: the popup fallback shows
+ * the same content. */
+const openFloating = async (
+  page: import("@playwright/test").Page,
+  button: import("@playwright/test").Locator,
+) => {
+  await page.evaluate(() =>
+    Object.defineProperty(window, "documentPictureInPicture", {
+      value: undefined,
+      configurable: true,
+    }),
+  );
+  const [floating] = await Promise.all([
+    page.waitForEvent("popup"),
+    button.click(),
+  ]);
+  return floating;
+};
+
 const remaining = async (page: import("@playwright/test").Page) => {
   const text = await page.locator(".timer-bar .timer-clock strong").innerText();
   const [minutes, seconds] = text.split(":").map(Number);
@@ -26,6 +45,18 @@ test("facilitating: start, move on, come back where the block was, visitors foll
   // Five minutes planned: the time already spent is kept, not restarted.
   expect(await remaining(page)).toBeLessThan(5 * 60 - 1);
 
+  // From the always-on-top window, without leaving a slideshow.
+  const floating = await openFloating(
+    page,
+    page.getByTitle("Fenêtre au premier plan"),
+  );
+  await floating.getByRole("button", { name: "Bloc suivant" }).click();
+  await expect(page.locator(".timer-bar")).toContainText("Idées");
+  await expect(floating.locator(".timer-content")).toContainText("Idées");
+  await floating.getByRole("button", { name: "Bloc précédent" }).click();
+  await expect(page.locator(".timer-bar")).toContainText("Accueil");
+  await floating.close();
+
   const sessionId = page.url().split("/").pop();
   const created = await page.request.post(`/api/sessions/${sessionId}/shares`, {
     headers: { Origin: new URL(page.url()).origin },
@@ -36,6 +67,17 @@ test("facilitating: start, move on, come back where the block was, visitors foll
   await visitor.goto(`/s/${share.token}`);
   await expect(visitor.locator(".public-live")).toContainText("Accueil");
   await expect(visitor.locator(".public-floating-button")).toBeVisible();
+  // Visitors follow along; only facilitators get the controls.
+  const visitorFloating = await openFloating(
+    visitor,
+    visitor.locator(".public-floating-button"),
+  );
+  await expect(visitorFloating.locator(".timer-content")).toContainText(
+    "Accueil",
+  );
+  await expect(visitorFloating.locator(".floating-controls")).toHaveCount(0);
+  await expect(visitorFloating.getByRole("button")).toHaveCount(0);
+  await visitorFloating.close();
 
   await page.getByTitle("Pause").click();
   await expect(page.locator(".timer-bar")).toContainText("EN PAUSE");

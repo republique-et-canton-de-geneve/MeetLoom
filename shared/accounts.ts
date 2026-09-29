@@ -18,6 +18,12 @@ export const accountPreferencesSchema = z
     inAppMentions: z.boolean().default(true),
     emailDigest: z.boolean().default(false),
     emailReminder: z.boolean().default(false),
+    /** Emails about problem reports and ideas: each new one for
+     * administrators, and the progress of one's own. Saved on its own
+     * (PUT /api/account/email-feedback) and never sent with the profile, so
+     * a server from before this option still accepts profile saves during a
+     * rolling update; missing means on. */
+    emailFeedback: z.boolean().optional(),
   })
   .strict();
 export type AccountPreferences = z.infer<typeof accountPreferencesSchema>;
@@ -27,6 +33,7 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   inAppMentions: true,
   emailDigest: false,
   emailReminder: false,
+  emailFeedback: true,
 };
 export interface AccountProfile {
   avatar?: string;

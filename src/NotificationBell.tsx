@@ -83,7 +83,7 @@ export default function NotificationBell({
     const data = await api<{
       notifications: TeamNotification[];
       unread: number;
-    }>("/notifications", { signal });
+    }>("/notifications?kinds=2", { signal });
     if (!signal?.aborted) {
       // Only something new rings: not what was already there on arrival.
       const count = pending(data.notifications);
@@ -158,6 +158,29 @@ export default function NotificationBell({
           )}
         </>
       );
+    if (notification.kind === "run-stopped")
+      return (
+        <strong>
+          {t(
+            "Minuteur oublié, arrêté automatiquement",
+            "Forgotten timer, stopped automatically",
+          )}
+        </strong>
+      );
+    if (notification.kind === "feedback-status")
+      return count > 1 ? (
+        <strong>
+          {t(
+            `${count} évolutions de vos retours`,
+            `${count} updates on your reports`,
+          )}
+        </strong>
+      ) : (
+        <>
+          <strong>{notification.actor}</strong>{" "}
+          {t("a fait avancer votre retour", "moved your report on")}
+        </>
+      );
     return (
       <>
         <strong>{notification.actor}</strong> {descriptions[notification.kind]}
@@ -165,7 +188,10 @@ export default function NotificationBell({
     );
   };
   const descriptions: Record<
-    Exclude<TeamNotification["kind"], "visitor-comments" | "feedback">,
+    Exclude<
+      TeamNotification["kind"],
+      "visitor-comments" | "feedback" | "feedback-status" | "run-stopped"
+    >,
     string
   > = {
     comment: t("a ajouté un commentaire", "added a comment"),
@@ -214,7 +240,7 @@ export default function NotificationBell({
               onClick={async () => {
                 setBusy(true);
                 try {
-                  await post("/notifications/read", { all: true });
+                  await post("/notifications/read?kinds=2", { all: true });
                   await load();
                 } catch (cause) {
                   setError((cause as Error).message);
@@ -271,6 +297,8 @@ export default function NotificationBell({
                     setOpen(false);
                     if (notification.kind === "feedback")
                       navigate("/account/feedback-inbox");
+                    else if (notification.kind === "feedback-status")
+                      navigate("/account/feedback");
                     else if (notification.sessionId)
                       onNavigate(
                         notification.sessionId,
@@ -286,7 +314,9 @@ export default function NotificationBell({
                 <b>
                   {notification.kind === "feedback"
                     ? t("Retours des utilisateurs", "User feedback")
-                    : notification.sessionTitle}
+                    : notification.kind === "feedback-status"
+                      ? t("Mes retours", "My reports")
+                      : notification.sessionTitle}
                 </b>
                 <time dateTime={notification.createdAt}>
                   {new Date(notification.createdAt).toLocaleString(locale)}

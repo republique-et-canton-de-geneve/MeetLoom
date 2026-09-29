@@ -10,7 +10,8 @@ export default function InviteColleague() {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [created, setCreated] = useState(""),
-    [copied, setCopied] = useState(false);
+    [copied, setCopied] = useState(false),
+    [emailed, setEmailed] = useState("");
   return (
     <section className="account-section invite-colleague">
       <h2>{t("Inviter un collègue", "Invite a colleague")}</h2>
@@ -28,8 +29,12 @@ export default function InviteColleague() {
           setBusy(true);
           try {
             const values = Object.fromEntries(new FormData(e.currentTarget));
-            const r = await post<{ token: string }>("/auth/invites", values);
+            const r = await post<{ token: string; emailed?: boolean }>(
+              "/auth/invites",
+              values,
+            );
             setCreated(`${location.origin}/join/${r.token}`);
+            setEmailed(r.emailed ? String(values.email) : "");
             setCopied(false);
           } catch (e) {
             setError((e as Error).message);
@@ -55,10 +60,15 @@ export default function InviteColleague() {
       {created && (
         <div className="share-result">
           <p>
-            {t(
-              "Transmettez ce lien à votre collègue :",
-              "Send this link to your colleague:",
-            )}
+            {emailed
+              ? t(
+                  `Un e-mail avec ce lien est envoyé à ${emailed}. Vous pouvez aussi le transmettre vous-même :`,
+                  `An email with this link is on its way to ${emailed}. You can also send it yourself:`,
+                )
+              : t(
+                  "Transmettez ce lien à votre collègue :",
+                  "Send this link to your colleague:",
+                )}
           </p>
           <input readOnly value={created} onFocus={(e) => e.target.select()} />
           <button

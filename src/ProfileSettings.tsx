@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "../shared/model";
 import {
   DEFAULT_ACCOUNT_PREFERENCES,
   type AccountProfile,
 } from "../shared/accounts";
-import { api, post } from "./api";
+import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
 
@@ -26,10 +26,24 @@ export default function ProfileSettings({
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    void api<{ profile: AccountProfile }>("/account")
-      .then((data) => setProfile(data.profile))
+    void api<{ profile: AccountProfile; emailFeedback?: boolean }>("/account")
+      .then((data) =>
+        setProfile({
+          ...data.profile,
+          preferences: {
+            ...data.profile.preferences,
+            emailFeedback: data.emailFeedback ?? true,
+          },
+        }),
+      )
       .catch((error) => setError(error.message));
   }, []);
+  // Report-email toggles are saved one after the other; a newer click
+  // abandons an older one still waiting to retry.
+  const feedbackToggle = useRef({
+    generation: 0,
+    queue: Promise.resolve() as Promise<void>,
+  });
   const preference = <K extends keyof AccountProfile["preferences"]>(
     key: K,
     value: AccountProfile["preferences"][K],
@@ -95,6 +109,11 @@ export default function ProfileSettings({
                 email,
                 locale: language,
                 ...profile,
+                // Saved on its own (see the checkbox).
+                preferences: {
+                  ...profile.preferences,
+                  emailFeedback: undefined,
+                },
                 currentPassword:
                   new FormData(event.currentTarget).get("currentPassword") ||
                   undefined,
@@ -257,6 +276,55 @@ export default function ProfileSettings({
             "Recevoir un rappel de préparation trois jours avant mes séances (si SMTP est configuré)",
             "Receive a preparation reminder three days before my sessions (when SMTP is configured)",
           )}
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={profile.preferences.emailFeedback !== false}
+            onChange={(event) => {
+              const enabled = event.target.checked,
+                toggle = feedbackToggle.current,
+                generation = ++toggle.generation;
+              preference("emailFeedback", enabled);
+              // During an update, a server from the previous version does not
+              // know this route yet: try again shortly before giving up.
+              const save = async (attempt: number): Promise<void> => {
+                if (generation !== toggle.generation) return;
+                try {
+                  await api("/account/email-feedback", {
+                    method: "PUT",
+                    body: JSON.stringify({ enabled }),
+                  });
+                } catch (cause) {
+                  if (
+                    cause instanceof ApiError &&
+                    cause.status === 404 &&
+                    attempt < 5
+                  ) {
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    return save(attempt + 1);
+                  }
+                  throw cause;
+                }
+              };
+              toggle.queue = toggle.queue
+                .then(() => save(1))
+                .catch((cause) => {
+                  if (generation !== toggle.generation) return;
+                  preference("emailFeedback", !enabled);
+                  setError((cause as Error).message);
+                });
+            }}
+          />
+          {user.isAdmin
+            ? t(
+                "Recevoir un e-mail à chaque problème ou idée signalé, et quand mes propres retours avancent (si SMTP est configuré)",
+                "Receive an email for each reported problem or idea, and when my own reports move on (when SMTP is configured)",
+              )
+            : t(
+                "Recevoir un e-mail quand mes signalements et idées avancent (si SMTP est configuré)",
+                "Receive an email when my reports and ideas move on (when SMTP is configured)",
+              )}
         </label>
         <button className="button primary" disabled={busy}>
           {t("Enregistrer mon profil", "Save profile")}

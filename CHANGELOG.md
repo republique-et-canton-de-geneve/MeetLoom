@@ -4,6 +4,23 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-28
+
+### Added
+
+- Facilitators move to the previous or next block, and pause or resume, from the always-on-top window, without leaving a slideshow. Visitors' windows have no controls.
+- Invitations are emailed when SMTP is configured: account, workspace and session invitations send their personal link to someone without an account, and a person who already has one is told where to find what they were added to. A session invitation says what the role allows: prepare and run, run, or follow. Without SMTP, the link is still shown to copy.
+- Forgotten timers are stopped automatically: a timer whose current step is 24 hours past its time, with nothing changed on the session for 24 hours (the last step never marked as done, a test left running), or a paused timer untouched for 7 days. The current step counts for its planned duration and the organizers see it in their notifications. A session still in use, over several days included, is never interrupted.
+- Administrators receive an email for each problem report or idea (when SMTP is configured), and authors are told in the app and by email when an administrator moves their report on. Nobody is emailed about their own action; each person can turn these emails off in their profile.
+
+### Changed
+
+- The report form offers its three kinds (a problem, an idea or a request, something else) as labelled cards instead of loose radio buttons.
+
+### Fixed
+
+- The sidebar scrolls when a zoomed-in browser leaves too little height; its bottom (account, report a problem) was cut off.
+
 ## [0.1.3] - 2026-09-25
 
 ### Added

@@ -2,10 +2,11 @@ import type { Express, RequestHandler, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { User } from "../shared/model.js";
-import type { Database } from "./db.js";
+import type { Database, Sql } from "./db.js";
 import { rateLimit } from "./security.js";
-import { notifyFeedback } from "./app-notifications.js";
+import { notifyFeedback, notifyFeedbackStatus } from "./app-notifications.js";
 import type { AppVersion } from "./version.js";
+import { dialectOf, lockInRestoreOrder } from "./snapshot.js";
 
 /** Where administrators forward a report, from their own browser. */
 export const DEFAULT_ISSUES_URL =
@@ -27,6 +28,7 @@ export async function registerFeedback(
     version,
     issuesUrl,
     rateLimits,
+    mail,
   }: {
     db: Database;
     authenticated: RequestHandler;
@@ -35,6 +37,30 @@ export async function registerFeedback(
     /** Null hides the GitHub link. */
     issuesUrl: string | null;
     rateLimits?: boolean;
+    /** Report emails, queued inside the same transactions (mailer.ts). */
+    mail?: {
+      feedbackReceived: (
+        sql: Sql,
+        report: {
+          authorId: string;
+          authorName: string;
+          authorEmail: string;
+          kind: "bug" | "idea" | "other";
+          message: string;
+          page: string | null;
+        },
+      ) => Promise<void>;
+      feedbackStatusChanged: (
+        sql: Sql,
+        change: {
+          authorId: string;
+          kind: "bug" | "idea" | "other";
+          message: string;
+          status: (typeof FEEDBACK_STATUSES)[number];
+        },
+      ) => Promise<void>;
+      deliverQueued: () => Promise<void>;
+    };
   },
 ) {
   await db.run(
@@ -44,6 +70,10 @@ export async function registerFeedback(
     "CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback(created_at)",
   );
   const who = (response: Response) => response.locals.user as User;
+  // Reports write feedback, then notifications and emails: not a restore's
+  // order (snapshot.ts).
+  const dialect = await dialectOf(db);
+  const snapshotOrder = (sql: Sql) => lockInRestoreOrder(sql, dialect);
   const limiter: RequestHandler =
     rateLimits === false
       ? (_request, _response, next) => next()
@@ -77,6 +107,7 @@ export async function registerFeedback(
         updatedAt: now,
       };
       await db.transaction(async (sql) => {
+        await snapshotOrder(sql);
         await sql.run(
           "INSERT INTO feedback(id,user_id,kind,message,page,app_version,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
           [
@@ -92,7 +123,16 @@ export async function registerFeedback(
           ],
         );
         await notifyFeedback(sql, who(response).id, who(response).name);
+        await mail?.feedbackReceived(sql, {
+          authorId: who(response).id,
+          authorName: who(response).name,
+          authorEmail: who(response).email,
+          kind: item.kind,
+          message: item.message,
+          page: item.page,
+        });
       });
+      void mail?.deliverQueued();
       response.status(201).json({ feedback: item });
     },
   );
@@ -124,18 +164,43 @@ export async function registerFeedback(
       .object({ status: z.enum(FEEDBACK_STATUSES) })
       .strict()
       .parse(request.body);
-    const changed = await db.run(
-      "UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3",
-      [
-        status,
-        new Date().toISOString(),
-        z.string().max(120).parse(request.params.id),
-      ],
-    );
-    if (!changed)
+    const id = z.string().max(120).parse(request.params.id);
+    const found = await db.transaction(async (sql) => {
+      await snapshotOrder(sql);
+      const [current] = await sql.all<{
+        user_id: string;
+        kind: "bug" | "idea" | "other";
+        message: string;
+      }>("SELECT user_id,kind,message FROM feedback WHERE id=$1", [id]);
+      if (!current) return false;
+      // Only the request that actually changes the status notifies: two
+      // administrators setting the same one at once tell the author once.
+      const changed = await sql.run(
+        "UPDATE feedback SET status=$1,updated_at=$2 WHERE id=$3 AND status<>$1",
+        [status, new Date().toISOString(), id],
+      );
+      // Its author hears about it, unless they moved it on themselves.
+      if (changed && current.user_id !== who(response).id) {
+        await notifyFeedbackStatus(
+          sql,
+          current.user_id,
+          id,
+          who(response).name,
+        );
+        await mail?.feedbackStatusChanged(sql, {
+          authorId: current.user_id,
+          kind: current.kind,
+          message: current.message,
+          status,
+        });
+      }
+      return true;
+    });
+    if (!found)
       return void response
         .status(404)
         .json({ error: "This report does not exist.", code: "NOT_FOUND" });
+    void mail?.deliverQueued();
     response.json({ ok: true });
   });
 }

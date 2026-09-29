@@ -7,6 +7,7 @@ import {
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { Database, Sql } from "./db.js";
 import type { AppVersion } from "./version.js";
+import { rebuildActiveRuns } from "./forgotten-runs.js";
 
 /**
  * Every table holding durable data, parents before children: a snapshot is
@@ -24,6 +25,7 @@ export const SNAPSHOT_TABLES = [
   "folders",
   "account_disabled",
   "account_profiles",
+  "account_email_options",
   "oidc_identities",
   "invites",
   "mcp_tokens",
@@ -74,6 +76,10 @@ export const TRANSIENT_TABLES = [
   "presence_heartbeats",
   "share_activity",
   "mail_deliveries",
+  "mail_outbox",
+  "mail_outbox_scope",
+  "mail_invitation_log",
+  "active_runs",
   "mail_recovery_requests",
   "server_logs",
 ] as const;
@@ -106,6 +112,16 @@ export class SnapshotError extends Error {
 }
 
 type Dialect = "sqlite" | "postgres";
+/** For a rare transaction writing several of these tables in another order
+ * (a report and its notifications, a forgotten timer's stop): on PostgreSQL
+ * it first takes them in a restore's order, so it waits for a restore in
+ * progress instead of deadlocking it. */
+export const lockInRestoreOrder = (sql: Sql, dialect: Dialect) =>
+  dialect === "postgres"
+    ? sql.run(
+        `LOCK TABLE ${[...SNAPSHOT_TABLES, ...TRANSIENT_TABLES].join(",")} IN ROW EXCLUSIVE MODE`,
+      )
+    : Promise.resolve(0);
 export async function dialectOf(db: Sql): Promise<Dialect> {
   try {
     await db.all("SELECT sqlite_version() AS version");
@@ -243,6 +259,8 @@ export async function replaceWithSnapshot(
       );
     }
   }
+  // Transient, so emptied above: timers the new data brings back.
+  await rebuildActiveRuns(sql);
 }
 
 // ── Archives: gzip, then AES-256-GCM with a key derived from a passphrase.

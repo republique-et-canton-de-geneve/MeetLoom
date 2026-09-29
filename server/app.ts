@@ -38,6 +38,15 @@ import { createPresenceRouter } from "./presence.js";
 import { registerOperations } from "./operations.js";
 import { registerAnnouncement } from "./announcement.js";
 import { createRunTables, installRunsApi, recordFinishedRun } from "./runs.js";
+import {
+  createForgottenRunTables,
+  forgottenRun,
+  rebuildActiveRuns,
+  stopForgotten,
+  trackActiveRun,
+} from "./forgotten-runs.js";
+import { notifyForgottenRun } from "./app-notifications.js";
+import { dialectOf, lockInRestoreOrder } from "./snapshot.js";
 import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
 import { log } from "./log.js";
 import { registerLogs, type LogConfig } from "./logs.js";
@@ -390,7 +399,20 @@ async function assembleWith(db: Database, config: AppConfig) {
             ),
           );
     });
-  await installWorkspacesApi(app, { db, authenticated, accessible });
+  // Before the APIs that email invitations.
+  const mail = await installMailApi(app, {
+    db,
+    config: config.mail,
+    origin: config.origin,
+    transport: config.mailTransport,
+    rateLimits: config.rateLimits,
+  });
+  await installWorkspacesApi(app, {
+    db,
+    authenticated,
+    accessible,
+    invite: mail.invitation,
+  });
   await initializeFolders(db);
   await installFoldersApi(app, { db, authenticated });
   await installActivityApi(app, { db, authenticated, accessible });
@@ -403,7 +425,12 @@ async function assembleWith(db: Database, config: AppConfig) {
     setAuth,
     rateLimits: config.rateLimits,
   });
-  await installParticipantsApi(app, { db, authenticated, accessible });
+  await installParticipantsApi(app, {
+    db,
+    authenticated,
+    accessible,
+    invite: mail.invitation,
+  });
   await installOidcApi(app, {
     db,
     config: config.oidc,
@@ -417,13 +444,6 @@ async function assembleWith(db: Database, config: AppConfig) {
       await acceptWorkspaceInvite(sql, hash, userId);
       await acceptParticipantInvite(sql, hash, userId);
     },
-  });
-  const mail = await installMailApi(app, {
-    db,
-    config: config.mail,
-    origin: config.origin,
-    transport: config.mailTransport,
-    rateLimits: config.rateLimits,
   });
   const authLimiter =
     config.rateLimits === false
@@ -765,9 +785,20 @@ async function assembleWith(db: Database, config: AppConfig) {
         detail: { role: input.role ?? null },
       });
     });
-    response
-      .status(201)
-      .json({ token: raw, expiresAt: new Date(expires).toISOString() });
+    const emailed = await mail.invitation({
+      email: input.email,
+      locale: user(response).locale,
+      inviter: user(response).name,
+      inviterId: user(response).id,
+      target: "account",
+      kind: "account",
+      path: `/join/${raw}`,
+    });
+    response.status(201).json({
+      token: raw,
+      expiresAt: new Date(expires).toISOString(),
+      emailed,
+    });
   });
   app.post(
     "/api/auth/accept-invite",
@@ -940,6 +971,7 @@ async function assembleWith(db: Database, config: AppConfig) {
       }
       await recordMentionNotifications(sql, previous, next, author);
       await recordFinishedRun(sql, previous, next);
+      await trackActiveRun(sql, next);
       if (commit) await commit(sql, next);
     };
     if (transaction) await write(transaction);
@@ -1238,6 +1270,124 @@ async function assembleWith(db: Database, config: AppConfig) {
   const logs = await registerLogs(app, { db, admin, config: config.logs });
   await createRunTables(db);
   installRunsApi(app, { db, authenticated, accessible });
+  await createForgottenRunTables(db);
+  /** Sessions saved since then may hold a timer `save()` did not list: an
+   * older pod's, during a rolling update. The margin covers clock skew
+   * between pods and saves committed late. */
+  let listedUpTo = Date.now() - 15 * 60 * 1000;
+  /** Pods of the previous version only run during a rollout, which starts
+   * with this pod: for its first hour, every sweep relists every timer, so
+   * a restore or import made by an older pod (which does not relist) is
+   * covered too, whatever the dates it brings back. */
+  const fullUntil = Date.now() + 60 * 60 * 1000;
+  /** Timers nobody stopped (forgotten-runs.ts): every pod looks every five
+   * minutes; the locked re-read and the version check make each stop happen
+   * once. */
+  const sweepDialect = await dialectOf(db);
+  async function sweepForgottenRuns(now = Date.now()) {
+    const next = Date.now() - 15 * 60 * 1000;
+    await rebuildActiveRuns(
+      db,
+      Date.now() < fullUntil ? undefined : new Date(listedUpTo).toISOString(),
+    );
+    listedUpTo = next;
+    const rows = await db.all<SessionRow & { workspace_id: string | null }>(
+      "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
+    );
+    // One malformed session must not keep the others from being checked.
+    for (const row of rows)
+      await checkForgotten(row, now).catch((error: Error) =>
+        log.warn("Forgotten timer check failed", {
+          session: row.id,
+          error: error.message,
+        }),
+      );
+  }
+  const active = (value: Session) =>
+    value.run.status === "running" || value.run.status === "paused";
+  async function checkForgotten(
+    row: SessionRow & { workspace_id: string | null },
+    now: number,
+  ) {
+    const session = mappedSession(row);
+    // Stopped or reset by an older pod: no longer a timer to watch.
+    if (!active(session)) {
+      await db.run("DELETE FROM active_runs WHERE session_id=$1", [session.id]);
+      return;
+    }
+    // An auto-advancing run past its last step, nobody polling: its end is
+    // saved like a poll would, recording the run, then it leaves the list.
+    const ended = !active(transitionRun(session, "sync", {}, now));
+    if (!ended && !forgottenRun(session, now)) return;
+    try {
+      await db.transaction(async (sql) => {
+        // A stop writes notifications after the session's tables.
+        await lockInRestoreOrder(sql, sweepDialect);
+        // Decide again on the locked, current session: someone may have
+        // stopped, reset or closed it since the scan.
+        await sql.run("UPDATE sessions SET version=version WHERE id=$1", [
+          session.id,
+        ]);
+        const [fresh] = await sql.all<
+          SessionRow & { workspace_id: string | null }
+        >(
+          "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE s.id=$1 AND l.deleted_at IS NULL AND l.closed_at IS NULL",
+          [session.id],
+        );
+        if (!fresh) return;
+        const current = mappedSession(fresh);
+        // Listed but no longer running (a restore, an older pod's save).
+        if (
+          current.run.status !== "running" &&
+          current.run.status !== "paused"
+        ) {
+          await sql.run("DELETE FROM active_runs WHERE session_id=$1", [
+            current.id,
+          ]);
+          return;
+        }
+        if (current.run.runStartedAt !== session.run.runStartedAt) return;
+        const caughtUp = transitionRun(current, "sync", {}, now);
+        if (!active(caughtUp)) {
+          await save(
+            current,
+            caughtUp,
+            current.ownerId,
+            undefined,
+            undefined,
+            sql,
+          );
+          return;
+        }
+        if (!forgottenRun(current, now)) return;
+        await save(
+          current,
+          stopForgotten(current, now),
+          current.ownerId,
+          undefined,
+          undefined,
+          sql,
+        );
+        // Its organizers see why the timer shows as finished.
+        await notifyForgottenRun(sql, session.id);
+      });
+    } catch (error) {
+      // Someone acted on the timer meanwhile: the next sweep decides again.
+      if (!(error instanceof HttpError && error.status === 409))
+        log.warn("Forgotten timer check failed", {
+          session: session.id,
+          error: (error as Error).message,
+        });
+    }
+  }
+  const forgottenInterval = setInterval(
+    () =>
+      void sweepForgottenRuns().catch((error: Error) =>
+        log.warn("Forgotten timer sweep failed", { error: error.message }),
+      ),
+    5 * 60 * 1000,
+  );
+  forgottenInterval.unref();
   registerAnnouncement(app, { db, admin });
   await registerFeedback(app, {
     db,
@@ -1249,6 +1399,7 @@ async function assembleWith(db: Database, config: AppConfig) {
         ? DEFAULT_ISSUES_URL
         : config.feedbackIssuesUrl || null,
     rateLimits: config.rateLimits,
+    mail,
   });
   await registerSharing(app, {
     db,
@@ -1470,7 +1621,9 @@ async function assembleWith(db: Database, config: AppConfig) {
     mail,
     backups,
     logs,
+    runs: { sweep: sweepForgottenRuns },
     close: async () => {
+      clearInterval(forgottenInterval);
       backups.close();
       await logs.close();
       await mail.close();

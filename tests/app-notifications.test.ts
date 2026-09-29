@@ -14,7 +14,7 @@ type Item = {
 const inbox = async (client: {
   request: (path: string) => Promise<{ body: unknown }>;
 }) =>
-  (await client.request("/notifications")).body as {
+  (await client.request("/notifications?kinds=2")).body as {
     notifications: Item[];
     unread: number;
   };

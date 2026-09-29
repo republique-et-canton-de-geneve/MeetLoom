@@ -8,7 +8,8 @@ import { sessionCollaborators } from "./collaborators.js";
  * flood the bell: while a notification is unread, new events of the same
  * kind and session add to its count instead of creating another one.
  */
-export type GroupedKind = "visitor-comments" | "feedback";
+export type GroupedKind =
+  "visitor-comments" | "feedback" | "feedback-status" | "run-stopped";
 
 export async function createAppNotifications(db: Database) {
   await db.run(
@@ -76,6 +77,20 @@ export async function notifyVisitorComment(
   });
 }
 
+/** A forgotten timer was stopped (forgotten-runs.ts): its organizers,
+ * owner, editors and facilitators, see why. */
+export async function notifyForgottenRun(sql: Sql, sessionId: string) {
+  const organizers = (await sessionCollaborators(sql, sessionId))
+    .filter((member) => member.role !== "viewer")
+    .map((member) => member.id);
+  await notifyGrouped(sql, organizers, {
+    kind: "run-stopped",
+    sessionId,
+    targetId: null,
+    actor: "MeetLoom",
+  });
+}
+
 /** Every active administrator but the author. */
 export async function notifyFeedback(
   sql: Sql,
@@ -91,4 +106,19 @@ export async function notifyFeedback(
     admins.map((row) => row.id),
     { kind: "feedback", sessionId: null, targetId: null, actor: authorName },
   );
+}
+
+/** The author of a report, when an administrator moves it on. */
+export async function notifyFeedbackStatus(
+  sql: Sql,
+  authorId: string,
+  feedbackId: string,
+  adminName: string,
+) {
+  await notifyGrouped(sql, [authorId], {
+    kind: "feedback-status",
+    sessionId: null,
+    targetId: feedbackId,
+    actor: adminName,
+  });
 }

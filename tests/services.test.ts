@@ -262,6 +262,471 @@ test("SMTP recovery is non-enumerating, rate-limited per address, hash-only and 
   assert.equal((await h.owner.request("/account")).status, 401);
 });
 
+test("a problem report is emailed to the other administrators who keep that preference on", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  const owner = await h.setup();
+  const second = await h.account("second-admin@example.test"),
+    quiet = await h.account("quiet-admin@example.test"),
+    member = await h.account("member@example.test");
+  for (const admin of [second, quiet])
+    assert.equal(
+      (
+        await h.owner.request(`/admin/accounts/${admin.user.id}`, "PATCH", {
+          isAdmin: true,
+        })
+      ).status,
+      200,
+    );
+  // Their invitations were emailed too.
+  await h.mail.flush();
+  messages.length = 0;
+  // One administrator turned these emails off.
+  await quiet.client.request("/account/email-feedback", "PUT", {
+    enabled: false,
+  });
+  const sent = await member.client.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige quand je change d’onglet.",
+    page: "/session/abc",
+  });
+  assert.equal(sent.status, 201);
+  await h.mail.flush();
+  assert.deepEqual(messages.map((message) => message.to).sort(), [
+    owner.email,
+    "second-admin@example.test",
+  ]);
+  assert.match(messages[0].text, /Le minuteur se fige/);
+  assert.match(messages[0].text, /\/account\/feedback-inbox/);
+  assert.match(messages[0].text, /member@example\.test/);
+
+  // The author of a report is never emailed about their own report.
+  messages.length = 0;
+  await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Un mode sombre.",
+  });
+  await h.mail.flush();
+  assert.deepEqual(
+    messages.map((message) => message.to),
+    ["second-admin@example.test"],
+  );
+});
+
+test("the author of a report hears when its status changes, in the app and by email", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  const owner = await h.setup();
+  const member = await h.account("member@example.test");
+  const sent = await member.client.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige quand je change d’onglet.",
+  });
+  await h.mail.flush();
+  messages.length = 0;
+  const id = sent.body.feedback.id;
+  const status = async (value: string) =>
+    assert.equal(
+      (
+        await h.owner.request(`/admin/feedback/${id}`, "PATCH", {
+          status: value,
+        })
+      ).status,
+      200,
+    );
+  await status("in-progress");
+  await h.mail.flush();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, "member@example.test");
+  assert.match(messages[0].text, /Le minuteur se fige/);
+  assert.match(messages[0].text, /\/account\/feedback/);
+  const bell = (await member.client.request("/notifications?kinds=2")).body;
+  assert.equal(bell.unread, 1);
+  assert.equal(bell.notifications[0].kind, "feedback-status");
+  assert.equal(bell.notifications[0].actor, owner.name);
+  // A 0.1.3 page, still open during a rollout, does not get a kind it
+  // cannot open.
+  assert.equal(
+    (await member.client.request("/notifications")).body.notifications.length,
+    0,
+  );
+  // Its "mark all as read" leaves that notification unread for newer pages.
+  await member.client.request("/notifications/read", "POST", { all: true });
+  assert.equal(
+    (await member.client.request("/notifications?kinds=2")).body.unread,
+    1,
+  );
+
+  // Setting the same status again says nothing new.
+  await status("in-progress");
+  await h.mail.flush();
+  assert.equal(messages.length, 1);
+
+  // Further changes group in the bell while unread; each one is emailed.
+  await status("done");
+  await h.mail.flush();
+  assert.equal(messages.length, 2);
+  const grouped = (await member.client.request("/notifications?kinds=2")).body;
+  assert.equal(grouped.unread, 1);
+  assert.equal(grouped.notifications[0].count, 2);
+
+  // An administrator updating their own report is not notified.
+  const own = await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Un mode sombre.",
+  });
+  messages.length = 0;
+  await h.owner.request(`/admin/feedback/${own.body.feedback.id}`, "PATCH", {
+    status: "done",
+  });
+  await h.mail.flush();
+  assert.equal(messages.length, 0);
+  assert.equal(
+    (await h.owner.request("/notifications?kinds=2")).body.notifications.some(
+      (item: { kind: string }) => item.kind === "feedback-status",
+    ),
+    false,
+  );
+});
+
+test("invitations are emailed with their link when SMTP is configured", async (t) => {
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const session = await h.session();
+  const existing = await h.account("existing@example.test");
+  await h.mail.flush();
+  messages.length = 0;
+  const to = (address: string) =>
+    messages.find((message) => message.to === address);
+
+  // Someone without an account: the private link to join.
+  const newcomer = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    {
+      name: "Nouvelle animatrice",
+      email: "newcomer@example.test",
+      role: "facilitator",
+    },
+  );
+  assert.equal(newcomer.status, 201);
+  assert.equal(newcomer.body.emailed, true);
+  // An existing account: added at once, and told where to find the session.
+  const added = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    { name: "Existing", email: "existing@example.test", role: "editor" },
+  );
+  assert.equal(added.status, 201);
+  // An account invitation from the administration.
+  const account = await h.owner.request("/auth/invites", "POST", {
+    name: "Colleague",
+    email: "colleague@example.test",
+  });
+  assert.equal(account.status, 201);
+  assert.equal(account.body.emailed, true);
+  // A workspace invitation.
+  const workspace = (
+    await h.owner.request("/workspaces", "POST", { name: "Équipe projet" })
+  ).body.workspace;
+  const joined = await h.owner.request(
+    `/workspaces/${workspace.id}/members`,
+    "POST",
+    { email: "teammate@example.test", role: "editor" },
+  );
+  assert.equal(joined.status, 201, JSON.stringify(joined.body));
+  await h.mail.flush();
+
+  assert.match(
+    to("newcomer@example.test")!.text,
+    new RegExp(`/join/${newcomer.body.token}`),
+  );
+  assert.match(to("newcomer@example.test")!.text, new RegExp(session.title));
+  // Each email names only what the role allows.
+  assert.match(
+    to("newcomer@example.test")!.text,
+    / à animer la séance | to run the session /,
+  );
+  assert.match(
+    to("existing@example.test")!.text,
+    /à préparer et animer la séance|to prepare and run the session/,
+  );
+  assert.match(
+    to("existing@example.test")!.text,
+    new RegExp(`/session/${session.id}`),
+  );
+  assert.equal(to("existing@example.test")!.text.includes("/join/"), false);
+  assert.match(
+    to("colleague@example.test")!.text,
+    new RegExp(`/join/${account.body.token}`),
+  );
+  assert.match(
+    to("teammate@example.test")!.text,
+    new RegExp(`/join/${joined.body.token}`),
+  );
+  assert.match(to("teammate@example.test")!.text, /Équipe projet/);
+  assert.equal(messages.length, 4);
+  void existing;
+});
+
+test("report emails survive a failed send and profiles saved before the option existed", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const second = await h.account("second-admin@example.test");
+  assert.equal(
+    (
+      await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+        isAdmin: true,
+      })
+    ).status,
+    200,
+  );
+  // A profile saved by an earlier version, without the report-email option.
+  await h.db.run(
+    "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
+    [
+      second.user.id,
+      JSON.stringify({
+        preferences: {
+          displayTimezone: "",
+          hour12: false,
+          inAppMentions: true,
+          emailDigest: false,
+          emailReminder: false,
+        },
+      }),
+    ],
+  );
+  assert.equal(
+    (await second.client.request("/account")).body.emailFeedback,
+    true,
+  );
+  await h.mail.flush();
+  // The SMTP server is down when the report arrives: the email waits in the
+  // database, not in one pod's memory.
+  await h.owner.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Le minuteur se fige.",
+  });
+  await h.mail.flush();
+  assert.equal(messages.length, 0);
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 1);
+  // Any pod retries it once the server is back.
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
+  assert.deepEqual(
+    messages.map((message) => message.to),
+    ["second-admin@example.test"],
+  );
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
+});
+
+test("invitation emails are sent before answering, in the recipient's language, and not repeated", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const session = await h.session();
+  const english = await h.account("english@example.test");
+  // The SMTP server is down: the inviter is told to pass the link on.
+  const unsent = await h.owner.request(
+    `/sessions/${session.id}/invitations`,
+    "POST",
+    { name: "Newcomer", email: "newcomer@example.test", role: "viewer" },
+  );
+  assert.equal(unsent.status, 201);
+  assert.equal(unsent.body.emailed, false);
+  assert.ok(unsent.body.token);
+
+  failing = false;
+  const invite = () =>
+    h.owner.request(`/sessions/${session.id}/invitations`, "POST", {
+      name: "English",
+      email: "english@example.test",
+      role: "editor",
+    });
+  const first = await invite();
+  assert.equal(first.body.emailed, true);
+  // Sent before the answer, in the English account's own language.
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, "english@example.test");
+  assert.match(messages[0].subject, /added you/);
+  // Adding the same person again does not email them again.
+  const again = await invite();
+  assert.equal(again.status, 201);
+  assert.equal(again.body.emailed, false);
+  assert.equal(messages.length, 1);
+  // A new invitation replaces the previous link: the new one is always sent.
+  const renew = () =>
+    h.owner.request(`/sessions/${session.id}/invitations`, "POST", {
+      name: "Newcomer",
+      email: "newcomer@example.test",
+      role: "viewer",
+    });
+  assert.equal((await renew()).body.emailed, true);
+  const renewed = await renew();
+  assert.equal(renewed.body.emailed, true);
+  assert.match(
+    messages.at(-1)!.text,
+    new RegExp(`/join/${renewed.body.token}`),
+  );
+  // A viewer is not promised to prepare or run the session.
+  assert.match(
+    messages.at(-1)!.text,
+    /à suivre la séance|to follow the session/,
+  );
+  assert.doesNotMatch(messages.at(-1)!.text, /animer|run the session/);
+  void english;
+});
+
+test("a join link replaced while its email was sent is not reported as emailed", async (t) => {
+  let replace: (() => Promise<void>) | undefined;
+  const h = await harness(t, {
+    mail,
+    mailTransport: {
+      async send() {
+        // The same invitation sent again from another tab meanwhile.
+        await replace?.();
+      },
+    },
+  });
+  await h.setup();
+  replace = async () => {
+    await h.db.run("DELETE FROM invites WHERE email=$1", ["late@example.test"]);
+  };
+  const invited = await h.owner.request("/auth/invites", "POST", {
+    name: "Late",
+    email: "late@example.test",
+  });
+  assert.equal(invited.status, 201);
+  assert.equal(invited.body.emailed, false);
+});
+
+test("the report-email option is saved on its own, so older servers keep accepting profile saves", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const account = (await h.owner.request("/account")).body;
+  // The profile keeps the shape older pages send back as is; the option
+  // travels beside it.
+  const older = account.profile.preferences;
+  assert.equal("emailFeedback" in older, false);
+  assert.equal(account.emailFeedback, true);
+  assert.equal(
+    (
+      await h.owner.request("/account/email-feedback", "PUT", {
+        enabled: false,
+      })
+    ).status,
+    200,
+  );
+  // A profile save without the option, as older servers expect it, keeps it.
+  const saved = await h.owner.request("/account", "PUT", {
+    name: account.user.name,
+    email: account.user.email,
+    locale: account.user.locale,
+    preferences: older,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal("emailFeedback" in saved.body.profile.preferences, false);
+  assert.equal((await h.owner.request("/account")).body.emailFeedback, false);
+  // A 0.1.3 pod rewriting the whole profile cannot turn it back on.
+  await h.db.run("UPDATE account_profiles SET payload=$1 WHERE user_id=$2", [
+    JSON.stringify({ preferences: older }),
+    account.user.id,
+  ]);
+  assert.equal((await h.owner.request("/account")).body.emailFeedback, false);
+});
+
+test("a queued email is dropped when its recipient lost the access it was about", async (t) => {
+  let failing = true;
+  const messages: MailMessage[] = [],
+    h = await harness(t, {
+      mail,
+      mailTransport: {
+        async send(message) {
+          if (failing) throw new Error("SMTP unavailable");
+          messages.push(message);
+        },
+      },
+    });
+  await h.setup();
+  const second = await h.account("second-admin@example.test");
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: true,
+  });
+  await h.mail.flush();
+  await h.owner.request("/feedback", "POST", {
+    kind: "bug",
+    message: "Détail privé du signalement.",
+  });
+  await h.mail.flush();
+  // No longer an administrator when the SMTP server comes back.
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: false,
+  });
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
+  assert.equal(messages.length, 0);
+  assert.equal((await h.db.all("SELECT id FROM mail_outbox")).length, 0);
+
+  // Turned off while it waited: not sent either.
+  failing = true;
+  await h.owner.request(`/admin/accounts/${second.user.id}`, "PATCH", {
+    isAdmin: true,
+  });
+  await h.owner.request("/feedback", "POST", {
+    kind: "idea",
+    message: "Une autre idée.",
+  });
+  await h.mail.flush();
+  await second.client.request("/account/email-feedback", "PUT", {
+    enabled: false,
+  });
+  failing = false;
+  await h.mail.deliverQueued(Date.now() + 12 * 60 * 1000);
+  assert.equal(messages.length, 0);
+});
+
 test("SMTP failures disclose no transport details and invalidate undelivered recovery links", async (t) => {
   const h = await harness(t, {
     mail,
