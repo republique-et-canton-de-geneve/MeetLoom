@@ -170,3 +170,45 @@ test("restoring data lists the timers it brings back", async (t) => {
     [session.id],
   );
 });
+
+test("a timer an older pod started is still found, and a planned run started again is stopped again", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  let session = await h.session();
+  session.timezone = "UTC";
+  session.days[0].date = new Date().toISOString().slice(0, 10);
+  session.days[0].startTime = "00:00";
+  session.days[0].blocks = [newBlock("fr", { title: "Accueil", duration: 10 })];
+  session = (
+    await h.owner.request(`/sessions/${session.id}`, "PUT", {
+      session,
+      version: session.version,
+    })
+  ).body.session;
+  const run = async (action: string, startMode?: "planned") => {
+    const response = await h.owner.request(
+      `/sessions/${session.id}/run`,
+      "POST",
+      { action, startMode, revision: session.run.revision },
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    session = response.body.session;
+  };
+  const status = async () =>
+    (await h.owner.request(`/sessions/${session.id}`)).body.session.run.status;
+
+  await run("start", "planned");
+  const planned = session.run.runStartedAt;
+  // Saved by a pod that does not list timers yet, during a rolling update.
+  await h.db.run("DELETE FROM active_runs");
+  await h.runs.sweep(Date.now() + 25 * HOUR);
+  assert.equal(await status(), "finished");
+
+  // Reset and started again on the same schedule: a new run, stopped too.
+  session = (await h.owner.request(`/sessions/${session.id}`)).body.session;
+  await run("reset");
+  await run("start", "planned");
+  assert.equal(session.run.runStartedAt, planned);
+  await h.runs.sweep(Date.now() + 25 * HOUR);
+  assert.equal(await status(), "finished");
+});

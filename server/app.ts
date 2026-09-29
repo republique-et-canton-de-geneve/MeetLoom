@@ -39,9 +39,9 @@ import { registerOperations } from "./operations.js";
 import { registerAnnouncement } from "./announcement.js";
 import { createRunTables, installRunsApi, recordFinishedRun } from "./runs.js";
 import {
-  claimForgottenRun,
   createForgottenRunTables,
   forgottenRun,
+  rebuildActiveRuns,
   stopForgotten,
   trackActiveRun,
 } from "./forgotten-runs.js";
@@ -1270,9 +1270,17 @@ async function assembleWith(db: Database, config: AppConfig) {
   await createRunTables(db);
   installRunsApi(app, { db, authenticated, accessible });
   await createForgottenRunTables(db);
+  /** Sessions saved since then may hold a timer `save()` did not list: an
+   * older pod's, during a rolling update. The margin covers clock skew
+   * between pods and saves committed late. */
+  let listedUpTo = Date.now() - 15 * 60 * 1000;
   /** Timers nobody stopped (forgotten-runs.ts): every pod looks every five
-   * minutes; the claim and the version check make each action happen once. */
+   * minutes; the locked re-read and the version check make each stop happen
+   * once. */
   async function sweepForgottenRuns(now = Date.now()) {
+    const next = Date.now() - 15 * 60 * 1000;
+    await rebuildActiveRuns(db, new Date(listedUpTo).toISOString());
+    listedUpTo = next;
     const rows = await db.all<SessionRow & { workspace_id: string | null }>(
       "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
     );
@@ -1306,8 +1314,7 @@ async function assembleWith(db: Database, config: AppConfig) {
           }
           if (
             current.run.runStartedAt !== session.run.runStartedAt ||
-            !forgottenRun(current, now) ||
-            !(await claimForgottenRun(sql, current))
+            !forgottenRun(current, now)
           )
             return;
           await save(

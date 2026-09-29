@@ -34,6 +34,8 @@ export type InvitationMail = (invite: {
   kind: "session" | "workspace" | "account";
   /** The session or workspace name. */
   title?: string;
+  /** In a session, what the person may do there. */
+  role?: "editor" | "facilitator" | "viewer";
   /** Absolute path in the application, such as /join/<token>. */
   path: string;
   /** Already has an account: no link to accept. */
@@ -508,9 +510,18 @@ export async function installMailApi(
       inviter = short(invite.inviter, 120),
       title = invite.title ? short(invite.title, 150) : "",
       what = {
-        session: french
-          ? `à préparer ou animer la séance « ${title} »`
-          : `to prepare or run the session “${title}”`,
+        // Only what the role allows: a viewer reads and comments.
+        session: {
+          editor: french
+            ? `à préparer et animer la séance « ${title} »`
+            : `to prepare and run the session “${title}”`,
+          facilitator: french
+            ? `à animer la séance « ${title} »`
+            : `to run the session “${title}”`,
+          viewer: french
+            ? `à suivre la séance « ${title} »`
+            : `to follow the session “${title}”`,
+        }[invite.role ?? "viewer"],
         workspace: french
           ? `à rejoindre l’espace de travail « ${title} »`
           : `to join the workspace “${title}”`,
@@ -609,14 +620,14 @@ export async function installMailApi(
       try {
         const [active] = await currentRecipient(db, row.user_id);
         // An account since disabled, readdressed or no longer entitled
-        // (administrator rights, a role in the session) gets nothing.
+        // (administrator rights) gets nothing.
         if (
           active &&
           active.email === row.email &&
           (await stillEntitled(row.id, row.user_id))
         )
           await send(active, row.subject, row.body);
-        await db.run("DELETE FROM mail_outbox_scope WHERE id=$1", [row.id]);
+        // Its scope row goes with it (cascade), outbox first like a restore.
         await db.run("DELETE FROM mail_outbox WHERE id=$1", [row.id]);
       } catch (error) {
         await db.run("UPDATE mail_outbox SET lease_until=$1 WHERE id=$2", [
@@ -627,10 +638,6 @@ export async function installMailApi(
       }
     }
     // Given up after five attempts: kept a week for the logs, then dropped.
-    await db.run(
-      "DELETE FROM mail_outbox_scope WHERE id IN (SELECT id FROM mail_outbox WHERE attempts>=5 AND created_at<$1)",
-      [now - 7 * day],
-    );
     await db.run(
       "DELETE FROM mail_outbox WHERE attempts>=5 AND created_at<$1",
       [now - 7 * day],

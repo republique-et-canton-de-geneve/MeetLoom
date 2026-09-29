@@ -458,6 +458,15 @@ test("invitations are emailed with their link when SMTP is configured", async (t
     new RegExp(`/join/${newcomer.body.token}`),
   );
   assert.match(to("newcomer@example.test")!.text, new RegExp(session.title));
+  // Each email names only what the role allows.
+  assert.match(
+    to("newcomer@example.test")!.text,
+    / à animer la séance | to run the session /,
+  );
+  assert.match(
+    to("existing@example.test")!.text,
+    /à préparer et animer la séance|to prepare and run the session/,
+  );
   assert.match(
     to("existing@example.test")!.text,
     new RegExp(`/session/${session.id}`),
@@ -596,6 +605,12 @@ test("invitation emails are sent before answering, in the recipient's language, 
     messages.at(-1)!.text,
     new RegExp(`/join/${renewed.body.token}`),
   );
+  // A viewer is not promised to prepare or run the session.
+  assert.match(
+    messages.at(-1)!.text,
+    /à suivre la séance|to follow the session/,
+  );
+  assert.doesNotMatch(messages.at(-1)!.text, /animer|run the session/);
   void english;
 });
 

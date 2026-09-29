@@ -357,6 +357,7 @@ export async function installParticipantsApi(
         target: session.id,
         kind: "session",
         title: session.title,
+        role: input.role,
         path: result.token ? `/join/${result.token}` : `/session/${session.id}`,
         existing: !result.token,
       }));

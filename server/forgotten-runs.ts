@@ -60,26 +60,26 @@ export function stopForgotten(session: Session, now: number): Session {
   );
 }
 
-/** One automatic stop per run, whichever pod gets there first;
- * `active_runs` lists the sessions whose timer runs, so the sweep reads
+/** `active_runs` lists the sessions whose timer runs, so the sweep reads
  * those instead of every agenda. */
 export async function createForgottenRunTables(db: Database) {
   await db.run(
-    "CREATE TABLE IF NOT EXISTS run_reminders (session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, run_started_at BIGINT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(session_id,run_started_at,kind))",
+    "CREATE TABLE IF NOT EXISTS active_runs (session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, since TEXT NOT NULL)",
   );
   await db.run(
-    "CREATE TABLE IF NOT EXISTS active_runs (session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, since TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS sessions_updated_idx ON sessions(updated_at)",
   );
   // Timers started before this table existed: one scan at startup, then
   // every save keeps the list current.
   await rebuildActiveRuns(db);
 }
 
-/** Lists every running or paused timer again (startup, restore, import). */
-export const rebuildActiveRuns = (sql: Sql) =>
+/** Lists again every running or paused timer, of every session or only of
+ * those saved since `since` (an ISO time). Pods may do it at the same time. */
+export const rebuildActiveRuns = (sql: Sql, since?: string) =>
   sql.run(
-    `INSERT INTO active_runs(session_id,since) SELECT id,$1 FROM sessions WHERE (payload LIKE '%"status":"running"%' OR payload LIKE '%"status":"paused"%') AND id NOT IN (SELECT session_id FROM active_runs)`,
-    [new Date().toISOString()],
+    `INSERT INTO active_runs(session_id,since) SELECT id,$1 FROM sessions WHERE ${since ? "updated_at>=$2 AND " : ""}(payload LIKE '%"status":"running"%' OR payload LIKE '%"status":"paused"%') AND id NOT IN (SELECT session_id FROM active_runs) ON CONFLICT(session_id) DO NOTHING`,
+    since ? [new Date().toISOString(), since] : [new Date().toISOString()],
   );
 
 /** Inside every session save: lists or unlists the session's timer. */
@@ -91,9 +91,3 @@ export async function trackActiveRun(sql: Sql, next: Session) {
     );
   else await sql.run("DELETE FROM active_runs WHERE session_id=$1", [next.id]);
 }
-
-export const claimForgottenRun = (sql: Sql, session: Session) =>
-  sql.run(
-    "INSERT INTO run_reminders(session_id,run_started_at,kind,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(session_id,run_started_at,kind) DO NOTHING",
-    [session.id, session.run.runStartedAt, "stop", new Date().toISOString()],
-  );
