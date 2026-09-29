@@ -364,6 +364,12 @@ test("the author of a report hears when its status changes, in the app and by em
     (await member.client.request("/notifications")).body.notifications.length,
     0,
   );
+  // Its "mark all as read" leaves that notification unread for newer pages.
+  await member.client.request("/notifications/read", "POST", { all: true });
+  assert.equal(
+    (await member.client.request("/notifications?kinds=2")).body.unread,
+    1,
+  );
 
   // Setting the same status again says nothing new.
   await status("in-progress");

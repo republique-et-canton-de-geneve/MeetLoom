@@ -240,7 +240,7 @@ export default function NotificationBell({
               onClick={async () => {
                 setBusy(true);
                 try {
-                  await post("/notifications/read", { all: true });
+                  await post("/notifications/read?kinds=2", { all: true });
                   await load();
                 } catch (cause) {
                   setError((cause as Error).message);

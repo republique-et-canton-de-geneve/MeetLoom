@@ -600,10 +600,15 @@ export async function installCommentsApi(
           .parse(request.body),
         user = actor(response),
         now = new Date().toISOString();
+      // "All" from a 0.1.3 page covers only the kinds it was shown.
+      const shown = (table: string) =>
+        table === "app_notifications" && request.query.kinds !== "2"
+          ? " AND kind NOT IN ('feedback-status','run-stopped')"
+          : "";
       for (const table of ["notifications", "app_notifications"])
         if (input.all)
           await db.run(
-            `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL`,
+            `UPDATE ${table} SET read_at=$1 WHERE user_id=$2 AND read_at IS NULL${shown(table)}`,
             [now, user.id],
           );
         else

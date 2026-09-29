@@ -529,10 +529,18 @@ export async function installMailApi(
     // Someone with an account reads it in their own language, and only
     // while the address is still that of an active account: changed or
     // disabled since the request looked it up, nothing is sent.
+    // It must also still have the access it is told about: removed from
+    // the session or workspace meanwhile, it hears nothing.
+    const access =
+      invite.kind === "session"
+        ? " AND EXISTS(SELECT 1 FROM members m WHERE m.user_id=u.id AND m.session_id=$2)"
+        : invite.kind === "workspace"
+          ? " AND EXISTS(SELECT 1 FROM workspace_members w WHERE w.user_id=u.id AND w.workspace_id=$2)"
+          : "";
     const [account] = invite.existing
       ? await db.all<{ locale: string }>(
-          "SELECT u.locale FROM users u LEFT JOIN account_disabled d ON d.user_id=u.id WHERE u.email=$1 AND d.user_id IS NULL",
-          [invite.email],
+          `SELECT u.locale FROM users u LEFT JOIN account_disabled d ON d.user_id=u.id WHERE u.email=$1 AND d.user_id IS NULL${access}`,
+          access ? [invite.email, invite.target] : [invite.email],
         )
       : [];
     if (invite.existing && !account) {
