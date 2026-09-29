@@ -129,18 +129,19 @@ test("a forgotten timer is stopped once, keeps a sensible run history and tells 
   assert.equal(runs[0].blocks[0].actual, 600);
   // Organizers see why in their notifications; viewers are not bothered.
   assert.equal(
-    (await facilitator.client.request("/notifications")).body.notifications[0]
-      .kind,
+    (await facilitator.client.request("/notifications?kinds=2")).body
+      .notifications[0].kind,
     "run-stopped",
   );
   assert.equal(
-    (await viewer.client.request("/notifications")).body.notifications.length,
+    (await viewer.client.request("/notifications?kinds=2")).body.notifications
+      .length,
     0,
   );
   // Nothing more on the next sweep.
   await h.runs.sweep(late + 10 * 60 * 1000);
   assert.equal(
-    (await h.owner.request("/notifications")).body.notifications.filter(
+    (await h.owner.request("/notifications?kinds=2")).body.notifications.filter(
       (item: { kind: string }) => item.kind === "run-stopped",
     )[0].count ?? 1,
     1,

@@ -83,7 +83,7 @@ export default function NotificationBell({
     const data = await api<{
       notifications: TeamNotification[];
       unread: number;
-    }>("/notifications", { signal });
+    }>("/notifications?kinds=2", { signal });
     if (!signal?.aborted) {
       // Only something new rings: not what was already there on arrival.
       const count = pending(data.notifications);

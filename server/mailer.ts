@@ -125,6 +125,14 @@ export async function installMailApi(
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_invitation_log (key TEXT PRIMARY KEY,sender TEXT NOT NULL,sent_at BIGINT NOT NULL)",
   );
+  // Each invitation counts its sender's last hour and prunes the day-old
+  // rows: both stay index reads however many people invite.
+  await db.run(
+    "CREATE INDEX IF NOT EXISTS mail_invitation_sender_idx ON mail_invitation_log(sender,sent_at)",
+  );
+  await db.run(
+    "CREATE INDEX IF NOT EXISTS mail_invitation_sent_idx ON mail_invitation_log(sent_at)",
+  );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_outbox (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
   );
@@ -518,13 +526,21 @@ export async function installMailApi(
         ])
         .then((rows) => rows.length > 0));
     if (!(await current())) return false;
-    // Someone with an account reads it in their own language.
+    // Someone with an account reads it in their own language, and only
+    // while the address is still that of an active account: changed or
+    // disabled since the request looked it up, nothing is sent.
     const [account] = invite.existing
       ? await db.all<{ locale: string }>(
-          "SELECT locale FROM users WHERE email=$1",
+          "SELECT u.locale FROM users u LEFT JOIN account_disabled d ON d.user_id=u.id WHERE u.email=$1 AND d.user_id IS NULL",
           [invite.email],
         )
       : [];
+    if (invite.existing && !account) {
+      await db.run("UPDATE mail_invitation_log SET sent_at=0 WHERE key=$1", [
+        key,
+      ]);
+      return false;
+    }
     const french = (account?.locale ?? invite.locale) === "fr",
       inviter = short(invite.inviter, 120),
       title = invite.title ? short(invite.title, 150) : "",

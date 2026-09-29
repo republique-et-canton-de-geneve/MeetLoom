@@ -354,10 +354,16 @@ test("the author of a report hears when its status changes, in the app and by em
   assert.equal(messages[0].to, "member@example.test");
   assert.match(messages[0].text, /Le minuteur se fige/);
   assert.match(messages[0].text, /\/account\/feedback/);
-  const bell = (await member.client.request("/notifications")).body;
+  const bell = (await member.client.request("/notifications?kinds=2")).body;
   assert.equal(bell.unread, 1);
   assert.equal(bell.notifications[0].kind, "feedback-status");
   assert.equal(bell.notifications[0].actor, owner.name);
+  // A 0.1.3 page, still open during a rollout, does not get a kind it
+  // cannot open.
+  assert.equal(
+    (await member.client.request("/notifications")).body.notifications.length,
+    0,
+  );
 
   // Setting the same status again says nothing new.
   await status("in-progress");
@@ -368,7 +374,7 @@ test("the author of a report hears when its status changes, in the app and by em
   await status("done");
   await h.mail.flush();
   assert.equal(messages.length, 2);
-  const grouped = (await member.client.request("/notifications")).body;
+  const grouped = (await member.client.request("/notifications?kinds=2")).body;
   assert.equal(grouped.unread, 1);
   assert.equal(grouped.notifications[0].count, 2);
 
@@ -384,7 +390,7 @@ test("the author of a report hears when its status changes, in the app and by em
   await h.mail.flush();
   assert.equal(messages.length, 0);
   assert.equal(
-    (await h.owner.request("/notifications")).body.notifications.some(
+    (await h.owner.request("/notifications?kinds=2")).body.notifications.some(
       (item: { kind: string }) => item.kind === "feedback-status",
     ),
     false,

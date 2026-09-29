@@ -1294,85 +1294,97 @@ async function assembleWith(db: Database, config: AppConfig) {
     const rows = await db.all<SessionRow & { workspace_id: string | null }>(
       "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
     );
-    const active = (value: Session) =>
-      value.run.status === "running" || value.run.status === "paused";
-    for (const row of rows) {
-      const session = mappedSession(row);
-      // Stopped or reset by an older pod: no longer a timer to watch.
-      if (!active(session)) {
-        await db.run("DELETE FROM active_runs WHERE session_id=$1", [
+    // One malformed session must not keep the others from being checked.
+    for (const row of rows)
+      await checkForgotten(row, now).catch((error: Error) =>
+        log.warn("Forgotten timer check failed", {
+          session: row.id,
+          error: error.message,
+        }),
+      );
+  }
+  const active = (value: Session) =>
+    value.run.status === "running" || value.run.status === "paused";
+  async function checkForgotten(
+    row: SessionRow & { workspace_id: string | null },
+    now: number,
+  ) {
+    const session = mappedSession(row);
+    // Stopped or reset by an older pod: no longer a timer to watch.
+    if (!active(session)) {
+      await db.run("DELETE FROM active_runs WHERE session_id=$1", [session.id]);
+      return;
+    }
+    // An auto-advancing run past its last step, nobody polling: its end is
+    // saved like a poll would, recording the run, then it leaves the list.
+    const ended = !active(transitionRun(session, "sync", {}, now));
+    if (!ended && !forgottenRun(session, now)) return;
+    try {
+      await db.transaction(async (sql) => {
+        // A stop writes notifications after the session's tables.
+        await lockInRestoreOrder(sql, sweepDialect);
+        // Decide again on the locked, current session: someone may have
+        // stopped, reset or closed it since the scan.
+        await sql.run("UPDATE sessions SET version=version WHERE id=$1", [
           session.id,
         ]);
-        continue;
-      }
-      // An auto-advancing run past its last step, nobody polling: its end is
-      // saved like a poll would, recording the run, then it leaves the list.
-      const ended = !active(transitionRun(session, "sync", {}, now));
-      if (!ended && !forgottenRun(session, now)) continue;
-      try {
-        await db.transaction(async (sql) => {
-          // A stop writes notifications after the session's tables.
-          await lockInRestoreOrder(sql, sweepDialect);
-          // Decide again on the locked, current session: someone may have
-          // stopped, reset or closed it since the scan.
-          await sql.run("UPDATE sessions SET version=version WHERE id=$1", [
-            session.id,
+        const [fresh] = await sql.all<
+          SessionRow & { workspace_id: string | null }
+        >(
+          "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE s.id=$1 AND l.deleted_at IS NULL AND l.closed_at IS NULL",
+          [session.id],
+        );
+        if (!fresh) return;
+        const current = mappedSession(fresh);
+        // Listed but no longer running (a restore, an older pod's save).
+        if (
+          current.run.status !== "running" &&
+          current.run.status !== "paused"
+        ) {
+          await sql.run("DELETE FROM active_runs WHERE session_id=$1", [
+            current.id,
           ]);
-          const [fresh] = await sql.all<
-            SessionRow & { workspace_id: string | null }
-          >(
-            "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM sessions s LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE s.id=$1 AND l.deleted_at IS NULL AND l.closed_at IS NULL",
-            [session.id],
-          );
-          if (!fresh) return;
-          const current = mappedSession(fresh);
-          // Listed but no longer running (a restore, an older pod's save).
-          if (
-            current.run.status !== "running" &&
-            current.run.status !== "paused"
-          ) {
-            await sql.run("DELETE FROM active_runs WHERE session_id=$1", [
-              current.id,
-            ]);
-            return;
-          }
-          if (current.run.runStartedAt !== session.run.runStartedAt) return;
-          const caughtUp = transitionRun(current, "sync", {}, now);
-          if (!active(caughtUp)) {
-            await save(
-              current,
-              caughtUp,
-              current.ownerId,
-              undefined,
-              undefined,
-              sql,
-            );
-            return;
-          }
-          if (!forgottenRun(current, now)) return;
+          return;
+        }
+        if (current.run.runStartedAt !== session.run.runStartedAt) return;
+        const caughtUp = transitionRun(current, "sync", {}, now);
+        if (!active(caughtUp)) {
           await save(
             current,
-            stopForgotten(current, now),
+            caughtUp,
             current.ownerId,
             undefined,
             undefined,
             sql,
           );
-          // Its organizers see why the timer shows as finished.
-          await notifyForgottenRun(sql, session.id);
+          return;
+        }
+        if (!forgottenRun(current, now)) return;
+        await save(
+          current,
+          stopForgotten(current, now),
+          current.ownerId,
+          undefined,
+          undefined,
+          sql,
+        );
+        // Its organizers see why the timer shows as finished.
+        await notifyForgottenRun(sql, session.id);
+      });
+    } catch (error) {
+      // Someone acted on the timer meanwhile: the next sweep decides again.
+      if (!(error instanceof HttpError && error.status === 409))
+        log.warn("Forgotten timer check failed", {
+          session: session.id,
+          error: (error as Error).message,
         });
-      } catch (error) {
-        // Someone acted on the timer meanwhile: the next sweep decides again.
-        if (!(error instanceof HttpError && error.status === 409))
-          log.warn("Forgotten timer check failed", {
-            session: session.id,
-            error: (error as Error).message,
-          });
-      }
     }
   }
   const forgottenInterval = setInterval(
-    () => void sweepForgottenRuns().catch(() => undefined),
+    () =>
+      void sweepForgottenRuns().catch((error: Error) =>
+        log.warn("Forgotten timer sweep failed", { error: error.message }),
+      ),
     5 * 60 * 1000,
   );
   forgottenInterval.unref();
