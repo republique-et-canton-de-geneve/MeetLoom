@@ -46,6 +46,7 @@ import {
   trackActiveRun,
 } from "./forgotten-runs.js";
 import { notifyForgottenRun } from "./app-notifications.js";
+import { dialectOf, lockInRestoreOrder } from "./snapshot.js";
 import { DEFAULT_ISSUES_URL, registerFeedback } from "./feedback.js";
 import { log } from "./log.js";
 import { registerLogs, type LogConfig } from "./logs.js";
@@ -1282,6 +1283,7 @@ async function assembleWith(db: Database, config: AppConfig) {
   /** Timers nobody stopped (forgotten-runs.ts): every pod looks every five
    * minutes; the locked re-read and the version check make each stop happen
    * once. */
+  const sweepDialect = await dialectOf(db);
   async function sweepForgottenRuns(now = Date.now()) {
     const next = Date.now() - 15 * 60 * 1000;
     await rebuildActiveRuns(
@@ -1292,20 +1294,25 @@ async function assembleWith(db: Database, config: AppConfig) {
     const rows = await db.all<SessionRow & { workspace_id: string | null }>(
       "SELECT s.*,sw.workspace_id,l.closed_at,l.facilitators FROM active_runs a JOIN sessions s ON s.id=a.session_id LEFT JOIN session_workspaces sw ON sw.session_id=s.id LEFT JOIN session_lifecycle l ON l.session_id=s.id WHERE l.deleted_at IS NULL AND l.closed_at IS NULL",
     );
+    const active = (value: Session) =>
+      value.run.status === "running" || value.run.status === "paused";
     for (const row of rows) {
       const session = mappedSession(row);
-      const status = transitionRun(session, "sync", {}, Date.now()).run.status;
-      // Stopped or reset by an older pod, or finished by its own schedule:
-      // no longer a timer to watch, so it leaves the list.
-      if (status !== "running" && status !== "paused") {
+      // Stopped or reset by an older pod: no longer a timer to watch.
+      if (!active(session)) {
         await db.run("DELETE FROM active_runs WHERE session_id=$1", [
           session.id,
         ]);
         continue;
       }
-      if (!forgottenRun(session, now)) continue;
+      // An auto-advancing run past its last step, nobody polling: its end is
+      // saved like a poll would, recording the run, then it leaves the list.
+      const ended = !active(transitionRun(session, "sync", {}, now));
+      if (!ended && !forgottenRun(session, now)) continue;
       try {
         await db.transaction(async (sql) => {
+          // A stop writes notifications after the session's tables.
+          await lockInRestoreOrder(sql, sweepDialect);
           // Decide again on the locked, current session: someone may have
           // stopped, reset or closed it since the scan.
           await sql.run("UPDATE sessions SET version=version WHERE id=$1", [
@@ -1329,11 +1336,20 @@ async function assembleWith(db: Database, config: AppConfig) {
             ]);
             return;
           }
-          if (
-            current.run.runStartedAt !== session.run.runStartedAt ||
-            !forgottenRun(current, now)
-          )
+          if (current.run.runStartedAt !== session.run.runStartedAt) return;
+          const caughtUp = transitionRun(current, "sync", {}, now);
+          if (!active(caughtUp)) {
+            await save(
+              current,
+              caughtUp,
+              current.ownerId,
+              undefined,
+              undefined,
+              sql,
+            );
             return;
+          }
+          if (!forgottenRun(current, now)) return;
           await save(
             current,
             stopForgotten(current, now),

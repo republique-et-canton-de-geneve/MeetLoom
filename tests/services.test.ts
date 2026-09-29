@@ -289,15 +289,9 @@ test("a problem report is emailed to the other administrators who keep that pref
   await h.mail.flush();
   messages.length = 0;
   // One administrator turned these emails off.
-  await h.db.run(
-    "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
-    [
-      quiet.user.id,
-      JSON.stringify({
-        preferences: { ...DEFAULT_ACCOUNT_PREFERENCES, emailFeedback: false },
-      }),
-    ],
-  );
+  await quiet.client.request("/account/email-feedback", "PUT", {
+    enabled: false,
+  });
   const sent = await member.client.request("/feedback", "POST", {
     kind: "bug",
     message: "Le minuteur se fige quand je change d’onglet.",
@@ -662,6 +656,12 @@ test("the report-email option is saved on its own, so older servers keep accepti
   });
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
   assert.equal("emailFeedback" in saved.body.profile.preferences, false);
+  assert.equal((await h.owner.request("/account")).body.emailFeedback, false);
+  // A 0.1.3 pod rewriting the whole profile cannot turn it back on.
+  await h.db.run("UPDATE account_profiles SET payload=$1 WHERE user_id=$2", [
+    JSON.stringify({ preferences: older }),
+    account.user.id,
+  ]);
   assert.equal((await h.owner.request("/account")).body.emailFeedback, false);
 });
 

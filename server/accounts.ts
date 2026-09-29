@@ -34,17 +34,30 @@ export async function accountProfile(
     "SELECT payload FROM account_profiles WHERE user_id=$1",
     [userId],
   );
-  if (!row) return { preferences: { ...DEFAULT_ACCOUNT_PREFERENCES } };
+  // The report-email option lives in its own table: a 0.1.3 pod rewriting
+  // the whole profile during a rollout cannot erase it.
+  const [option] = await db.all<{ feedback: number }>(
+    "SELECT feedback FROM account_email_options WHERE user_id=$1",
+    [userId],
+  );
   // Profiles saved before an option existed get its default.
-  const profile = JSON.parse(row.payload) as AccountProfile;
+  const profile = row
+    ? (JSON.parse(row.payload) as AccountProfile)
+    : { preferences: {} as AccountProfile["preferences"] };
   return {
     ...profile,
-    preferences: { ...DEFAULT_ACCOUNT_PREFERENCES, ...profile.preferences },
+    preferences: {
+      ...DEFAULT_ACCOUNT_PREFERENCES,
+      ...legacyShape(profile).preferences,
+      emailFeedback: option ? option.feedback === 1 : true,
+    },
   };
 }
 /** A profile as 0.1.3 knew it: its pages send it back as is, so the
  * report-email option travels apart until no such page remains. */
-function legacyShape(profile: AccountProfile) {
+function legacyShape<
+  T extends { preferences: Partial<AccountProfile["preferences"]> },
+>(profile: T) {
   const { emailFeedback: _omitted, ...preferences } = profile.preferences;
   void _omitted;
   return { ...profile, preferences };
@@ -82,6 +95,9 @@ export async function installAccountsApi(
       "CREATE TABLE IF NOT EXISTS account_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,payload TEXT NOT NULL)",
     );
     await sql.run(
+      "CREATE TABLE IF NOT EXISTS account_email_options(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,feedback INTEGER NOT NULL)",
+    );
+    await sql.run(
       "CREATE TABLE IF NOT EXISTS account_disabled(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,disabled_at TEXT NOT NULL)",
     );
     await sql.run(
@@ -96,16 +112,9 @@ export async function installAccountsApi(
     await db.transaction(async (sql) => {
       // Serialized with profile saves by the account row.
       await sql.run("UPDATE users SET id=id WHERE id=$1", [who(res).id]);
-      const profile = await accountProfile(sql, who(res).id);
       await sql.run(
-        "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
-        [
-          who(res).id,
-          JSON.stringify({
-            ...profile,
-            preferences: { ...profile.preferences, emailFeedback: enabled },
-          }),
-        ],
+        "INSERT INTO account_email_options(user_id,feedback) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET feedback=excluded.feedback",
+        [who(res).id, enabled ? 1 : 0],
       );
     });
     res.json({ ok: true });
@@ -190,14 +199,11 @@ export async function installAccountsApi(
           await sql.run("DELETE FROM account_resets WHERE user_id=$1", [
             who(res).id,
           ]);
-        // The report-email option has its own route: a profile save keeps
-        // it, read under the account row locked by the update above.
-        profile.preferences.emailFeedback = (
-          await accountProfile(sql, who(res).id)
-        ).preferences.emailFeedback;
+        // The report-email option has its own table and route: the profile
+        // is stored as 0.1.3 knew it.
         await sql.run(
           "INSERT INTO account_profiles(user_id,payload) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET payload=excluded.payload",
-          [who(res).id, JSON.stringify(profile)],
+          [who(res).id, JSON.stringify(legacyShape(profile))],
         );
       });
       res.json({

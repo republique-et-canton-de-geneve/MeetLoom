@@ -6,7 +6,7 @@ import type { Database, Sql } from "./db.js";
 import { rateLimit } from "./security.js";
 import { notifyFeedback, notifyFeedbackStatus } from "./app-notifications.js";
 import type { AppVersion } from "./version.js";
-import { dialectOf } from "./snapshot.js";
+import { dialectOf, lockInRestoreOrder } from "./snapshot.js";
 
 /** Where administrators forward a report, from their own browser. */
 export const DEFAULT_ISSUES_URL =
@@ -70,14 +70,10 @@ export async function registerFeedback(
     "CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback(created_at)",
   );
   const who = (response: Response) => response.locals.user as User;
-  // A restore locks every table in the snapshot order (users, then
-  // app_notifications, then feedback). These transactions touch them in
-  // that same order, so they wait for a restore instead of deadlocking it.
-  const postgres = (await dialectOf(db)) === "postgres";
-  const snapshotOrder = (sql: Sql) =>
-    postgres
-      ? sql.run("LOCK TABLE users,app_notifications IN ROW EXCLUSIVE MODE")
-      : Promise.resolve(0);
+  // Reports write feedback, then notifications and emails: not a restore's
+  // order (snapshot.ts).
+  const dialect = await dialectOf(db);
+  const snapshotOrder = (sql: Sql) => lockInRestoreOrder(sql, dialect);
   const limiter: RequestHandler =
     rateLimits === false
       ? (_request, _response, next) => next()

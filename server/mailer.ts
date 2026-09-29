@@ -128,6 +128,14 @@ export async function installMailApi(
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_outbox (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
   );
+  // Every pod reads the emails still due each minute, and prunes the ones
+  // given up: neither scans a backlog left by a long SMTP outage.
+  await db.run(
+    "CREATE INDEX IF NOT EXISTS mail_outbox_due_idx ON mail_outbox(created_at,id) WHERE attempts<5",
+  );
+  await db.run(
+    "CREATE INDEX IF NOT EXISTS mail_outbox_created_idx ON mail_outbox(created_at)",
+  );
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_outbox_scope (id TEXT PRIMARY KEY REFERENCES mail_outbox(id) ON DELETE CASCADE,purpose TEXT NOT NULL,target TEXT)",
   );

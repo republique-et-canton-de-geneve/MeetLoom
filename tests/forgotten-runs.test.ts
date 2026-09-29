@@ -268,3 +268,35 @@ test("a listed session whose timer no longer runs leaves the list", async (t) =>
   await h.runs.sweep();
   assert.deepEqual(await h.db.all("SELECT session_id FROM active_runs"), []);
 });
+
+test("an auto-advancing run past its last step is saved as finished and recorded", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const session = await h.session();
+  session.days[0].blocks = [newBlock("fr", { title: "Accueil", duration: 1 })];
+  const saved = (
+    await h.owner.request(`/sessions/${session.id}`, "PUT", {
+      session,
+      version: session.version,
+    })
+  ).body.session;
+  await h.owner.request(`/sessions/${saved.id}/run`, "POST", {
+    action: "start",
+    autoAdvance: true,
+  });
+  // Nobody polls; the sweep saves its end like a poll would.
+  await h.runs.sweep(Date.now() + 10 * 60 * 1000);
+  const [row] = await h.db.all<{ payload: string }>(
+    "SELECT payload FROM sessions WHERE id=$1",
+    [saved.id],
+  );
+  assert.equal(JSON.parse(row.payload).run.status, "finished");
+  assert.equal(
+    (
+      (await h.owner.request(`/sessions/${saved.id}/runs`)).body
+        .runs as RunRecord[]
+    ).length,
+    1,
+  );
+  assert.deepEqual(await h.db.all("SELECT session_id FROM active_runs"), []);
+});
