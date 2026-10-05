@@ -8,6 +8,12 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATA_DIR=/app/data SQLITE_PATH=/app/data/meetloom.sqlite
 WORKDIR /app
+# The Node.js image is rebuilt some days after Debian publishes a security fix;
+# take the fixes now so the published image does not wait for it.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 COPY package*.json .npmrc ./
 # npm is needed to install dependencies, but the runtime starts with node directly.
 RUN npm ci --omit=dev --ignore-scripts --no-audit \
