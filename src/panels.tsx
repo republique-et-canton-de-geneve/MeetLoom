@@ -33,6 +33,7 @@ import {
 } from "../shared/field-presets";
 import { localDate, mapBlocks } from "../shared/domain";
 import { QRCode } from "./QRCode";
+import { NumberField } from "./NumberField";
 import ParticipantInvitePanel from "./ParticipantInvitePanel";
 
 type Common = { session: Session; close: () => void };
@@ -1028,21 +1029,13 @@ export function SettingsPanel({
           {session.sound.mode === "minutes"
             ? t("Minutes avant la fin", "Minutes before end")
             : t("% du temps restant", "% of time remaining")}
-          <input
-            type="number"
+          <NumberField
             min={session.sound.mode === "minutes" ? 0.1 : 1}
             step={session.sound.mode === "minutes" ? 0.1 : 1}
             max={session.sound.mode === "minutes" ? 1440 : 99}
             value={session.sound.value}
             readOnly={!editable}
-            onChange={(e) => {
-              const value = Number(e.target.value);
-              if (
-                value > 0 &&
-                value <= (session.sound.mode === "percent" ? 99 : 1440)
-              )
-                change({ value });
-            }}
+            change={(value) => change({ value })}
           />
         </label>
       </div>

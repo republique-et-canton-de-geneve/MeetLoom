@@ -123,6 +123,14 @@ Run by Claude Code on the production build (`NODE_ENV=production`, PostgreSQL 16
 - **Fixed, visitor notes (cosmetic):** notes showed "0 min" on visitor links.
 - **Seen, not changed:** in the editor a note still shows a 0 min field and a category (cosmetic); the invitation section tells an administrator that only the administrator can invite (wording). Not tested here: real LLM, OIDC, SMTP, Office rendering, audible alerts, the floating window above PowerPoint, native drag and drop.
 
+## Number fields can be cleared (gstack `/investigate`, October 6, 2026)
+
+Reported by the user with a screen recording: in "Le bon rythme, à votre façon", changing "Minutes avant la fin" from 1 to 2 required typing 2 after the 1, then deleting the 1. Replayed by Claude Code in headless Chromium (fr-CH) against a production build and a scratch SQLite database, keyboard only, as in the recording.
+
+- **Before the fix:** cursor after "1", Backspace: the field still read "1"; typing "2" gave "12", which was saved (still "12" after reload). Typing "0.5" was impossible: the "0" was refused and the field went back to its previous value. In "Mon compte & équipe" → "Sauvegardes et données", "Sauvegardes gardées" behaved the same ("1", Backspace, "9" gave "19").
+- **After the fix:** Backspace left "Minutes avant la fin" empty, typing "2" gave "2", saved ("Tout est enregistré") and still "2" after reload. Emptying the field and pressing Tab showed "2" again. Select all, then "0.5" typed one key at a time gave "0.5". "Sauvegardes gardées": emptied, then "9" gave "9".
+- Not replayed in a browser: a form scale's minimum and maximum and the import durations use the same `NumberField`; `tests/number-input.test.ts` covers the bounds they pass.
+
 ## Optional AI
 
 - Used an isolated local mock implementing the OpenAI-compatible contract; no organizational LLM endpoint was provided.

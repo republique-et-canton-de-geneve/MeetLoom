@@ -29,6 +29,7 @@ import { FormFields, questionTypeLabel } from "./FormFields";
 import { answerLabel, exportResponsesCsv } from "./form-export";
 import { useI18n } from "./i18n";
 import { QRCode } from "./QRCode";
+import { NumberField } from "./NumberField";
 import { FormResponseSummary } from "./FormResponseSummary";
 import { FormAiSummary } from "./FormAiSummary";
 import { isStoredFormImage } from "../shared/form-images";
@@ -420,16 +421,16 @@ export default function FormEditor({
                 <div className="scale-settings">
                   <label>
                     {t("Minimum", "Minimum")}
-                    <input
-                      type="number"
+                    <NumberField
                       min={0}
                       max={question.max - 1}
+                      integer
                       value={question.min}
                       disabled={!editable}
-                      onChange={(event) =>
+                      change={(min) =>
                         changeQuestion(question.id, (current) =>
                           current.type === "scale"
-                            ? { ...current, min: Number(event.target.value) }
+                            ? { ...current, min }
                             : current,
                         )
                       }
@@ -437,16 +438,16 @@ export default function FormEditor({
                   </label>
                   <label>
                     {t("Maximum", "Maximum")}
-                    <input
-                      type="number"
+                    <NumberField
                       min={question.min + 1}
                       max={10}
+                      integer
                       value={question.max}
                       disabled={!editable}
-                      onChange={(event) =>
+                      change={(max) =>
                         changeQuestion(question.id, (current) =>
                           current.type === "scale"
-                            ? { ...current, max: Number(event.target.value) }
+                            ? { ...current, max }
                             : current,
                         )
                       }

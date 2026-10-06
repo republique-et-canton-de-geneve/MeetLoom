@@ -4,6 +4,7 @@ import type { User } from "../shared/model";
 import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
+import { NumberField } from "./NumberField";
 
 type Schedule = {
   mode: "off" | "daily" | "twice";
@@ -306,17 +307,12 @@ export default function AdminData({ user }: { user: User }) {
               ))}
               <label>
                 {t("Sauvegardes gardées", "Backups kept")}
-                <input
-                  type="number"
+                <NumberField
                   min={1}
                   max={60}
+                  integer
                   value={schedule.keep}
-                  onChange={(event) =>
-                    setSchedule({
-                      ...schedule,
-                      keep: Math.max(1, Number(event.target.value) || 1),
-                    })
-                  }
+                  change={(keep) => setSchedule({ ...schedule, keep })}
                 />
               </label>
             </div>
