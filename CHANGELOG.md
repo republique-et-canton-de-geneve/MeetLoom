@@ -8,6 +8,10 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 - undici 8.11.2 (from 7.30.0). With a self-signed LLM certificate allowed (`LLM_ALLOW_SELF_SIGNED`), requests go through undici's own `fetch`, because Node's built-in `fetch` refuses an undici 8 agent.
 
+### Fixed
+
+- Number fields can be cleared and retyped: replacing 1 by 2 in "Minutes avant la fin" no longer means typing 12, then deleting the 1 (and 12 was saved meanwhile). The same applies to the backups kept, a form scale's minimum and maximum, and import durations. Leaving an empty field shows its saved value again.
+
 ## [0.1.4] - 2026-09-28
 
 ### Added

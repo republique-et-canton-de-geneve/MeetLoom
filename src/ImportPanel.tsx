@@ -17,6 +17,7 @@ import { post } from "./api";
 import { parseDuration } from "./time-input";
 import { useI18n } from "./i18n";
 import { ErrorBanner, Loading, Modal } from "./ui";
+import { NumberField } from "./NumberField";
 import "./import.css";
 
 export interface ImportPanelProps {
@@ -383,14 +384,11 @@ export default function ImportPanel({
                 "Durée par défaut si absente (minutes)",
                 "Default duration when missing (minutes)",
               )}
-              <input
-                type="number"
-                min="0"
-                max="1440"
+              <NumberField
+                min={0}
+                max={1440}
                 value={defaultDuration}
-                onChange={(event) =>
-                  setDefaultDuration(Number(event.target.value))
-                }
+                change={setDefaultDuration}
               />
             </label>
             <label>
@@ -491,17 +489,12 @@ export default function ImportPanel({
                     </label>
                     <label>
                       {t("Minutes", "Minutes")}
-                      <input
-                        type="number"
-                        min="0"
-                        max="1440"
+                      <NumberField
+                        min={0}
+                        max={1440}
                         value={block.duration}
                         disabled={!!block.kind && block.kind !== "activity"}
-                        onChange={(event) =>
-                          modify(block.id, {
-                            duration: Number(event.target.value),
-                          })
-                        }
+                        change={(duration) => modify(block.id, { duration })}
                       />
                     </label>
                     <details>
