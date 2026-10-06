@@ -4,13 +4,15 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
-### Changed
-
-- undici 8.11.2 (from 7.30.0). With a self-signed LLM certificate allowed (`LLM_ALLOW_SELF_SIGNED`), requests go through undici's own `fetch`, because Node's built-in `fetch` refuses an undici 8 agent.
+## [0.1.5] - 2026-10-06
 
 ### Fixed
 
 - Number fields can be cleared and retyped: replacing 1 by 2 in "Minutes avant la fin" no longer means typing 12, then deleting the 1 (and 12 was saved meanwhile). The same applies to the backups kept, a form scale's minimum and maximum, and import durations. Leaving an empty field shows its saved value again.
+
+### Security
+
+- The image applies Debian security updates when it is built, instead of waiting for the Node.js base image to be rebuilt: it no longer carries the fixable HIGH and CRITICAL `libpcre2-8-0` and `perl-base` vulnerabilities that made the container scan fail.
 
 ## [0.1.4] - 2026-09-28
 
@@ -24,6 +26,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 ### Changed
 
 - The report form offers its three kinds (a problem, an idea or a request, something else) as labelled cards instead of loose radio buttons.
+- undici 8.11.2 (from 7.30.0). With a self-signed LLM certificate allowed (`LLM_ALLOW_SELF_SIGNED`), requests go through undici's own `fetch`, because Node's built-in `fetch` refuses an undici 8 agent.
 
 ### Fixed
 
