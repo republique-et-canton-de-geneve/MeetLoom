@@ -408,15 +408,14 @@ export default function PublicAgenda({ token }: { token: string }) {
                       <tbody>
                         {schedule.map((item, index) => (
                           <Fragment key={item.block.id}>
-                            {item.block.section &&
-                              item.block.section !==
-                                schedule[index - 1]?.block.section && (
+                            {item.section &&
+                              item.section !== schedule[index - 1]?.section && (
                                 <tr className="public-section">
                                   <th
                                     scope="rowgroup"
                                     colSpan={2 + columns.length}
                                   >
-                                    {item.block.section}
+                                    {item.section}
                                   </th>
                                 </tr>
                               )}

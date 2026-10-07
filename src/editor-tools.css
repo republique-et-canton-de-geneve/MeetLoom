@@ -1415,8 +1415,16 @@
   z-index: 4;
   cursor: pointer;
 }
+/* An open menu stays above the insert lines of the rows below it (and below
+   the sticky timer bar). */
+.insert-slot.open {
+  z-index: 7;
+}
 .container-block > .insert-slot {
   top: -13px;
+}
+.agenda-section > .insert-slot {
+  top: -14px;
 }
 .insert-slot::before {
   content: "";
@@ -1552,7 +1560,8 @@
 .room-panel {
   padding: 4px 0 0;
 }
-.group-children > .group-drop {
+.group-children > .group-drop,
+.agenda-section-body > .section-drop {
   margin: 0 0 8px;
 }
 /* Compact header of a group or parallel activities: time, computed

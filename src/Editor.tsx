@@ -104,11 +104,18 @@ import GroupOutline, { type OutlineActions } from "./GroupOutline";
 import InsertMenu, { type InsertKind } from "./InsertMenu";
 import {
   duplicateBlockInTree,
+  groupBlocks,
   insertBlockInto,
+  insertSection,
   relocateBlock,
   removeBlockFromTree,
+  renameSection,
+  sectionRuns,
+  startsSection,
+  stepDestination,
   type BlockDestination,
 } from "./block-tree";
+import SectionHeader from "./SectionHeader";
 import {
   categoriesFor,
   categoryColor,
@@ -423,22 +430,16 @@ export default function Editor({
         ),
       })),
     }));
+  // Enter in a title keeps the block's section; the buttons below the agenda
+  // add outside every section.
   const addBlock = (afterId?: string) => {
-    if (
-      session.days.reduce((n, d) => n + allBlocks(d.blocks).length, 0) >= 1000
-    )
-      return;
-    const previous =
-      day.blocks.find((b) => b.id === afterId) ?? day.blocks.at(-1);
-    const block = newBlock(locale, { section: previous?.section ?? "" });
-    const blocks = [...day.blocks];
-    const index = afterId
-      ? blocks.findIndex((b) => b.id === afterId) + 1
-      : blocks.length;
-    blocks.splice(index, 0, block);
-    updateDay({ blocks });
+    const index = afterId ? day.blocks.findIndex((b) => b.id === afterId) : -1;
+    insertAt(newBlock(locale), {
+      listId: null,
+      beforeId: index < 0 ? undefined : day.blocks[index + 1]?.id,
+      section: day.blocks[index]?.section ?? "",
+    });
     setDetail(null);
-    focusAfterRender.current = block.id;
   };
   const removeBlock = (blockId: string) => {
     updateDay({ blocks: removeBlockFromTree(day.blocks, blockId) });
@@ -446,15 +447,6 @@ export default function Editor({
   };
   const duplicateBlock = (block: Block) => {
     updateDay({ blocks: duplicateBlockInTree(day.blocks, block.id) });
-  };
-  const moveBlock = (from: string, to: string) => {
-    const blocks = [...day.blocks];
-    const source = blocks.findIndex((b) => b.id === from),
-      target = blocks.findIndex((b) => b.id === to);
-    if (source < 0 || target < 0 || source === target) return;
-    const [block] = blocks.splice(source, 1);
-    blocks.splice(target, 0, block);
-    updateDay({ blocks });
   };
   const titleKey = (
     e: KeyboardEvent<HTMLInputElement>,
@@ -475,12 +467,15 @@ export default function Editor({
     } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       e.preventDefault();
       const up = e.key === "ArrowUp";
-      if (up ? index > 0 : index < siblings.length - 1) {
+      const destination =
+        listId === null
+          ? stepDestination(siblings, block.id, up)
+          : (up ? index > 0 : index < siblings.length - 1)
+            ? { listId, beforeId: siblings[index + (up ? -1 : 2)]?.id }
+            : undefined;
+      if (destination) {
         focusAfterRender.current = block.id;
-        outlineActions.relocate(block.id, {
-          listId,
-          beforeId: siblings[index + (up ? -1 : 2)]?.id,
-        });
+        outlineActions.relocate(block.id, destination);
       }
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
       e.preventDefault();
@@ -551,10 +546,15 @@ export default function Editor({
       selectedContent?.kind === "form" && form.id === selectedContent.id,
   );
   const currentBlock = allBlocks(day.blocks).find((b) => b.id === detail);
+  // The detail arrows step a top-level block like Alt+↑/↓.
+  const stepUp =
+      currentBlock && stepDestination(day.blocks, currentBlock.id, true),
+    stepDown =
+      currentBlock && stepDestination(day.blocks, currentBlock.id, false);
   const containsActive = (block: Block) =>
     ["running", "paused"].includes(session.run.status) &&
     allBlocks([block]).some((b) => b.id === session.run.blockId);
-  const createBlock = (kind: InsertKind) =>
+  const createBlock = (kind: Exclude<InsertKind, "section">) =>
     newBlock(locale, {
       ...(kind === "activity" ? {} : { kind }),
       ...(kind === "group"
@@ -572,13 +572,25 @@ export default function Editor({
             ? { title: t("Note", "Note") }
             : {}),
     });
+  const full = () =>
+    session.days.reduce((n, d) => n + allBlocks(d.blocks).length, 0) >= 1000;
   const insertAt = (block: Block, destination: BlockDestination) => {
-    if (
-      session.days.reduce((n, d) => n + allBlocks(d.blocks).length, 0) >= 1000
-    )
-      return;
+    if (full()) return;
     updateDay({ blocks: insertBlockInto(day.blocks, block, destination) });
     focusAfterRender.current = block.id;
+  };
+  // A new section gathers the blocks below it, or starts with a new activity;
+  // its title is focused and selected so it can be named at once.
+  const addSection = (beforeId?: string) => {
+    if (full()) return;
+    const { blocks, firstId } = insertSection(
+      day.blocks,
+      t("Nouvelle section", "New section"),
+      createBlock("activity"),
+      beforeId,
+    );
+    updateDay({ blocks });
+    focusAfterRender.current = `section:${firstId}`;
   };
   // The day's start time is the first block's start: a stale lock on that
   // block is cleared so it can never contradict the day.
@@ -592,14 +604,17 @@ export default function Editor({
     });
   };
   const addContainer = (kind: "note" | "group" | "parallel") =>
-    insertAt(createBlock(kind), { listId: null });
+    insertAt(createBlock(kind), { listId: null, section: "" });
   const outlineActions: OutlineActions = {
     change: editBlock,
     open: showDetail,
     remove: removeBlock,
     insert: insertAt,
-    relocate: (id, destination) =>
-      updateDay({ blocks: relocateBlock(day.blocks, id, destination) }),
+    // A move that changes nothing records no undo step and no save.
+    relocate: (id, destination) => {
+      const blocks = relocateBlock(day.blocks, id, destination);
+      if (blocks !== day.blocks) updateDay({ blocks });
+    },
     dragId,
     inspected: detail,
     movable: (id) => {
@@ -684,6 +699,26 @@ export default function Editor({
       outlineActions.relocate(dragId.current, { listId, beforeId: blockId });
     dragId.current = null;
   };
+  // Footers and section headers accept a dragged block for one destination.
+  const dropZone = (destination: BlockDestination) => ({
+    onDragOver: (e: DragEvent<HTMLElement>) => {
+      if (!dragId.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.add("drop-here");
+    },
+    onDragLeave: (e: DragEvent<HTMLElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node))
+        e.currentTarget.classList.remove("drop-here");
+    },
+    onDrop: (e: DragEvent<HTMLElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.remove("drop-here");
+      if (dragId.current) outlineActions.relocate(dragId.current, destination);
+      dragId.current = null;
+    },
+  });
   // Every block renders the same way, at the top level or inside a group:
   // a group is only a container around its blocks.
   const actualChip = (block: Block) => {
@@ -942,25 +977,7 @@ export default function Editor({
                 onClick={() =>
                   insertAt(createBlock("activity"), { listId: room.id })
                 }
-                onDragOver={(e) => {
-                  if (!dragId.current) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.currentTarget.classList.add("drop-here");
-                }}
-                onDragLeave={(e) =>
-                  e.currentTarget.classList.remove("drop-here")
-                }
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.currentTarget.classList.remove("drop-here");
-                  if (dragId.current)
-                    outlineActions.relocate(dragId.current, {
-                      listId: room.id,
-                    });
-                  dragId.current = null;
-                }}
+                {...dropZone({ listId: room.id })}
               >
                 <Plus size={14} />
                 {t(
@@ -1071,43 +1088,17 @@ export default function Editor({
       >
         {editable && (
           <InsertMenu
+            withSection={listId === null && !startsSection(siblings, index)}
             pick={(kind) =>
-              insertAt(createBlock(kind), {
-                listId,
-                beforeId: block.id,
-              })
+              kind === "section"
+                ? addSection(block.id)
+                : insertAt(createBlock(kind), {
+                    listId,
+                    beforeId: block.id,
+                  })
             }
           />
         )}
-        {block.section &&
-          listId === null &&
-          (index === 0 || siblings[index - 1].section !== block.section) && (
-            <div className="section-label">
-              <button
-                className="section-toggle"
-                aria-expanded={
-                  !collapsedSections.has(`${day.id}:${block.section}`)
-                }
-                onClick={() =>
-                  setCollapsedSections((current) => {
-                    const next = new Set(current);
-                    const key = `${day.id}:${block.section}`;
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  })
-                }
-              >
-                {collapsedSections.has(`${day.id}:${block.section}`) ? (
-                  <ChevronRight size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-                {block.section}
-              </button>
-              <div />
-            </div>
-          )}
         {gapMinutes < 0 && (
           <div className="schedule-overlap" role="alert">
             <XCircle size={18} />
@@ -1141,9 +1132,6 @@ export default function Editor({
                   session.categories,
                 ),
               } as CSSProperties),
-              display: collapsedSections.has(`${day.id}:${block.section}`)
-                ? "none"
-                : undefined,
             }}
             onDragOver={
               editable
@@ -1412,58 +1400,128 @@ export default function Editor({
             </div>
           </div>
         )}
-        {block.kind === "group" &&
-          !collapsedBlocks.has(block.id) &&
-          !collapsedSections.has(`${day.id}:${block.section}`) && (
-            <div className="group-children">
-              {(block.children ?? []).map((child, childIndex) => {
-                const row = treeRows.get(child.id);
-                return row
-                  ? renderRow(row, childIndex, block.children ?? [], block.id)
-                  : null;
-              })}
-              {editable && (
-                <button
-                  className="outline-add group-drop"
-                  onClick={() =>
-                    insertAt(createBlock("activity"), { listId: block.id })
-                  }
-                  onDragOver={(e) => {
-                    if (!dragId.current) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.currentTarget.classList.add("drop-here");
-                  }}
-                  onDragLeave={(e) =>
-                    e.currentTarget.classList.remove("drop-here")
-                  }
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.currentTarget.classList.remove("drop-here");
-                    if (dragId.current)
-                      outlineActions.relocate(dragId.current, {
-                        listId: block.id,
-                      });
-                    dragId.current = null;
-                  }}
-                >
-                  <Plus size={14} />
-                  {t(
-                    "Ajouter une activité au groupe",
-                    "Add an activity to the group",
-                  )}
-                  <span>
-                    {t("ou glissez un bloc ici", "or drag a block here")}
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
+        {block.kind === "group" && !collapsedBlocks.has(block.id) && (
+          <div className="group-children">
+            {(block.children ?? []).map((child, childIndex) => {
+              const row = treeRows.get(child.id);
+              return row
+                ? renderRow(row, childIndex, block.children ?? [], block.id)
+                : null;
+            })}
+            {editable && (
+              <button
+                className="outline-add group-drop"
+                onClick={() =>
+                  insertAt(createBlock("activity"), { listId: block.id })
+                }
+                {...dropZone({ listId: block.id })}
+              >
+                <Plus size={14} />
+                {t(
+                  "Ajouter une activité au groupe",
+                  "Add an activity to the group",
+                )}
+                <span>
+                  {t("ou glissez un bloc ici", "or drag a block here")}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
         {block.kind === "parallel" &&
           !collapsedBlocks.has(block.id) &&
-          !collapsedSections.has(`${day.id}:${block.section}`) &&
           roomsArea(block)}
+      </div>
+    );
+  };
+  // A section is a chapter of the day: a header with its title and times,
+  // its blocks, and a footer that adds or drops a block at its end. The frame
+  // is keyed by its rank among the day's sections, so renaming the section or
+  // inserting at its top keeps its rows, and the focus or click in them.
+  const renderSection = (
+    label: string,
+    start: number,
+    end: number,
+    rank: number,
+  ): ReactNode => {
+    const first = day.blocks[start],
+      rows = scheduled.slice(start, end),
+      key = `${day.id}:${label}`,
+      collapsed = collapsedSections.has(key),
+      atEnd: BlockDestination = {
+        listId: null,
+        beforeId: day.blocks[end]?.id,
+        section: label,
+      };
+    return (
+      <div className="agenda-section" key={`section:${rank}`}>
+        {editable && (
+          <InsertMenu
+            withSection
+            pick={(kind) =>
+              kind === "section"
+                ? addSection(first.id)
+                : insertAt(createBlock(kind), {
+                    listId: null,
+                    beforeId: first.id,
+                    section: "",
+                  })
+            }
+          />
+        )}
+        <SectionHeader
+          label={label}
+          span={`${formatTime(rows[0].startMinute)} – ${formatTime(rows.at(-1)!.endMinute)}`}
+          duration={durationLabel(
+            day.blocks
+              .slice(start, end)
+              .reduce((sum, block) => sum + blockDuration(block), 0),
+          )}
+          collapsed={collapsed}
+          editable={editable}
+          bodyId={`agenda-section-${rank}`}
+          toggle={() =>
+            setCollapsedSections((current) => {
+              const next = new Set(current);
+              if (next.has(key)) next.delete(key);
+              else next.add(key);
+              return next;
+            })
+          }
+          rename={(name) =>
+            updateDay({ blocks: renameSection(day.blocks, first.id, name) })
+          }
+          inputRef={(el) => {
+            if (el) titleInputs.current.set(`section:${first.id}`, el);
+            else titleInputs.current.delete(`section:${first.id}`);
+          }}
+          dropProps={
+            editable
+              ? dropZone({ listId: null, beforeId: first.id, section: label })
+              : {}
+          }
+        />
+        <div
+          className="agenda-section-body"
+          id={`agenda-section-${rank}`}
+          hidden={collapsed}
+        >
+          {rows.map((row, k) => renderRow(row, start + k, day.blocks, null))}
+          {editable && (
+            <button
+              className="outline-add section-drop"
+              onClick={() => insertAt(createBlock("activity"), atEnd)}
+              {...dropZone(atEnd)}
+            >
+              <Plus size={14} />
+              {t(
+                "Ajouter une activité à la section",
+                "Add an activity to the section",
+              )}
+              <span>{t("ou glissez un bloc ici", "or drag a block here")}</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -2260,20 +2318,17 @@ export default function Editor({
                         onSubmit={(e) => {
                           e.preventDefault();
                           if (!groupName.trim()) return;
-                          const group = newBlock(locale, {
-                            kind: "group",
-                            title: groupName.trim(),
-                            children: selectedBlocks,
+                          updateDay({
+                            blocks: groupBlocks(
+                              day.blocks,
+                              selection,
+                              newBlock(locale, {
+                                kind: "group",
+                                title: groupName.trim(),
+                                children: selectedBlocks,
+                              }),
+                            ),
                           });
-                          const blocks = day.blocks.filter(
-                            (b) => !selection.has(b.id),
-                          );
-                          blocks.splice(
-                            day.blocks.findIndex((b) => selection.has(b.id)),
-                            0,
-                            group,
-                          );
-                          updateDay({ blocks });
                           setGroupName("");
                           clearSelection();
                         }}
@@ -2415,8 +2470,21 @@ export default function Editor({
                       ))}
                       <span />
                     </div>
-                    {scheduled.map((row, index) =>
-                      renderRow(row, index, day.blocks, null),
+                    {sectionRuns(day.blocks).flatMap(
+                      ({ label, start, end }, run, runs) =>
+                        label
+                          ? renderSection(
+                              label,
+                              start,
+                              end,
+                              runs.slice(0, run).filter((other) => other.label)
+                                .length,
+                            )
+                          : scheduled
+                              .slice(start, end)
+                              .map((row, k) =>
+                                renderRow(row, start + k, day.blocks, null),
+                              ),
                     )}
                     {!day.blocks.length && (
                       <div className="agenda-empty">
@@ -2461,6 +2529,7 @@ export default function Editor({
                           if (dragId.current)
                             outlineActions.relocate(dragId.current, {
                               listId: null,
+                              section: "",
                             });
                           dragId.current = null;
                         }}
@@ -2483,6 +2552,13 @@ export default function Editor({
                         >
                           <Plus size={14} />
                           {t("Groupe", "Group")}
+                        </button>
+                        <button
+                          className="toolbar-button"
+                          onClick={() => addSection()}
+                        >
+                          <Plus size={14} />
+                          {t("Section", "Section")}
                         </button>
                         <button
                           className="toolbar-button"
@@ -2736,23 +2812,26 @@ export default function Editor({
                         change={(patch) => editBlock(currentBlock.id, patch)}
                       />
                     </div>
-                    <label>
-                      {t("Section", "Section")}
-                      <input
-                        value={currentBlock.section}
-                        maxLength={240}
-                        placeholder={t(
-                          "Ex. Construire ensemble",
-                          "e.g. Create together",
-                        )}
-                        readOnly={!editable}
-                        onChange={(e) =>
-                          editBlock(currentBlock.id, {
-                            section: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
+                    {/* A nested block follows its container's section. */}
+                    {day.blocks.some((b) => b.id === currentBlock.id) && (
+                      <label>
+                        {t("Section", "Section")}
+                        <input
+                          value={currentBlock.section}
+                          maxLength={240}
+                          placeholder={t(
+                            "Ex. Construire ensemble",
+                            "e.g. Create together",
+                          )}
+                          readOnly={!editable}
+                          onChange={(e) =>
+                            editBlock(currentBlock.id, {
+                              section: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    )}
                   </div>
                   <label>
                     {t("Description", "Description")}
@@ -2839,35 +2918,22 @@ export default function Editor({
                         <>
                           <button
                             className="icon-button"
-                            disabled={
-                              day.blocks.indexOf(currentBlock) <= 0 ||
-                              containsActive(currentBlock)
-                            }
+                            disabled={!stepUp || containsActive(currentBlock)}
                             title={t("Monter", "Move up")}
                             onClick={() =>
-                              moveBlock(
-                                currentBlock.id,
-                                day.blocks[day.blocks.indexOf(currentBlock) - 1]
-                                  .id,
-                              )
+                              stepUp &&
+                              outlineActions.relocate(currentBlock.id, stepUp)
                             }
                           >
                             <ArrowUp size={18} />
                           </button>
                           <button
                             className="icon-button"
-                            disabled={
-                              day.blocks.indexOf(currentBlock) < 0 ||
-                              day.blocks.at(-1)!.id === currentBlock.id ||
-                              containsActive(currentBlock)
-                            }
+                            disabled={!stepDown || containsActive(currentBlock)}
                             title={t("Descendre", "Move down")}
                             onClick={() =>
-                              moveBlock(
-                                currentBlock.id,
-                                day.blocks[day.blocks.indexOf(currentBlock) + 1]
-                                  .id,
-                              )
+                              stepDown &&
+                              outlineActions.relocate(currentBlock.id, stepDown)
                             }
                           >
                             <ArrowDown size={18} />

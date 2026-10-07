@@ -66,7 +66,7 @@ export function exportSessionCsv(
         formatTime(item.startMinute),
         formatTime(item.endMinute),
         blockDuration(item.block),
-        item.block.section,
+        item.section,
         item.roomPath.join(" / "),
         item.block.title,
         source.categories?.find(

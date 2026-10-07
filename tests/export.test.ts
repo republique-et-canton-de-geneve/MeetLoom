@@ -100,3 +100,19 @@ test("public CSV and JSON export only authorized columns, regardless of editor v
     "authenticated organizer backup includes team columns",
   );
 });
+
+test("the CSV gives a group's activities the group's section", () => {
+  const session = createSession("owner", "Sections", "en");
+  session.days[0].blocks = [
+    newBlock("en", {
+      title: "Group",
+      kind: "group",
+      section: "Matin",
+      children: [newBlock("en", { title: "Child activity", section: "" })],
+    }),
+  ];
+  const line = exportSessionCsv(session, "en")
+    .split("\r\n")
+    .find((row) => row.includes("Child activity"));
+  assert.match(line ?? "", /"Matin","","Child activity"/);
+});

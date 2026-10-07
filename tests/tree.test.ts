@@ -275,3 +275,42 @@ test("metadata stays internal and every descendant category must belong to the a
   session.tags = Array.from({ length: 21 }, (_, index) => `${index}`);
   assert.equal(sessionInputSchema.safeParse(session).success, false);
 });
+
+test("nested rows carry their container's section, so a section is announced once", () => {
+  const rows = scheduleTreeDay({
+    startTime: "09:00",
+    blocks: [
+      newBlock("fr", {
+        kind: "group",
+        title: "Group",
+        section: "Matin",
+        children: [newBlock("fr", { title: "Child", section: "" })],
+      }),
+      newBlock("fr", {
+        kind: "parallel",
+        title: "Rooms",
+        section: "Matin",
+        rooms: [
+          {
+            id: crypto.randomUUID(),
+            title: "Room 1",
+            blocks: [newBlock("fr", { title: "In room", section: "Other" })],
+          },
+        ],
+      }),
+      newBlock("fr", { title: "D", section: "Matin" }),
+      newBlock("fr", { title: "E", section: "" }),
+    ],
+  });
+  assert.deepEqual(
+    rows.map((row) => [row.block.title, row.section]),
+    [
+      ["Group", "Matin"],
+      ["Child", "Matin"],
+      ["Rooms", "Matin"],
+      ["In room", "Matin"],
+      ["D", "Matin"],
+      ["E", ""],
+    ],
+  );
+});

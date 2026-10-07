@@ -1617,34 +1617,77 @@ hr {
   width: 26px;
   color: #b4c0a8;
 }
-.section-label {
+/* A section is a chapter of the day, not a box: no indent, so its rows stay
+   aligned with the table's columns. */
+.agenda-section {
+  position: relative;
+  margin: 18px 0 8px;
+  border-top: 2px solid #c9d8c0;
+  border-bottom: 1px solid #e4eadc;
+  padding-bottom: 4px;
+}
+.section-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.5px;
-  color: #9aab8e;
-  margin: 20px 0 11px;
+  gap: 8px 10px;
+  padding: 8px 4px 10px;
+  border-radius: 6px;
 }
-.section-label > div {
-  height: 1px;
-  background: #e4eadc;
-  flex: 1;
-}
-.section-label > span {
-  padding-left: 6px;
+.section-header.drop-here {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
 }
 .section-toggle {
   display: flex;
   align-items: center;
   gap: 7px;
   font: inherit;
-  color: inherit;
+  color: #73816c;
   border: 0;
   background: none;
   padding: 0 4px;
   cursor: pointer;
+}
+.section-title {
+  flex: 1;
+  min-width: 160px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #34492f;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+.section-title:not([readonly]):hover,
+.section-title:not([readonly]):focus {
+  background: #fff;
+}
+.section-title:not([readonly]):hover {
+  outline: 1px solid #c9d8c0;
+}
+/* The title reads as plain text, so its focus ring must stand out. */
+.section-title:not([readonly]):focus {
+  outline: 2px solid var(--green);
+  outline-offset: 0;
+}
+.section-totals {
+  font-size: 12px;
+  color: #73816c;
+  white-space: nowrap;
+}
+.section-header .section-ungroup {
+  visibility: hidden;
+}
+.section-header:hover .section-ungroup,
+.section-header:focus-within .section-ungroup {
+  visibility: visible;
+}
+@media (hover: none) {
+  .section-header .section-ungroup {
+    visibility: visible;
+  }
 }
 .print-agenda {
   display: none;
@@ -3417,7 +3460,6 @@ hr {
 }
 .agenda-table-header,
 .toolbar-button,
-.section-label,
 .start-time,
 .inline-field,
 .inline-field input,
@@ -3675,9 +3717,6 @@ hr {
   }
   .agenda-end {
     color: #333;
-  }
-  .section-label {
-    color: #666;
   }
 }
 /* Before a scheduled start, the timer is a countdown in its own colour. */

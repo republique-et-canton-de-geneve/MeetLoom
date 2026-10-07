@@ -447,6 +447,9 @@ export interface ScheduledTreeBlock<
 > extends ScheduledBlock<T> {
   depth: number;
   roomPath: string[];
+  /** The section of the row's top-level block: nested rows follow their
+   * container. Computed, never stored. */
+  section: string;
 }
 function blockAnchor(block: PublicBlock): number | null {
   if (block.lockedStart !== undefined) return minuteOfDay(block.lockedStart);
@@ -472,6 +475,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
     depth: number,
     roomPath: string[],
     backCalculate: boolean,
+    section?: string,
   ): ScheduledTreeBlock<T>[] => {
     let cursor = initial;
     if (backCalculate) {
@@ -495,6 +499,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
       // neither a gap nor an overlap.
       const gapMinutes =
         Math.abs(startMinute - cursor) < 1 ? 0 : startMinute - cursor;
+      const rowSection = section ?? block.section;
       const children =
         block.kind === "group"
           ? sequence(
@@ -503,6 +508,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
               depth + 1,
               roomPath,
               false,
+              rowSection,
             )
           : block.kind === "parallel"
             ? (block.rooms ?? []).flatMap((room) =>
@@ -512,6 +518,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
                   depth + 1,
                   [...roomPath, room.title],
                   false,
+                  rowSection,
                 ),
               )
             : [];
@@ -529,6 +536,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
           conflict: gapMinutes < 0 || children.some((row) => row.conflict),
           depth,
           roomPath,
+          section: rowSection,
         },
         ...children,
       ];

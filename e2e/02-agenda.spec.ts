@@ -8,7 +8,7 @@ import {
   signIn,
 } from "./helpers";
 
-test("editing an agenda saves blocks, durations and groups across reloads", async ({
+test("editing an agenda saves blocks, durations, groups and sections across reloads", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
@@ -29,6 +29,52 @@ test("editing an agenda saves blocks, durations and groups across reloads", asyn
   await expect(page.locator(".container-group .container-title")).toHaveValue(
     "Nouveau groupe",
   );
+  await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
+  // A section inserted above a block gathers it and the blocks that follow.
+  await page
+    .locator(".block-group")
+    .filter({ has: duration(page, "Idées") })
+    .locator("> .insert-slot")
+    .click();
+  await page.getByRole("menuitem", { name: /^Section/ }).click();
+  const section = page.locator(".agenda-section");
+  await expect(section).toHaveCount(1);
+  for (const [title, inside] of [
+    ["Accueil", 0],
+    ["Idées", 1],
+    ["Décision", 1],
+  ] as const)
+    await expect(section.filter({ has: duration(page, title) })).toHaveCount(
+      inside,
+    );
+  const heading = section.locator(".section-title");
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveValue("Nouvelle section");
+  await heading.fill("Construire");
+  // Clicking one of its blocks names the section and keeps that block's focus.
+  const decision = page
+    .locator(".agenda-row")
+    .filter({ has: duration(page, "Décision") })
+    .getByRole("textbox", { name: "Titre du bloc" });
+  await decision.click();
+  await expect(decision).toBeFocused();
+  await expect(heading).toHaveValue("Construire");
+  await expect(section.locator(".section-totals")).toContainText("35 min");
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".section-title")).toHaveValue("Construire");
+  await expect(
+    page.getByRole("button", {
+      name: "Développer ou replier la section Construire",
+    }),
+  ).toHaveAttribute("aria-expanded", "true");
+  // A block dropped where it already is leaves nothing to undo.
+  await page
+    .locator(".agenda-row")
+    .filter({ has: duration(page, "Idées") })
+    .locator(".drag-handle")
+    .dragTo(page.locator(".section-totals"));
+  await expect(page.getByTitle("Annuler", { exact: true })).toBeDisabled();
   await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
 });
 
