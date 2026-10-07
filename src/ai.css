@@ -193,13 +193,22 @@
 }
 .mcp-panel form {
   display: grid;
-  gap: 1rem;
+  gap: 16px;
+}
+.mcp-panel form > label {
+  margin: 0;
 }
 .mcp-panel fieldset {
-  max-height: 220px;
-  overflow: auto;
-  border: 1px solid var(--border, #d8e0db);
-  border-radius: 8px;
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px 12px;
+}
+.mcp-panel legend {
+  font-size: 13px;
+  font-weight: 620;
+  padding: 0 5px;
 }
 .mcp-endpoint {
   display: block;
@@ -210,12 +219,70 @@
   border-radius: 8px;
   font-size: 0.78rem;
 }
-.mcp-panel .check-row {
-  display: flex !important;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-weight: 400 !important;
+/* Only the list scrolls: the legend and the count stay in view. */
+.mcp-session-count {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
 }
-.mcp-panel .check-row input {
-  width: auto !important;
+.mcp-session-list {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0 -6px;
+}
+.mcp-session-list .checkbox-row {
+  margin: 0;
+  padding: 7px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mcp-session-list .checkbox-row:hover {
+  background: #f3f6f4;
+}
+.mcp-session-list .checkbox-row:has(input:checked) {
+  background: var(--green-pale);
+}
+.mcp-session-list strong {
+  font-weight: 550;
+}
+.mcp-session-list small,
+.mcp-option-hint {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.mcp-option {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.mcp-option + .mcp-option {
+  margin-top: 8px;
+}
+.mcp-option .checkbox-row {
+  margin: 0;
+  cursor: pointer;
+}
+.mcp-option strong {
+  font-weight: 600;
+}
+/* Under the label text: the 17px checkbox plus the 9px gap. */
+.mcp-option-hint {
+  display: block;
+  margin: 4px 0 0 26px;
+}
+/* The private-column amber, as a reminder that team-only content leaves. */
+.mcp-option.internal:has(input:checked) {
+  background: #fdfaf0;
+  border-color: #eee5c9;
+}
+.mcp-warning {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #faf4e9;
+  color: #8a6a3c;
+  font-size: 12px;
+  line-height: 1.6;
 }

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import {
   addActivities,
   createSession,
@@ -208,10 +208,43 @@ test("without a configured LLM no AI feature shows, and MCP connectors stay reac
   await expect(page.locator(".editor-inspector")).toContainText(
     "Connecteur MCP interne",
   );
+  // Each checkbox sits on its text's line, not above it; the open session
+  // comes first, ticked, and the count follows the selection.
+  const sameLine = async (box: Locator, text: Locator) => {
+    const b = (await box.boundingBox())!,
+      s = (await text.boundingBox())!;
+    expect(s.x).toBeGreaterThanOrEqual(b.x + b.width);
+    expect(s.y).toBeLessThan(b.y + b.height);
+  };
+  const current = page.locator(".mcp-session-list .checkbox-row").first();
+  await expect(current).toContainText("Atelier E2E");
+  await expect(current).toContainText("Séance actuelle");
+  await expect(current.getByRole("checkbox")).toBeChecked();
+  await sameLine(current.getByRole("checkbox"), current.locator("strong"));
+  const write = page.getByRole("checkbox", {
+    name: "Autoriser les modifications et la création de jours",
+  });
+  await sameLine(
+    write,
+    page.locator("label", { has: write }).locator("strong"),
+  );
+  await expect(write).toHaveAccessibleDescription(/historique/);
+  await expect(page.getByText(/^1 séance sélectionnée sur \d+$/)).toBeVisible();
+  await current.getByRole("checkbox").uncheck();
+  await expect(page.getByText(/^0 séance sélectionnée sur \d+$/)).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: /Exporter/ })
     .first()
     .click();
   await expect(page.getByText(/avec l’IA interne/)).toHaveCount(0);
+  // The block filter's compact rows leave room before the note under them.
+  await page.getByText("Filtrer les blocs et catégories").click();
+  const last = page.locator(".slide-outline > .checkbox-row").last();
+  await expect(last).toBeVisible();
+  const row = (await last.boundingBox())!,
+    note = (await page
+      .getByText(/^Les groupes nécessaires restent/)
+      .boundingBox())!;
+  expect(note.y - (row.y + row.height)).toBeGreaterThanOrEqual(8);
 });

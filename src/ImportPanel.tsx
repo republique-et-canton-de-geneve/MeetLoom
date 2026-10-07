@@ -297,7 +297,7 @@ export default function ImportPanel({
                     </select>
                   </label>
                 )}
-                <label className="check-row">
+                <label className="checkbox-row">
                   <input
                     type="checkbox"
                     checked={mapping.header}

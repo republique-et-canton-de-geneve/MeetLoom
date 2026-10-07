@@ -170,3 +170,6 @@
     padding: 7px;
   }
 }
+.lifecycle-settings fieldset .checkbox-row {
+  margin: 0;
+}

@@ -122,6 +122,23 @@ label > span {
   align-items: center;
   gap: 5px;
 }
+/* A checkbox with its text on the same line; long text wraps beside the box.
+   Overrides the column layout every label gets above. */
+.checkbox-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 10px 0;
+}
+.checkbox-row > input[type="checkbox"] {
+  margin: 0;
+}
+.checkbox-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 h1,
 h2,
 h3,
