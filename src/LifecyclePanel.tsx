@@ -12,6 +12,7 @@ export default function LifecyclePanel({
   close,
   reload,
   onDeleted,
+  onClosed,
 }: {
   session: Session;
   role?: Role;
@@ -19,6 +20,8 @@ export default function LifecyclePanel({
   close: () => void;
   reload: () => Promise<void>;
   onDeleted?: () => void;
+  /** Right after a close succeeds, even if the reload then fails. */
+  onClosed?: () => void;
 }) {
   const { t, locale } = useI18n(),
     [info, setInfo] = useState<LifecycleInfo | null>(null),
@@ -60,6 +63,7 @@ export default function LifecyclePanel({
         onDeleted?.();
         close();
       } else {
+        if (action === "close") onClosed?.();
         await reload();
         close();
       }

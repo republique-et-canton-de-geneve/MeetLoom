@@ -2,7 +2,7 @@
   display: grid;
   gap: 1rem;
 }
-.document-import label:not(.check-row):not(.file-drop) {
+.document-import label:not(.checkbox-row):not(.file-drop) {
   display: grid;
   gap: 0.4rem;
   font-size: 0.85rem;

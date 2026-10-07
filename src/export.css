@@ -91,6 +91,14 @@
   max-height: 340px;
   overflow: auto;
 }
+/* The block filter: the grid gap already spaces the rows; its note keeps
+   the space a row's own margin would give. */
+.slide-outline > .checkbox-row {
+  margin: 0;
+}
+.slide-outline + .muted {
+  margin-top: 10px;
+}
 .slide-outline-row {
   display: flex;
   align-items: center;

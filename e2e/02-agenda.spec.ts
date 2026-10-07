@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import {
   addActivities,
   createSession,
@@ -175,13 +175,52 @@ test("on a phone the editor fits the screen and days keep their names", async ({
   ).toBe(true);
 });
 
-test("zoomed in, the whole sidebar can still be scrolled to", async ({
+test("the sidebar gives the folders the height left, and scrolls when zoomed in", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
+  const sidebar = page.locator(".sidebar");
+  const height = async (selector: string) =>
+    (await sidebar.locator(selector).boundingBox())?.height ?? 0;
+  // A desktop window about 900 px tall: the folders take what the
+  // navigation leaves, and the account footer shows the avatar beside the name.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(220);
+  const avatar = (await sidebar
+    .locator(".sidebar-user .avatar")
+    .boundingBox())!;
+  const name = (await sidebar.locator(".sidebar-user strong").boundingBox())!;
+  expect(name.x).toBeGreaterThanOrEqual(avatar.x + avatar.width);
+  // No placeholder card without a workspace; the hint shows only in "all",
+  // the one view where folders cannot be managed.
+  const card = sidebar.locator(".workspace-card");
+  const hint = sidebar.locator(".folder-note");
+  await expect(card).toHaveCount(0);
+  await expect(hint).toHaveText(
+    "Sélectionnez un espace pour gérer les dossiers.",
+  );
+  await page.locator("#workspace-switcher").selectOption("personal");
+  await expect(hint).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  // A narrower window: no height cap, and the name wraps instead of being cut.
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(250);
+  expect(
+    await sidebar
+      .locator(".sidebar-user strong")
+      .evaluate(
+        (element) =>
+          element.scrollWidth <= element.clientWidth &&
+          element.scrollHeight <= element.clientHeight,
+      ),
+  ).toBe(true);
   // A laptop browser zoomed to 150% leaves about this much room.
   await page.setViewportSize({ width: 900, height: 480 });
-  const sidebar = page.locator(".sidebar");
+  expect(await height(".dashboard-folders")).toBeGreaterThanOrEqual(150);
   for (const target of [
     sidebar.getByRole("button", { name: "Signaler un problème" }),
     sidebar.locator(".sidebar-user"),
@@ -215,10 +254,43 @@ test("without a configured LLM no AI feature shows, and MCP connectors stay reac
   await expect(page.locator(".editor-inspector")).toContainText(
     "Connecteur MCP interne",
   );
+  // Each checkbox sits on its text's line, not above it; the open session
+  // comes first, ticked, and the count follows the selection.
+  const sameLine = async (box: Locator, text: Locator) => {
+    const b = (await box.boundingBox())!,
+      s = (await text.boundingBox())!;
+    expect(s.x).toBeGreaterThanOrEqual(b.x + b.width);
+    expect(s.y).toBeLessThan(b.y + b.height);
+  };
+  const current = page.locator(".mcp-session-list .checkbox-row").first();
+  await expect(current).toContainText("Atelier E2E");
+  await expect(current).toContainText("Séance actuelle");
+  await expect(current.getByRole("checkbox")).toBeChecked();
+  await sameLine(current.getByRole("checkbox"), current.locator("strong"));
+  const write = page.getByRole("checkbox", {
+    name: "Autoriser les modifications et la création de jours",
+  });
+  await sameLine(
+    write,
+    page.locator("label", { has: write }).locator("strong"),
+  );
+  await expect(write).toHaveAccessibleDescription(/historique/);
+  await expect(page.getByText(/^1 séance sélectionnée sur \d+$/)).toBeVisible();
+  await current.getByRole("checkbox").uncheck();
+  await expect(page.getByText(/^0 séance sélectionnée sur \d+$/)).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: /Exporter/ })
     .first()
     .click();
   await expect(page.getByText(/avec l’IA interne/)).toHaveCount(0);
+  // The block filter's compact rows leave room before the note under them.
+  await page.getByText("Filtrer les blocs et catégories").click();
+  const last = page.locator(".slide-outline > .checkbox-row").last();
+  await expect(last).toBeVisible();
+  const row = (await last.boundingBox())!,
+    note = (await page
+      .getByText(/^Les groupes nécessaires restent/)
+      .boundingBox())!;
+  expect(note.y - (row.y + row.height)).toBeGreaterThanOrEqual(8);
 });

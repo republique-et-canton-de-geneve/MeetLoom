@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Copy, KeyRound, Trash2 } from "lucide-react";
 import type { McpToken } from "../shared/mcp";
 import type { SessionSummary } from "../shared/model";
 import { api, post } from "./api";
 import { useI18n } from "./i18n";
+import { canGrantWrite, mcpSessionChoices, mcpTokenCheck } from "./mcp-grant";
 import { ErrorBanner, Loading } from "./ui";
+// Also rendered on its own from the editor's "Autres actions" menu.
+import "./ai.css";
 export default function McpPanel({ sessionId }: { sessionId: string }) {
   const { t } = useI18n(),
     [tokens, setTokens] = useState<McpToken[]>([]),
@@ -18,7 +21,12 @@ export default function McpPanel({ sessionId }: { sessionId: string }) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    internalHint = useId(),
+    writeHint = useId();
+  const choices = mcpSessionChoices(sessions, sessionId),
+    { readOnly, ready } = mcpTokenCheck({ label, selected, write }, sessions),
+    count = selected.length;
   useEffect(() => {
     let active = true;
     void Promise.all([
@@ -84,47 +92,110 @@ export default function McpPanel({ sessionId }: { sessionId: string }) {
             onChange={(event) => setLabel(event.target.value)}
           />
         </label>
-        <fieldset>
+        <fieldset className="mcp-sessions">
           <legend>{t("Séances autorisées", "Allowed sessions")}</legend>
-          {sessions.map((session) => (
-            <label className="check-row" key={session.id}>
+          {sessions.length > 0 && (
+            <p className="mcp-session-count">
+              {t(
+                `${count} ${count > 1 ? "séances sélectionnées" : "séance sélectionnée"} sur ${sessions.length}`,
+                `${count} of ${sessions.length} ${sessions.length === 1 ? "session" : "sessions"} selected`,
+              )}
+            </p>
+          )}
+          <div className="mcp-session-list">
+            {choices.map((session) => {
+              const meta = [
+                session.id === sessionId &&
+                  t("Séance actuelle", "This session"),
+                session.client,
+                session.closedAt && t("Clôturée", "Closed"),
+                session.archived && t("Archivée", "Archived"),
+                !canGrantWrite(session.role) && t("Lecture seule", "Read only"),
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <label className="checkbox-row" key={session.id}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(session.id)}
+                    onChange={(event) =>
+                      setSelected((prior) =>
+                        event.target.checked
+                          ? [...prior, session.id]
+                          : prior.filter((id) => id !== session.id),
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>{session.title}</strong>
+                    {meta && <small>{meta}</small>}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <fieldset className="mcp-permissions">
+          <legend>{t("Autorisations", "Permissions")}</legend>
+          <div className="mcp-option internal">
+            <label className="checkbox-row">
               <input
                 type="checkbox"
-                checked={selected.includes(session.id)}
-                onChange={(event) =>
-                  setSelected((prior) =>
-                    event.target.checked
-                      ? [...prior, session.id]
-                      : prior.filter((id) => id !== session.id),
-                  )
-                }
+                aria-describedby={internalHint}
+                checked={includePrivate}
+                onChange={(event) => setIncludePrivate(event.target.checked)}
               />
-              {session.title}
+              <strong>
+                {t(
+                  "Inclure colonnes internes, Pages privées et formulaires brouillons",
+                  "Include internal columns, private Pages and draft forms",
+                )}
+              </strong>
             </label>
-          ))}
+            <small className="mcp-option-hint" id={internalHint}>
+              {t(
+                "Donne aussi accès à la description de la séance et à ces contenus réservés à l’équipe. Sans cette option : l’agenda avec ses colonnes et Pages publiques uniquement.",
+                "Also gives access to the session description and this team-only content. Without it: the agenda with its public columns and Pages only.",
+              )}
+            </small>
+          </div>
+          <div className="mcp-option">
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                aria-describedby={writeHint}
+                checked={write}
+                onChange={(event) => setWrite(event.target.checked)}
+              />
+              <strong>
+                {t(
+                  "Autoriser les modifications et la création de jours",
+                  "Allow edits and creation of days",
+                )}
+              </strong>
+            </label>
+            <small className="mcp-option-hint" id={writeHint}>
+              {t(
+                "Le client peut ajouter des jours et modifier l’agenda, suppressions comprises, dans les séances que vous pouvez modifier et qui ne sont pas clôturées. Chaque changement figure dans l’historique. Sans cette option : lecture seule.",
+                "The client can add days and change the agenda, deletions included, in sessions you can edit that are not closed. Every change is recorded in the history. Without it: read-only.",
+              )}
+            </small>
+            {readOnly > 0 && (
+              <p className="mcp-warning" role="alert">
+                {readOnly === 1
+                  ? t(
+                      "1 séance sélectionnée est en lecture seule pour vous : décochez-la ou retirez cette option.",
+                      "1 selected session is read-only for you: untick it or turn this option off.",
+                    )
+                  : t(
+                      `${readOnly} séances sélectionnées sont en lecture seule pour vous : décochez-les ou retirez cette option.`,
+                      `${readOnly} selected sessions are read-only for you: untick them or turn this option off.`,
+                    )}
+              </p>
+            )}
+          </div>
         </fieldset>
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={includePrivate}
-            onChange={(event) => setIncludePrivate(event.target.checked)}
-          />
-          {t(
-            "Inclure colonnes internes, Pages privées et formulaires brouillons",
-            "Include internal columns, private Pages and draft forms",
-          )}
-        </label>
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={write}
-            onChange={(event) => setWrite(event.target.checked)}
-          />
-          {t(
-            "Autoriser les modifications et la création de jours",
-            "Allow edits and creation of days",
-          )}
-        </label>
         <label>
           {t("Expiration", "Expiry")}
           <select
@@ -138,10 +209,7 @@ export default function McpPanel({ sessionId }: { sessionId: string }) {
             ))}
           </select>
         </label>
-        <button
-          className="button primary"
-          disabled={busy || !selected.length || !label.trim()}
-        >
+        <button className="button primary" disabled={busy || !ready}>
           <KeyRound size={16} />
           {t("Créer le jeton", "Create token")}
         </button>

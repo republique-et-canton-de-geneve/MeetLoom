@@ -102,6 +102,7 @@ import {
   installLifecycleApi,
   guardSessionLifecycle,
 } from "./lifecycle.js";
+import { sessionNeedsClosing } from "../shared/lifecycle.js";
 import {
   initializeFolders,
   installFoldersApi,
@@ -1002,6 +1003,7 @@ async function assembleWith(db: Database, config: AppConfig) {
   app.get("/api/sessions", async (_request, response) => {
     const rows = await accessibleSessionRows(db, user(response).id);
     const readMarkers = await sessionReadMarkers(db, user(response).id);
+    const now = new Date();
     response.json({
       sessions: rows.map((row) => {
         const session = mappedSession(row);
@@ -1026,6 +1028,7 @@ async function assembleWith(db: Database, config: AppConfig) {
           duration: totalDuration(session),
           role: row.role,
           archived: session.archived,
+          needsClosing: sessionNeedsClosing(session, row.role, now),
         };
       }),
     });
