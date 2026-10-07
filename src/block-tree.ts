@@ -288,6 +288,21 @@ export function sectionRuns(
   return runs;
 }
 
+/** The identity of the section holding the top-level block at `index`, for
+ * state kept beside it such as collapse: its label and how many earlier
+ * sections share it. Two sections with the same name stay apart, and adding
+ * a block at a section's top keeps it. Undefined outside every section. */
+export function sectionKey(
+  blocks: { section: string }[],
+  index: number,
+): string | undefined {
+  const runs = sectionRuns(blocks),
+    at = runs.findIndex((run) => index >= run.start && index < run.end),
+    label = runs[at]?.label;
+  if (!label) return undefined;
+  return `${label}#${runs.slice(0, at).filter((run) => run.label === label).length}`;
+}
+
 /** Whether the top-level block at `index` is the first of a section. */
 export function startsSection(
   blocks: { section: string }[],

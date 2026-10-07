@@ -8,6 +8,7 @@ import {
   insertSection,
   relocateBlock,
   renameSection,
+  sectionKey,
   sectionRuns,
   startsSection,
   stepDestination,
@@ -278,6 +279,28 @@ test("renaming a section relabels only its own run; an empty name removes it but
   assert.equal(startsSection(blocks, 1), false);
   assert.equal(startsSection(blocks, 3), true);
   assert.equal(startsSection(removed, 0), false, "no label, no section");
+});
+
+test("two sections with the same name keep their own state, which follows them when blocks are added", () => {
+  const blocks = [
+    labelled("x", "A"),
+    labelled("y", "B"),
+    labelled("z", "A"),
+    labelled("w", ""),
+  ];
+  assert.equal(sectionKey(blocks, 0), "A#0");
+  assert.equal(sectionKey(blocks, 1), "B#0");
+  assert.equal(sectionKey(blocks, 2), "A#1", "not the first A section's key");
+  assert.equal(sectionKey(blocks, 3), undefined, "outside every section");
+  // A block added at the top of the second "A" keeps that section's key.
+  const added = insertBlockInto(blocks, labelled("new", ""), {
+    listId: null,
+    beforeId: blocks[2].id,
+  });
+  assert.equal(sectionKey(added, 2), "A#1");
+  // Renamed to its neighbour's name, it merges into that section.
+  const merged = renameSection(blocks, blocks[2].id, "B");
+  assert.equal(sectionKey(merged, 2), "B#0");
 });
 
 test("grouping blocks inside a section keeps the group in that section", () => {

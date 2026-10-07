@@ -23,9 +23,12 @@ export function dashboardUrl(scope: string) {
   return `/?${new URLSearchParams({ [WORKSPACE_PARAM]: scope })}`;
 }
 const workspaceKey = (userId: string) => `meetloom.workspace.${userId}`;
+/** Each account's last scope in this tab, for when the browser keeps none. */
+const tabWorkspaces = new Map<string, string>();
 /** The scope a dashboard opens on: the address (reload, Back, bookmark), then
- * this account's last choice in this browser, then every workspace. Storage
- * may be missing or throw (private browsing, blocked site data). */
+ * this account's last choice in this browser (or in this tab, when storage is
+ * missing or throws: private browsing, blocked site data), then every
+ * workspace. */
 export function dashboardWorkspace(
   url: string,
   userId: string,
@@ -35,13 +38,13 @@ export function dashboardWorkspace(
     .get(WORKSPACE_PARAM)
     ?.trim();
   if (asked) return asked;
+  let stored: string | undefined;
   try {
-    return (
-      (storage ?? localStorage).getItem(workspaceKey(userId))?.trim() || "all"
-    );
+    stored = (storage ?? localStorage).getItem(workspaceKey(userId))?.trim();
   } catch {
-    return "all";
+    /* Storage is optional. */
   }
+  return stored || tabWorkspaces.get(userId) || "all";
 }
 /** A scope from the address or this browser is trusted once the account's
  * workspaces are listed: one it cannot see (deleted, left, an old link) falls
@@ -59,13 +62,14 @@ export function signInTarget(url: string, invited: boolean) {
   const { pathname, search } = new URL(url, "http://localhost");
   return pathname === "/" ? `/${search}` : "/";
 }
-/** Remembers the account's last scope; without storage, the address still
- * carries it. */
+/** Remembers the account's last scope; without storage, this tab and the
+ * address still carry it. */
 export function rememberWorkspace(
   userId: string,
   scope: string,
   storage?: Pick<Storage, "setItem">,
 ) {
+  tabWorkspaces.set(userId, scope);
   try {
     (storage ?? localStorage).setItem(workspaceKey(userId), scope);
   } catch {

@@ -113,6 +113,7 @@ import {
   relocateBlock,
   removeBlockFromTree,
   renameSection,
+  sectionKey,
   sectionRuns,
   startsSection,
   stepDestination,
@@ -1490,7 +1491,7 @@ export default function Editor({
       rows = scheduled.slice(start, end),
       sectionBlocks = day.blocks.slice(start, end),
       comparison = runComparison(session.run, sectionBlocks),
-      key = `${day.id}:${label}`,
+      key = `${day.id}:${sectionKey(day.blocks, start)}`,
       collapsed = collapsedSections.has(key),
       atEnd: BlockDestination = {
         listId: null,
@@ -1541,14 +1542,16 @@ export default function Editor({
             })
           }
           rename={(name) => {
-            updateDay({ blocks: renameSection(day.blocks, first.id, name) });
+            const blocks = renameSection(day.blocks, first.id, name),
+              renamed = sectionKey(blocks, start);
+            updateDay({ blocks });
             // Collapsed stays collapsed under the new name; a removed
             // section leaves no key behind.
             if (collapsed)
               setCollapsedSections((current) => {
                 const next = new Set(current);
                 next.delete(key);
-                if (name.trim()) next.add(`${day.id}:${name.trim()}`);
+                if (renamed) next.add(`${day.id}:${renamed}`);
                 return next;
               });
           }}

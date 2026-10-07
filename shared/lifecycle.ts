@@ -68,9 +68,11 @@ export function sessionNeedsClosing(
   const last = days.reduce((max, day) => (day.date > max ? day.date : max), "");
   const today = dayOf(now);
   if (last > today) return false;
+  // Several agendas can share the last date: the last of them in the
+  // session's order ends it.
   if (
     run.status === "finished" &&
-    days.some((day) => day.id === run.dayId && day.date === last)
+    run.dayId === days.findLast((day) => day.date === last)?.id
   )
     return true;
   const created = new Date(session.createdAt);

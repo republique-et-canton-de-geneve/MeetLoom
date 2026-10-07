@@ -259,15 +259,29 @@ test("a bare dashboard address resumes the account's last workspace, and another
   );
   assert.ok([...remembered.values.keys()].some((key) => key.includes("u1")));
 });
-test("blocked browser storage (private browsing) falls back to all workspaces without failing", () => {
+test("blocked browser storage (private browsing) never fails, and the tab still remembers the workspace", () => {
   assert.equal(
-    dashboardWorkspace("https://meetloom.test/", "u1", blocked),
+    dashboardWorkspace("https://meetloom.test/", "u-private", blocked),
     "all",
   );
-  assert.doesNotThrow(() => rememberWorkspace("u1", "w-1", blocked));
+  assert.doesNotThrow(() => rememberWorkspace("u-private", "w-1", blocked));
   assert.equal(
-    dashboardWorkspace("https://meetloom.test/?workspace=w-2", "u1", blocked),
+    dashboardWorkspace(
+      "https://meetloom.test/?workspace=w-2",
+      "u-private",
+      blocked,
+    ),
     "w-2",
+  );
+  // "Toutes les séances" opens a bare "/": the tab still remembers the
+  // choice, though the browser cannot, and another account does not get it.
+  assert.equal(
+    dashboardWorkspace("https://meetloom.test/", "u-private", blocked),
+    "w-1",
+  );
+  assert.equal(
+    dashboardWorkspace("https://meetloom.test/", "u-other", blocked),
+    "all",
   );
 });
 test("a workspace this account cannot see (deleted, left, or an old link) falls back to all of them", () => {

@@ -1295,7 +1295,13 @@ export function transitionRun(
     (current.status === "running" || current.status === "paused")
   ) {
     run.elapsedBeforePause = elapsedSeconds(current, now);
-    if (block)
+    // Stopped during the countdown to a scheduled start, the step was never
+    // reached: it gets no actual time, so it never reads as played.
+    if (
+      block &&
+      (run.elapsedBeforePause > 0 ||
+        Object.hasOwn(current.actualDurations ?? {}, block.id))
+    )
       run.actualDurations = {
         ...current.actualDurations,
         [block.id]:

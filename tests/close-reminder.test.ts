@@ -79,6 +79,24 @@ test("the timer finishing the last day flags it the same day, but not a rehearsa
     sessionNeedsClosing(finishedOn(twoDays, s.days[0].id), "owner", now),
     false,
   );
+  // Two agendas on the last date: only finishing the later one ends the
+  // session, so the other one is never frozen by an early close.
+  const sameDate = {
+    ...twoDays,
+    days: [
+      twoDays.days[0],
+      twoDays.days[1],
+      { ...s.days[0], id: "third", date: "2026-10-08" },
+    ],
+  };
+  assert.equal(
+    sessionNeedsClosing(finishedOn(sameDate, "second"), "owner", now),
+    false,
+  );
+  assert.equal(
+    sessionNeedsClosing(finishedOn(sameDate, "third"), "owner", now),
+    true,
+  );
   const rehearsal = { ...s, days: [{ ...s.days[0], date: "2026-10-20" }] };
   assert.equal(
     sessionNeedsClosing(finishedOn(rehearsal, s.days[0].id), "owner", now),
