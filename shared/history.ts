@@ -45,8 +45,16 @@ export interface RunRecord {
   dayTitle: string;
   startedAt: string;
   finishedAt: string;
-  /** Timed steps in order. */
-  blocks: { id: string; title: string; planned: number; actual: number }[];
+  /** Timed steps in order, in whole seconds. */
+  blocks: {
+    id: string;
+    title: string;
+    planned: number;
+    actual: number;
+    /** Reached by the run, even for under a second. Records kept before it
+     * existed only know a step was played from its actual time. */
+    played?: boolean;
+  }[];
   /** Planned seconds per block, activities inside parallel rooms included:
    * what "restore this plan" puts back. */
   plan: Record<string, number>;

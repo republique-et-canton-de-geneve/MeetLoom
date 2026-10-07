@@ -314,3 +314,55 @@ test("nested rows carry their container's section, so a section is announced onc
     ],
   );
 });
+
+test("the visitor projection gives nested blocks their container's section, like the agenda", () => {
+  const session = createSession("owner", "Sections", "fr", false);
+  // Grouped in a section that was then renamed: the children keep the old,
+  // no longer shown label.
+  const child = newBlock("fr", {
+    title: "Child",
+    section: "Plan social (confidentiel)",
+  });
+  session.days[0].blocks = [
+    newBlock("fr", {
+      kind: "group",
+      title: "Group",
+      section: "Réorganisation",
+      children: [
+        child,
+        newBlock("fr", {
+          kind: "group",
+          title: "Subgroup",
+          section: "Ancien",
+          children: [newBlock("fr", { title: "Deep", section: "Ancien" })],
+        }),
+      ],
+    }),
+    newBlock("fr", {
+      kind: "parallel",
+      title: "Rooms",
+      section: "",
+      rooms: [
+        {
+          id: crypto.randomUUID(),
+          title: "Room 1",
+          blocks: [newBlock("fr", { title: "In room", section: "Other" })],
+        },
+      ],
+    }),
+  ];
+  const projected = publicProjection(session);
+  assert.deepEqual(
+    allBlocks(projected.days[0].blocks).map((block) => [
+      block.title,
+      block.section,
+    ]),
+    scheduleTreeDay(session.days[0]).map((row) => [
+      row.block.title,
+      row.section,
+    ]),
+  );
+  assert.equal(JSON.stringify(projected).includes("confidentiel"), false);
+  assert.equal(child.section, "Plan social (confidentiel)", "a copy");
+  assert.deepEqual(publicProjection(projected), projected);
+});

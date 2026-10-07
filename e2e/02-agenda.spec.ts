@@ -68,14 +68,75 @@ test("editing an agenda saves blocks, durations, groups and sections across relo
       name: "Développer ou replier la section Construire",
     }),
   ).toHaveAttribute("aria-expanded", "true");
-  // A block dropped where it already is leaves nothing to undo.
-  await page
-    .locator(".agenda-row")
-    .filter({ has: duration(page, "Idées") })
-    .locator(".drag-handle")
-    .dragTo(page.locator(".section-totals"));
-  await expect(page.getByTitle("Annuler", { exact: true })).toBeDisabled();
+  // A block dropped where it already is leaves nothing to undo: the first
+  // block on its section's header, the last one on the section's footer.
+  const handle = (title: string) =>
+    page
+      .locator(".agenda-row")
+      .filter({ has: duration(page, title) })
+      .locator(".drag-handle");
+  const undo = page.getByTitle("Annuler", { exact: true });
+  await handle("Idées").dragTo(page.locator(".section-totals"));
+  await handle("Décision").dragTo(page.locator(".section-drop"));
+  await expect(undo).toBeDisabled();
+  // A block that does move there joins the section, and Undo takes it out.
+  const accueil = section.filter({ has: duration(page, "Accueil") });
+  await handle("Accueil").dragTo(page.locator(".section-drop"));
+  await expect(accueil).toHaveCount(1);
+  await undo.click();
+  await expect(accueil).toHaveCount(0);
   await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
+  // A collapsed section stays collapsed when it is renamed.
+  const toggle = (name: string) =>
+    page.getByRole("button", {
+      name: `Développer ou replier la section ${name}`,
+      exact: true,
+    });
+  await toggle("Construire").click();
+  await heading.fill("Construire ensemble");
+  await heading.press("Enter");
+  await expect(toggle("Construire ensemble")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await heading.fill("Construire");
+  await heading.press("Enter");
+  await expect(toggle("Construire")).toHaveAttribute("aria-expanded", "false");
+  await toggle("Construire").click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  // A collaborator adds a section above while this title is being typed:
+  // the draft goes rather than renaming the section that takes its place.
+  await heading.fill("Construire ensemble");
+  const api = `/api/sessions/${page.url().split("/").pop()}`;
+  const { session: remote } = await (await page.request.get(api)).json();
+  // Accueil and the group before Construire.
+  for (const block of remote.days[0].blocks.slice(0, 2))
+    block.section = "Ouverture";
+  const saved = await page.request.put(api, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { session: remote, version: remote.version },
+  });
+  expect(saved.ok()).toBe(true);
+  const titles = page.locator(".section-title");
+  await expect(titles).toHaveCount(2);
+  await page.keyboard.type(" final");
+  await page.keyboard.press("Enter");
+  await expect(titles.nth(0)).toHaveValue("Ouverture");
+  await expect(titles.nth(1)).toHaveValue("Construire");
+  // Renaming a section to its neighbour's name merges them; Undo splits
+  // them again.
+  await titles.nth(0).fill("Construire");
+  await titles.nth(0).press("Enter");
+  await expect(titles).toHaveCount(1);
+  await expect(accueil).toHaveCount(1);
+  await undo.click();
+  await expect(titles).toHaveCount(2);
+  const opening = page.locator(".section-header").first();
+  await opening.hover();
+  await opening.locator(".section-ungroup").click();
+  await expect(titles).toHaveCount(1);
+  await expect(accueil).toHaveCount(0);
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
 });
 
 test("Escape closes the actions menu and side panels, and returns focus", async ({

@@ -1477,7 +1477,9 @@ export default function Editor({
   // A section is a chapter of the day: a header with its title and times,
   // its blocks, and a footer that adds or drops a block at its end. The frame
   // is keyed by its rank among the day's sections, so renaming the section or
-  // inserting at its top keeps its rows, and the focus or click in them.
+  // inserting at its top keeps its rows, and the focus or click in them. Its
+  // header is keyed by its first block: when a collaborator adds or removes a
+  // section above, a title being typed is dropped, never given to another.
   const renderSection = (
     label: string,
     start: number,
@@ -1512,6 +1514,7 @@ export default function Editor({
           />
         )}
         <SectionHeader
+          key={first.id}
           label={label}
           span={`${formatTime(rows[0].startMinute)} – ${formatTime(rows.at(-1)!.endMinute)}`}
           duration={
@@ -1537,9 +1540,18 @@ export default function Editor({
               return next;
             })
           }
-          rename={(name) =>
-            updateDay({ blocks: renameSection(day.blocks, first.id, name) })
-          }
+          rename={(name) => {
+            updateDay({ blocks: renameSection(day.blocks, first.id, name) });
+            // Collapsed stays collapsed under the new name; a removed
+            // section leaves no key behind.
+            if (collapsed)
+              setCollapsedSections((current) => {
+                const next = new Set(current);
+                next.delete(key);
+                if (name.trim()) next.add(`${day.id}:${name.trim()}`);
+                return next;
+              });
+          }}
           inputRef={(el) => {
             if (el) titleInputs.current.set(`section:${first.id}`, el);
             else titleInputs.current.delete(`section:${first.id}`);

@@ -1706,6 +1706,21 @@ hr {
     visibility: visible;
   }
 }
+/* On a phone the agenda scrolls sideways and the header is as wide as the
+   table: keep the remove button beside the title and the times and totals
+   on the line below, instead of at the table's far edge. */
+@media (max-width: 650px) {
+  .section-title {
+    flex: 0 1 auto;
+    width: min(240px, 60vw);
+    min-width: 0;
+  }
+  .section-totals {
+    order: 1;
+    flex-basis: 100%;
+    padding-left: 38px;
+  }
+}
 .print-agenda {
   display: none;
 }

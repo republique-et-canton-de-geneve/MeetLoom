@@ -667,13 +667,18 @@ export function publicProjection(
     (column) =>
       !BUILTIN_COLUMNS.includes(column.id as (typeof BUILTIN_COLUMNS)[number]),
   );
-  const projectBlock = (block: Block | PublicBlock): PublicBlock => {
+  // A nested block is in its top-level container's section, as the agenda
+  // shows it: a label it kept from before being grouped is never sent.
+  const projectBlock = (
+    block: Block | PublicBlock,
+    section = block.section,
+  ): PublicBlock => {
     const projected: PublicBlock = {
       id: block.id,
       title: block.title,
       duration: blockDuration(block),
       category: block.category,
-      section: block.section,
+      section,
       fields: Object.fromEntries(
         publicFields.flatMap((column) =>
           Object.hasOwn(block.fields, column.id)
@@ -685,12 +690,14 @@ export function publicProjection(
     if (["activity", "note", "group", "parallel"].includes(block.kind ?? ""))
       projected.kind = block.kind;
     if (block.kind === "group")
-      projected.children = (block.children ?? []).map(projectBlock);
+      projected.children = (block.children ?? []).map((child) =>
+        projectBlock(child, section),
+      );
     if (block.kind === "parallel")
       projected.rooms = (block.rooms ?? []).map((room) => ({
         id: room.id,
         title: room.title,
-        blocks: room.blocks.map(projectBlock),
+        blocks: room.blocks.map((child) => projectBlock(child, section)),
       }));
     if (block.lockedStart !== undefined)
       projected.lockedStart = block.lockedStart;
@@ -705,7 +712,7 @@ export function publicProjection(
     title: day.title,
     date: day.date,
     startTime: day.startTime,
-    blocks: day.blocks.map(projectBlock),
+    blocks: day.blocks.map((block) => projectBlock(block)),
   }));
   const run = session.run;
   const pages = pageProjection(session.pages);
@@ -920,9 +927,11 @@ export function runComparison(
     )
   )
     return null;
+  // Whole seconds per step, as each run record keeps them, so a past run
+  // adds up to the same minutes.
   return compareDurations(
     steps.reduce((sum, block) => sum + plannedBlockSeconds(run, block), 0),
-    steps.reduce((sum, block) => sum + actual[block.id], 0),
+    steps.reduce((sum, block) => sum + wholeSeconds(actual[block.id]), 0),
   );
 }
 /**

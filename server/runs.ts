@@ -42,6 +42,7 @@ export async function recordFinishedRun(
       planned: run.plannedDurations?.[block.id] ?? block.duration * 60,
       // Counted like the agenda, so both show the same minutes and gap.
       actual: wholeSeconds(run.actualDurations?.[block.id] ?? 0),
+      played: Object.hasOwn(run.actualDurations ?? {}, block.id),
     })),
     plan: run.plannedDurations ?? {},
   };

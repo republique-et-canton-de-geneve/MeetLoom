@@ -3,7 +3,13 @@ import type { Session } from "../shared/model";
 import type { RunRecord } from "../shared/history";
 import { compareDurations } from "../shared/domain";
 import { useI18n } from "./i18n";
+import { gapPhrase } from "./TimeFields";
 import { durationGapLabel, durationLabel } from "./ui";
+
+/** The steps a run reached, as the agenda counts them: a step skipped in
+ * under a second was played for 0 s. */
+export const playedSteps = (run: RunRecord) =>
+  run.blocks.filter((block) => block.played ?? block.actual > 0);
 
 /**
  * Every finished run, newest first. The first run of each day is the initial
@@ -59,14 +65,14 @@ export default function RunsHistory({
       {[...runs].reverse().map((run) => {
         const day = session.days.find((value) => value.id === run.dayId),
           first = rank.get(run.id) === 1,
-          played = run.blocks.filter((block) => block.actual > 0),
+          played = playedSteps(run),
           planned = run.blocks.reduce((sum, block) => sum + block.planned, 0),
           actual = played.reduce((sum, block) => sum + block.actual, 0),
           // Whole minutes rounded down, like the gaps shown in the agenda.
-          late = compareDurations(
+          gap = compareDurations(
             played.reduce((sum, block) => sum + block.planned, 0),
             actual,
-          ).deltaMinutes;
+          );
         return (
           <article
             className={`history-run ${first ? "is-initial" : ""}`}
@@ -96,15 +102,8 @@ export default function RunsHistory({
               {t("Prévu", "Planned")} {durationLabel(planned / 60)} ·{" "}
               {t("réel", "actual")} {durationLabel(actual / 60)}
               {played.length > 0 && (
-                <span
-                  className="history-run-gap"
-                  data-gap={late > 0 ? "late" : late < 0 ? "early" : "on-time"}
-                >
-                  {late > 0
-                    ? t(`${late} min de retard`, `${late} min late`)
-                    : late < 0
-                      ? t(`${-late} min d’avance`, `${-late} min early`)
-                      : t("Dans le temps prévu", "On schedule")}
+                <span className="history-run-gap" data-gap={gap.state}>
+                  {gapPhrase(t, gap.deltaMinutes)}
                 </span>
               )}
             </p>
@@ -125,12 +124,12 @@ export default function RunsHistory({
                       <td>{block.title}</td>
                       <td>{durationLabel(block.planned / 60)}</td>
                       <td>
-                        {block.actual > 0
+                        {played.includes(block)
                           ? durationLabel(block.actual / 60)
                           : "—"}
                       </td>
                       <td>
-                        {block.actual > 0
+                        {played.includes(block)
                           ? durationGapLabel(
                               compareDurations(block.planned, block.actual)
                                 .deltaMinutes,

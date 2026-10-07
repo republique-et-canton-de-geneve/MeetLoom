@@ -221,6 +221,34 @@ test("a block inserted or moved before another joins its section; an explicit se
     blocks,
     "an unchanged move returns the same array, so the editor records nothing",
   );
+  // Dropped where it already is: before the block that follows it, a
+  // section's last block on that section's footer, the day's last block on
+  // the end of the day.
+  for (const [block, destination] of [
+    [a1, { listId: null, beforeId: a2.id }],
+    [a2, { listId: null, beforeId: b1.id, section: "A" }],
+    [b1, { listId: null, section: "B" }],
+    [b1, { listId: null }],
+  ] as const)
+    assert.equal(
+      relocateBlock(blocks, block.id, destination),
+      blocks,
+      `${block.title} in place`,
+    );
+  // In place, only its section changes: the next section's first row takes
+  // the block into that section, the footer below the day leaves every one.
+  const across = relocateBlock(blocks, a2.id, {
+    listId: null,
+    beforeId: b1.id,
+  });
+  assert.deepEqual(titles(across), ["a1", "a2", "b1"]);
+  assert.deepEqual(sections(across), ["A", "B", "B"]);
+  const unlabelled = relocateBlock(blocks, b1.id, {
+    listId: null,
+    section: "",
+  });
+  assert.deepEqual(titles(unlabelled), ["a1", "a2", "b1"]);
+  assert.deepEqual(sections(unlabelled), ["A", "A", ""]);
 });
 
 test("renaming a section relabels only its own run; an empty name removes it but keeps the blocks", () => {

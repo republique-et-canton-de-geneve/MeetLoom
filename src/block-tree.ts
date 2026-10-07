@@ -215,16 +215,28 @@ export function relocateBlock(
   id: string,
   destination: BlockDestination,
 ): Block[] {
-  if (id === destination.beforeId) {
-    // In place: only an explicit, different top-level section changes it, as
-    // when the block that follows a section is dropped on its footer.
+  const at =
+    destination.listId === null
+      ? blocks.findIndex((block) => block.id === id)
+      : -1;
+  if (
+    at >= 0 &&
+    (id === destination.beforeId || blocks[at + 1]?.id === destination.beforeId)
+  ) {
+    // In place, dropped on itself, on the block after it or, for the last
+    // block, at the end: only its section can change. An explicit one wins,
+    // as on a section's footer; otherwise it joins the block it stays before.
     const section =
-      destination.listId === null ? destination.section : undefined;
-    return section !== undefined &&
-      blocks.some((block) => block.id === id && block.section !== section)
-      ? blocks.map((block) => (block.id === id ? { ...block, section } : block))
-      : blocks;
+      destination.section ??
+      (id === destination.beforeId ? undefined : blocks[at + 1]?.section) ??
+      blocks[at].section;
+    return section === blocks[at].section
+      ? blocks
+      : blocks.map((block) =>
+          block.id === id ? { ...block, section } : block,
+        );
   }
+  if (id === destination.beforeId) return blocks;
   const source = allBlocks(blocks).find((block) => block.id === id);
   if (!source || !listExists(blocks, destination.listId)) return blocks;
   const inside = allBlocks([source]);

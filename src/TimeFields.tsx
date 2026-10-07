@@ -19,7 +19,12 @@ export const RunContext = createContext<
 export const actualDurationLabel = (seconds: number) =>
   seconds < 60 ? "< 1 min" : `${Math.floor(seconds / 60)} min`;
 
-const gapPhrase = (t: (fr: string, en: string) => string, minutes: number) =>
+/** "On schedule", "1 h 15 min late": the gap in words, here and in past
+ * runs. */
+export const gapPhrase = (
+  t: (fr: string, en: string) => string,
+  minutes: number,
+) =>
   minutes === 0
     ? t("Dans le temps prévu", "On schedule")
     : minutes > 0

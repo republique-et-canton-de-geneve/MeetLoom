@@ -13,7 +13,7 @@ import type { RunState, Session } from "../shared/model.js";
 import type { RunRecord } from "../shared/history.js";
 import { durationGapLabel } from "../src/ui.tsx";
 import { DurationField, RunCompare, RunContext } from "../src/TimeFields.tsx";
-import RunsHistory from "../src/RunsHistory.tsx";
+import RunsHistory, { playedSteps } from "../src/RunsHistory.tsx";
 import { recordFinishedRun } from "../server/runs.js";
 
 // Seconds are expressed from the run start at t = 0 to keep scenarios readable.
@@ -27,6 +27,37 @@ function plan(...minutes: number[]) {
   return session;
 }
 const blocks = (session: Session) => session.days[0].blocks;
+/** The run record the server keeps when `after` finishes the run. */
+async function recorded(before: Session, after: Session): Promise<RunRecord> {
+  let payload = "";
+  await recordFinishedRun(
+    {
+      all: async <T>() => [] as T[],
+      run: async (_sql, values) => {
+        payload = String(values?.[3]);
+        return 1;
+      },
+    },
+    before,
+    after,
+  );
+  return {
+    id: "run-1",
+    dayId: after.days[0].id,
+    startedAt: "2026-10-07T09:00:00.000Z",
+    finishedAt: "2026-10-07T09:30:00.000Z",
+    ...(JSON.parse(payload) as Pick<RunRecord, "dayTitle" | "blocks" | "plan">),
+  };
+}
+const history = (run: RunRecord, session: Session) =>
+  renderToStaticMarkup(
+    createElement(RunsHistory, {
+      runs: [run],
+      session,
+      editable: false,
+      apply: () => {},
+    }),
+  );
 
 test("a played block is compared with the plan captured at the start, whatever its duration becomes", () => {
   let s = plan(10, 10);
@@ -278,22 +309,10 @@ test("the time cell, its sentence and the run record use the same whole seconds"
   // Versions & activity › Runs keeps the same whole seconds.
   const s = transitionRun(plan(10), "start", {}, at(0));
   const finished = transitionRun(s, "stop", {}, at(599.6));
-  let payload = "";
-  await recordFinishedRun(
-    {
-      all: async <T>() => [] as T[],
-      run: async (_sql, values) => {
-        payload = String(values?.[3]);
-        return 1;
-      },
-    },
-    s,
-    finished,
-  );
-  const [recorded] = (JSON.parse(payload) as Pick<RunRecord, "blocks">).blocks;
-  assert.equal(recorded.actual, 599);
+  const [step] = (await recorded(s, finished)).blocks;
+  assert.equal(step.actual, 599);
   assert.equal(
-    compareDurations(recorded.planned, recorded.actual).deltaMinutes,
+    compareDurations(step.planned, step.actual).deltaMinutes,
     runComparison(finished.run, blocks(finished))?.deltaMinutes,
   );
 });
@@ -325,14 +344,92 @@ test("past runs show the same gap as the agenda", () => {
     blocks: [{ id: "A", title: "Accueil", planned: 600, actual: 530 }],
     plan: { A: 600 },
   };
-  const html = renderToStaticMarkup(
-    createElement(RunsHistory, {
-      runs: [run],
-      session,
-      editable: false,
-      apply: () => {},
-    }),
-  );
+  const html = history(run, session);
   assert.match(html, /<td>−2 min<\/td>/);
   assert.match(html, /2 min d’avance/);
+});
+
+test("past runs count every step the run reached, in the agenda's whole seconds", async () => {
+  // A step left after 0.6 s was played: the agenda counts it, so do past runs.
+  let s = transitionRun(plan(10, 10, 10), "start", {}, at(0));
+  s = transitionRun(s, "next", {}, at(600));
+  s = transitionRun(s, "next", {}, at(600.6));
+  const skipped = transitionRun(s, "stop", {}, at(1200.6));
+  const day = runComparison(skipped.run, blocks(skipped));
+  assert.equal(day?.deltaMinutes, -10);
+  const run = await recorded(s, skipped);
+  assert.deepEqual(
+    playedSteps(run).map((step) => step.title),
+    ["Bloc 1", "Bloc 2", "Bloc 3"],
+    "what “Apply these actual durations” puts back",
+  );
+  const html = history(run, skipped);
+  assert.match(
+    html,
+    /<span class="history-run-gap" data-gap="early">10 min d’avance<\/span>/,
+  );
+  assert.match(
+    html,
+    /<td>Bloc 2<\/td><td>10 min<\/td><td>0 min<\/td><td>−10 min<\/td>/,
+  );
+  // Records kept before steps were marked keep their reading.
+  const legacy = {
+    ...run,
+    blocks: run.blocks.map(({ id, title, planned, actual }) => ({
+      id,
+      title,
+      planned,
+      actual,
+    })),
+  };
+  assert.deepEqual(
+    playedSteps(legacy).map((step) => step.title),
+    ["Bloc 1", "Bloc 3"],
+  );
+
+  // Two steps of 300.6 s and 299.6 s: 300 + 299 whole seconds, nine minutes,
+  // in the agenda's day, section and group totals as in past runs.
+  let t = transitionRun(plan(5, 5), "start", {}, at(0));
+  t = transitionRun(t, "next", {}, at(300.6));
+  const finished = transitionRun(t, "stop", {}, at(600.2));
+  const total = runComparison(finished.run, blocks(finished));
+  assert.deepEqual(
+    [total?.actualMinutes, total?.actualSeconds, total?.deltaMinutes],
+    [9, 599, -1],
+  );
+  assert.match(
+    history(await recorded(t, finished), finished),
+    /réel 9 min<span class="history-run-gap" data-gap="early">1 min d’avance<\/span>/,
+  );
+});
+
+test("past runs word and colour their gap like the agenda, very late included", () => {
+  const session = createSession("owner", "History", "fr", false);
+  const run: RunRecord = {
+    id: "run-1",
+    dayId: session.days[0].id,
+    dayTitle: session.days[0].title,
+    startedAt: "2026-10-07T09:00:00.000Z",
+    finishedAt: "2026-10-07T12:15:00.000Z",
+    blocks: [
+      {
+        id: "A",
+        title: "Atelier",
+        planned: 7200,
+        actual: 11_700,
+        played: true,
+      },
+    ],
+    plan: { A: 7200 },
+  };
+  const gap = compareDurations(7200, 11_700);
+  assert.equal(gap.state, "very-late");
+  const agenda = renderToStaticMarkup(
+    createElement(RunCompare, { comparison: gap }),
+  );
+  assert.match(agenda, /title="[^"]*1 h 15 min de retard"/);
+  assert.match(
+    history(run, session),
+    /<span class="history-run-gap" data-gap="very-late">1 h 15 min de retard<\/span>/,
+  );
 });
