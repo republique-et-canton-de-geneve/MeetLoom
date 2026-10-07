@@ -115,6 +115,9 @@
   gap: 9px;
   align-items: end;
 }
+.workspace-member-form label {
+  margin: 0;
+}
 .workspace-member {
   display: flex;
   align-items: start;
@@ -142,8 +145,11 @@
 .workspace-member summary {
   cursor: pointer;
 }
-.workspace-member select {
-  width: 140px;
+/* .workspace-members raises specificity above .modal select { width: 100% }
+   in styles.css, which loads after this file. */
+.workspace-members .workspace-member select {
+  flex: none;
+  width: 160px;
 }
 .workspace-invitation,
 .workspace-confirm {
@@ -177,6 +183,7 @@
   }
   .workspace-member-form {
     grid-template-columns: 1fr;
+    gap: 17px;
   }
   .workspace-copy-defaults {
     align-items: stretch;

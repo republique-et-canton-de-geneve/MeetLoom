@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { admin, member, signIn } from "./helpers";
 
 test("before an update the administrator sees the version and the sessions being run", async ({
@@ -93,4 +93,39 @@ test("an announcement reaches everyone, and a reported problem reaches the admin
     .getByRole("button", { name: "Retirer le message" })
     .click();
   await expect(announcement).toContainText("Message retiré.");
+});
+
+test("a workspace administrator reads each member in full, on a computer and on a phone", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, admin);
+  await page.getByRole("button", { name: "Créer un espace" }).click();
+  await page.getByLabel("Nom de l’espace").fill("Équipe admin E2E");
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  const panel = page.locator("dialog.modal", { hasText: "Gérer l’espace" });
+  await panel.getByRole("button", { name: "Membres et invités" }).click();
+  const row = panel.locator(".workspace-member", { hasText: admin.email });
+  await expect(row).toBeVisible();
+  const box = async (locator: Locator) => (await locator.boundingBox())!;
+  const name = row.getByText(admin.name, { exact: true });
+  // One line, not one letter per line beside a role selector filling the row.
+  expect((await box(name)).height).toBeLessThan(30);
+  // The add button lines up with its fields.
+  const field = await box(panel.getByLabel("Adresse e-mail"));
+  const add = await box(
+    panel.getByRole("button", { name: "Ajouter / inviter" }),
+  );
+  expect(Math.abs(field.y + field.height - (add.y + add.height))).toBeLessThan(
+    3,
+  );
+  // On a phone the role and the remove button share the line under the name.
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect((await box(name)).height).toBeLessThan(30);
+  const role = await box(
+    row.getByRole("combobox", { name: `Rôle de ${admin.name}` }),
+  );
+  const remove = await box(
+    row.getByRole("button", { name: `Retirer l’accès de ${admin.name}` }),
+  );
+  expect(Math.abs(role.y - remove.y)).toBeLessThan(5);
 });
