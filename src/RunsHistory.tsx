@@ -3,13 +3,17 @@ import type { Session } from "../shared/model";
 import type { RunRecord } from "../shared/history";
 import { compareDurations } from "../shared/domain";
 import { useI18n } from "./i18n";
-import { gapPhrase } from "./TimeFields";
+import { actualDurationLabel, gapPhrase } from "./TimeFields";
 import { durationGapLabel, durationLabel } from "./ui";
 
 /** The steps a run reached, as the agenda counts them: a step skipped in
  * under a second was played for 0 s. */
 export const playedSteps = (run: RunRecord) =>
   run.blocks.filter((block) => block.played ?? block.actual > 0);
+
+/** What "Apply these actual durations" puts back: each played step's time. */
+export const actualDurationsOf = (run: RunRecord) =>
+  Object.fromEntries(playedSteps(run).map((block) => [block.id, block.actual]));
 
 /**
  * Every finished run, newest first. The first run of each day is the initial
@@ -125,7 +129,9 @@ export default function RunsHistory({
                       <td>{durationLabel(block.planned / 60)}</td>
                       <td>
                         {played.includes(block)
-                          ? durationLabel(block.actual / 60)
+                          ? block.actual < 60
+                            ? actualDurationLabel(block.actual)
+                            : durationLabel(block.actual / 60)
                           : "—"}
                       </td>
                       <td>

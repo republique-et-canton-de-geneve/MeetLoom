@@ -1768,10 +1768,15 @@ function Dashboard({
                         "Des séances terminées restent à clôturer dans un autre emplacement.",
                         "Finished sessions still need closing in another location.",
                       )
-                    : t(
-                        "Vous n’avez aucune séance terminée à clôturer. Seules les séances clôturées comptent dans le rapport des séances.",
-                        "You have no finished sessions to close. Only closed sessions count in the session report.",
-                      )
+                    : workspaceId === "all"
+                      ? t(
+                          "Vous n’avez aucune séance terminée à clôturer. Seules les séances clôturées comptent dans le rapport des séances.",
+                          "You have no finished sessions to close. Only closed sessions count in the session report.",
+                        )
+                      : t(
+                          "Aucune séance terminée à clôturer dans cet espace. Seules les séances clôturées comptent dans le rapport des séances.",
+                          "No finished sessions to close in this workspace. Only closed sessions count in the session report.",
+                        )
                   : filter || roleFilter
                     ? t(
                         "Essayez un autre terme ou changez le filtre de rôle.",

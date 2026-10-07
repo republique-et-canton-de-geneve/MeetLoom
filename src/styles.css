@@ -1712,8 +1712,9 @@ hr {
 @media (max-width: 650px) {
   .section-title {
     flex: 0 1 auto;
-    width: min(240px, 60vw);
+    width: calc(100vw - 140px);
     min-width: 0;
+    text-overflow: ellipsis;
   }
   .section-totals {
     order: 1;

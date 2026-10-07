@@ -13,7 +13,10 @@ import type { RunState, Session } from "../shared/model.js";
 import type { RunRecord } from "../shared/history.js";
 import { durationGapLabel } from "../src/ui.tsx";
 import { DurationField, RunCompare, RunContext } from "../src/TimeFields.tsx";
-import RunsHistory, { playedSteps } from "../src/RunsHistory.tsx";
+import RunsHistory, {
+  actualDurationsOf,
+  playedSteps,
+} from "../src/RunsHistory.tsx";
 import { recordFinishedRun } from "../server/runs.js";
 
 // Seconds are expressed from the run start at t = 0 to keep scenarios readable.
@@ -361,8 +364,12 @@ test("past runs count every step the run reached, in the agenda's whole seconds"
   assert.deepEqual(
     playedSteps(run).map((step) => step.title),
     ["Bloc 1", "Bloc 2", "Bloc 3"],
-    "what “Apply these actual durations” puts back",
   );
+  // "Apply these actual durations" sets the skipped step to 0 min, as the
+  // timer's own "Use actual durations" does.
+  const applied = actualDurationsOf(run);
+  assert.equal(Object.keys(applied).length, 3);
+  assert.equal(applied[run.blocks[1].id], 0);
   const html = history(run, skipped);
   assert.match(
     html,
@@ -370,7 +377,7 @@ test("past runs count every step the run reached, in the agenda's whole seconds"
   );
   assert.match(
     html,
-    /<td>Bloc 2<\/td><td>10 min<\/td><td>0 min<\/td><td>−10 min<\/td>/,
+    /<td>Bloc 2<\/td><td>10 min<\/td><td>&lt; 1 min<\/td><td>−10 min<\/td>/,
   );
   // Records kept before steps were marked keep their reading.
   const legacy = {

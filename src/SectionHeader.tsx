@@ -68,6 +68,7 @@ export default function SectionHeader({
         ref={inputRef}
         value={draft}
         maxLength={240}
+        title={label}
         readOnly={!editable}
         aria-label={t("Titre de la section", "Section title")}
         placeholder={t("Nom de la section", "Section name")}
