@@ -106,6 +106,7 @@ import GroupEditor from "./GroupEditor";
 import GroupOutline, { type OutlineActions } from "./GroupOutline";
 import InsertMenu, { type InsertKind } from "./InsertMenu";
 import {
+  carrySectionKeys,
   duplicateBlockInTree,
   groupBlocks,
   insertBlockInto,
@@ -392,6 +393,19 @@ export default function Editor({
       ),
     [day],
   );
+  // Collapsed sections follow their blocks through any change of the day:
+  // a rename, a deletion, an undo, a collaborator's edit.
+  const shownBlocks = useRef<{ dayId?: string; blocks?: Block[] }>({});
+  useLayoutEffect(() => {
+    const before = shownBlocks.current;
+    shownBlocks.current = { dayId: day?.id, blocks: day?.blocks };
+    if (!day || before.dayId !== day.id || !before.blocks) return;
+    const previous = before.blocks;
+    if (previous !== day.blocks)
+      setCollapsedSections((current) =>
+        carrySectionKeys(current, `${day.id}:`, previous, day.blocks),
+      );
+  }, [day]);
   if (!session || !day)
     return data.error ? (
       <main className="fatal">
@@ -1541,20 +1555,9 @@ export default function Editor({
               return next;
             })
           }
-          rename={(name) => {
-            const blocks = renameSection(day.blocks, first.id, name),
-              renamed = sectionKey(blocks, start);
-            updateDay({ blocks });
-            // Collapsed stays collapsed under the new name; a removed
-            // section leaves no key behind.
-            if (collapsed)
-              setCollapsedSections((current) => {
-                const next = new Set(current);
-                next.delete(key);
-                if (renamed) next.add(`${day.id}:${renamed}`);
-                return next;
-              });
-          }}
+          rename={(name) =>
+            updateDay({ blocks: renameSection(day.blocks, first.id, name) })
+          }
           inputRef={(el) => {
             if (el) titleInputs.current.set(`section:${first.id}`, el);
             else titleInputs.current.delete(`section:${first.id}`);

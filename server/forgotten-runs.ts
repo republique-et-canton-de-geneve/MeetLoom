@@ -39,7 +39,9 @@ export function forgottenRun(session: Session, now: number): boolean {
 
 /** Stops a forgotten timer. When the current step really ended is unknown,
  * so it counts for its planned time, running or paused, rather than the
- * whole night or wherever a pause left it. */
+ * whole night or wherever a pause left it. A step the run never reached
+ * (paused during the countdown to a scheduled start) gets no time, as with
+ * a manual stop. */
 export function stopForgotten(session: Session, now: number): Session {
   const synced = transitionRun(session, "sync", {}, now);
   const run = synced.run;
@@ -47,6 +49,14 @@ export function stopForgotten(session: Session, now: number): Session {
   const block = runnableBlocks(
     synced.days.find((day) => day.id === run.dayId)?.blocks ?? [],
   ).find((value) => value.id === run.blockId);
+  const reached =
+    block &&
+    (run.elapsedBeforePause > 0 ||
+      Object.hasOwn(run.actualDurations ?? {}, block.id) ||
+      (run.status === "running" &&
+        run.startedAt !== null &&
+        run.startedAt <= now));
+  if (!reached) return transitionRun(synced, "stop", {}, now);
   return transitionRun(
     {
       ...synced,
@@ -54,7 +64,12 @@ export function stopForgotten(session: Session, now: number): Session {
         ...run,
         status: "paused",
         startedAt: null,
-        elapsedBeforePause: (block?.duration ?? 0) * 60,
+        elapsedBeforePause: block.duration * 60,
+        // Reached, even for 0 minutes: the stop records it as played.
+        actualDurations: {
+          ...run.actualDurations,
+          [block.id]: run.actualDurations?.[block.id] ?? 0,
+        },
       },
     },
     "stop",

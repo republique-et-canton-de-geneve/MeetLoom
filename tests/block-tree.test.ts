@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { newBlock } from "../shared/domain.js";
 import type { Block } from "../shared/model.js";
 import {
+  carrySectionKeys,
   groupBlocks,
   insertBlockInto,
   insertSection,
@@ -301,6 +302,43 @@ test("two sections with the same name keep their own state, which follows them w
   // Renamed to its neighbour's name, it merges into that section.
   const merged = renameSection(blocks, blocks[2].id, "B");
   assert.equal(sectionKey(merged, 2), "B#0");
+});
+
+test("a collapsed section stays collapsed through any change of the day, and only that section", () => {
+  const blocks = [
+    labelled("x", "A"),
+    labelled("y", "B"),
+    labelled("z", "A"),
+    labelled("z2", "A"),
+  ];
+  const day = "d1:",
+    other = "d2:A#0";
+  // The second "A" is collapsed; another day's state is left alone.
+  const collapsed = new Set([`${day}A#1`, other]);
+  const carry = (after: typeof blocks) =>
+    [...carrySectionKeys(collapsed, day, blocks, after)].sort();
+  // Renaming the first "A" makes the second the first "A": it stays collapsed.
+  assert.deepEqual(carry(renameSection(blocks, blocks[0].id, "C")), [
+    `${day}A#0`,
+    other,
+  ]);
+  // So does deleting the first "A" section's only block.
+  assert.deepEqual(carry(blocks.slice(1)), [`${day}A#0`, other]);
+  // Renaming the collapsed section itself carries its state to the new name.
+  assert.deepEqual(carry(renameSection(blocks, blocks[2].id, "D")), [
+    `${day}D#0`,
+    other,
+  ]);
+  // Its first block moved elsewhere: the state stays with the rest of it.
+  const moved = relocateBlock(blocks, blocks[2].id, {
+    listId: null,
+    beforeId: blocks[1].id,
+  });
+  assert.deepEqual(carry(moved), [`${day}A#1`, other]);
+  // Removing the section leaves no key behind.
+  assert.deepEqual(carry(renameSection(blocks, blocks[2].id, "")), [other]);
+  // Nothing changed: the same set comes back.
+  assert.equal(carrySectionKeys(collapsed, day, blocks, blocks), collapsed);
 });
 
 test("grouping blocks inside a section keeps the group in that section", () => {

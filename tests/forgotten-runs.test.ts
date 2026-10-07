@@ -301,3 +301,41 @@ test("an auto-advancing run past its last step is saved as finished and recorded
   );
   assert.deepEqual(await h.db.all("SELECT session_id FROM active_runs"), []);
 });
+
+test("a forgotten timer keeps the step it really reached, a 0-minute one included, and none it never reached", () => {
+  const session = createSession("owner", "Atelier", "fr");
+  session.timezone = "UTC";
+  session.days[0].blocks = [
+    newBlock("fr", { title: "A", duration: 10 }),
+    newBlock("fr", { title: "Fin", duration: 0 }),
+  ];
+  const start = nextUtcHour(Date.now(), 9);
+  const [a, end] = session.days[0].blocks;
+  // Left on its last step, which lasts 0 minutes: that step was played.
+  let left = transitionRun(session, "start", {}, start);
+  left = transitionRun(left, "next", {}, start + 10 * 60 * 1000);
+  const stopped = stopForgotten(left, start + 30 * HOUR);
+  assert.deepEqual(stopped.run.actualDurations, { [a.id]: 600, [end.id]: 0 });
+  // Paused during the countdown to a scheduled start, then left for a week:
+  // the meeting never began, so no step is recorded as played.
+  const waiting = transitionRun(
+    {
+      ...session,
+      days: [
+        {
+          ...session.days[0],
+          date: new Date(start).toISOString().slice(0, 10),
+          startTime: "10:00",
+        },
+      ],
+    },
+    "start",
+    { startMode: "planned" },
+    start,
+  );
+  const paused = transitionRun(waiting, "pause", {}, start + 60 * 1000);
+  assert.deepEqual(
+    stopForgotten(paused, start + 8 * 24 * HOUR).run.actualDurations,
+    {},
+  );
+});

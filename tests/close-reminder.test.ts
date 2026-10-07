@@ -19,7 +19,12 @@ const workshop = (): Session => {
 };
 const finishedOn = (session: Session, dayId: string): Session => ({
   ...session,
-  run: { ...session.run, status: "finished", dayId },
+  run: {
+    ...session.run,
+    status: "finished",
+    dayId,
+    actualDurations: { [session.days[0].blocks[0].id]: 600 },
+  },
 });
 
 test("a session needs closing once its last day is past in its own timezone", () => {
@@ -97,6 +102,29 @@ test("the timer finishing the last day flags it the same day, but not a rehearsa
     sessionNeedsClosing(finishedOn(sameDate, "third"), "owner", now),
     true,
   );
+  // An agenda without a timed activity (notes only) cannot run a timer, so
+  // it never stands in for the last one.
+  const notesAfter = {
+    ...twoDays,
+    days: [
+      ...twoDays.days,
+      {
+        ...s.days[0],
+        id: "notes",
+        date: "2026-10-08",
+        blocks: [newBlock("fr", { kind: "note", title: "Compte rendu" })],
+      },
+    ],
+  };
+  assert.equal(
+    sessionNeedsClosing(finishedOn(notesAfter, "second"), "owner", now),
+    true,
+  );
+  // Stopped during the countdown to a scheduled start, the run played no
+  // step: the meeting has not started, so nothing asks to close it.
+  const neverStarted = finishedOn(twoDays, "second");
+  neverStarted.run.actualDurations = {};
+  assert.equal(sessionNeedsClosing(neverStarted, "owner", now), false);
   const rehearsal = { ...s, days: [{ ...s.days[0], date: "2026-10-20" }] };
   assert.equal(
     sessionNeedsClosing(finishedOn(rehearsal, s.days[0].id), "owner", now),

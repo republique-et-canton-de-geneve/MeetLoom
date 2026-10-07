@@ -303,6 +303,37 @@ export function sectionKey(
   return `${label}#${runs.slice(0, at).filter((run) => run.label === label).length}`;
 }
 
+/**
+ * Carries one day's collapsed sections (`keys` starting with `prefix`) across
+ * any change of its blocks: a rename, a deletion, an undo, a collaborator's
+ * edit. Each collapsed section follows the first of its blocks still in a
+ * section of the same name, or else the first still at the top level (a
+ * rename); a section that is gone leaves no key. Returns `keys` itself when
+ * nothing changes.
+ */
+export function carrySectionKeys(
+  keys: Set<string>,
+  prefix: string,
+  before: { id: string; section: string }[],
+  after: { id: string; section: string }[],
+): Set<string> {
+  const next = new Set([...keys].filter((key) => !key.startsWith(prefix)));
+  const index = new Map(after.map((block, i) => [block.id, i]));
+  for (const run of sectionRuns(before)) {
+    const key = sectionKey(before, run.start);
+    if (!key || !keys.has(prefix + key)) continue;
+    const kept = before
+      .slice(run.start, run.end)
+      .flatMap((block) => index.get(block.id) ?? []);
+    const at = kept.find((i) => after[i].section === run.label) ?? kept[0];
+    const carried = at === undefined ? undefined : sectionKey(after, at);
+    if (carried) next.add(prefix + carried);
+  }
+  return next.size === keys.size && [...next].every((key) => keys.has(key))
+    ? keys
+    : next;
+}
+
 /** Whether the top-level block at `index` is the first of a section. */
 export function startsSection(
   blocks: { section: string }[],
