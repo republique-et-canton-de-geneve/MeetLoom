@@ -67,6 +67,8 @@ import {
   dashboardUrl,
   dashboardWorkspace,
   rememberWorkspace,
+  resolveWorkspace,
+  signInTarget,
   type AsyncNavigation,
 } from "./navigation";
 import type { Workspace, WorkspaceSummary } from "../shared/workspaces";
@@ -228,7 +230,7 @@ function AppRoutes() {
         auth={auth}
         inviteToken={inviteToken}
         onSuccess={() => {
-          navigate(inviteToken ? dashboardUrl("all") : "/");
+          navigate(signInTarget(location.href, !!inviteToken));
           refresh();
         }}
       />,
@@ -625,11 +627,10 @@ function Dashboard({
     setSessions(agenda.sessions);
     setWorkspaces(spaces.workspaces);
     setWorkspaceId((current) =>
-      current === "all" ||
-      current === "personal" ||
-      spaces.workspaces.some((space) => space.id === current)
-        ? current
-        : "all",
+      resolveWorkspace(
+        current,
+        spaces.workspaces.map((space) => space.id),
+      ),
     );
   };
   useEffect(() => {
@@ -860,7 +861,8 @@ function Dashboard({
     setRoleFilter("");
     setActivityFilter("to-close");
   };
-  // When empty: all are closed, or those to close are in another location.
+  // When empty: this account has nothing to close here, or what it may close
+  // is in another location.
   const toCloseEmpty = activityFilter === "to-close" && !filter && !roleFilter;
   const openLifecycle = (session: SessionSummary) => {
     setMutationId(session.id);
@@ -1767,8 +1769,8 @@ function Dashboard({
                         "Finished sessions still need closing in another location.",
                       )
                     : t(
-                        "Toutes les séances terminées sont clôturées : elles comptent dans le rapport des séances.",
-                        "Every finished session is closed: they all count in the session report.",
+                        "Vous n’avez aucune séance terminée à clôturer. Seules les séances clôturées comptent dans le rapport des séances.",
+                        "You have no finished sessions to close. Only closed sessions count in the session report.",
                       )
                   : filter || roleFilter
                     ? t(

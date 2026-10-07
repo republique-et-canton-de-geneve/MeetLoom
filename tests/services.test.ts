@@ -416,6 +416,7 @@ test("invitations are emailed with their link when SMTP is configured", async (t
   await h.setup();
   const session = await h.session();
   const existing = await h.account("existing@example.test");
+  await h.account("member@example.test");
   await h.mail.flush();
   messages.length = 0;
   const to = (address: string) =>
@@ -457,6 +458,12 @@ test("invitations are emailed with their link when SMTP is configured", async (t
     { email: "teammate@example.test", role: "editor" },
   );
   assert.equal(joined.status, 201, JSON.stringify(joined.body));
+  const member = await h.owner.request(
+    `/workspaces/${workspace.id}/members`,
+    "POST",
+    { email: "member@example.test", role: "viewer" },
+  );
+  assert.equal(member.status, 201, JSON.stringify(member.body));
   await h.mail.flush();
 
   assert.match(
@@ -487,7 +494,13 @@ test("invitations are emailed with their link when SMTP is configured", async (t
     new RegExp(`/join/${joined.body.token}`),
   );
   assert.match(to("teammate@example.test")!.text, /Équipe projet/);
-  assert.equal(messages.length, 4);
+  // An existing account added to a workspace: its link opens that workspace,
+  // not the scope this browser last remembered.
+  assert.match(
+    to("member@example.test")!.text,
+    new RegExp(`/\\?workspace=${workspace.id}$`),
+  );
+  assert.equal(messages.length, 5);
   void existing;
 });
 

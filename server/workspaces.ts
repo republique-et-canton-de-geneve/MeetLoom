@@ -514,7 +514,11 @@ export async function installWorkspacesApi(
       target: wid,
       kind: "workspace",
       title: workspace?.name,
-      path: result.token ? `/join/${result.token}` : "/",
+      // A bare "/" would resume the scope this browser last remembered: name
+      // the workspace just shared, as the dashboard address does.
+      path: result.token
+        ? `/join/${result.token}`
+        : `/?workspace=${encodeURIComponent(wid)}`,
       existing: !result.token,
     }));
     res.status(201).json({ ...result, emailed });

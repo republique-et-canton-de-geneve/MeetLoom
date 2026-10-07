@@ -245,7 +245,7 @@ export function localDate(at: Date = new Date(), timeZone?: string): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-const DEFAULT_TIMEZONE = "Europe/Zurich";
+export const DEFAULT_TIMEZONE = "Europe/Zurich";
 
 export function createSession(
   userId: string,

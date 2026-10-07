@@ -43,6 +43,22 @@ export function dashboardWorkspace(
     return "all";
   }
 }
+/** A scope from the address or this browser is trusted once the account's
+ * workspaces are listed: one it cannot see (deleted, left, an old link) falls
+ * back to every workspace. */
+export function resolveWorkspace(scope: string, workspaceIds: string[]) {
+  return scope === "all" || scope === "personal" || workspaceIds.includes(scope)
+    ? scope
+    : "all";
+}
+/** Where signing in leads: an invitation opens every workspace, so what was
+ * just shared is visible; the dashboard keeps the workspace its address names
+ * (a bookmark, an emailed link); any other page leads to the dashboard. */
+export function signInTarget(url: string, invited: boolean) {
+  if (invited) return dashboardUrl("all");
+  const { pathname, search } = new URL(url, "http://localhost");
+  return pathname === "/" ? `/${search}` : "/";
+}
 /** Remembers the account's last scope; without storage, the address still
  * carries it. */
 export function rememberWorkspace(
