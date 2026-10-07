@@ -12,7 +12,7 @@ A session's **Change workspace** action is restricted to its owner. It exposes t
 
 Folders and subfolders persist even when empty. Select personal space or a team workspace, then use folder actions in the dashboard toolbar. Renaming also moves subfolders and updates their sessions' filing; it preserves agendas and permissions, including for closed sessions. Deletion requires a subtree without sessions, including archived sessions. Personal folders belong to the account; editors and administrators manage team folders, while viewers can read them. Guests see only paths belonging to sessions they can access.
 
-The **Activity** filter finds recently opened sessions or unread changes. A green dot indicates a version newer than the one this account viewed. Read markers belong to each user; opening a session under another account does not mark it read for collaborators.
+The **Activity** filter finds recently opened sessions, unread changes, or sessions **To close** (see below). A green dot indicates a version newer than the one this account viewed. Read markers belong to each user; opening a session under another account does not mark it read for collaborators.
 
 ## Defaults for new sessions
 
@@ -25,6 +25,10 @@ The logo is a PNG, JPEG, or WebP image stored in the application; no remote imag
 ## Close a delivered session
 
 After stopping the timer, open **Close / delete** from dashboard actions or **Session status** in the editor. Choose facilitators from the collaborators, then close the session.
+
+Only closed sessions count in the **Session report**, so the dashboard reminds whoever may close a session once it is over: its card or list row shows **Session over · Close it?**, and a banner above the sessions counts those not closed yet in the selected workspace. The banner's **Show sessions to close** lists them all: it applies the **To close** activity filter and clears the folder, search, and role filters; **Show all sessions** removes the activity filter. The reminder opens the usual close dialog, and a notice confirms that the session now counts in the report. Owners and editors see it, including workspace administrators and editors; facilitators and viewers do not.
+
+A session is over when its timer finished on its last day (the latest date in the agenda), or when that last day is past in the agenda's timezone and the session was created before that day. It is never flagged while archived or closed, while its timer is running or paused, or without a timed activity (notes and empty groups do not count). A new session is dated on its creation day, which may never have been changed, and a copy or import keeps its old dates: such a session is not flagged until its date is changed to a day after its creation or its timer finishes. A session held on the day it was created without the timer, or created afterwards to record a past meeting, is closed from the actions menu. A session whose date is past but which has not taken place yet, for example a postponed one, is flagged: correct its date in the agenda, or archive or close it. Archiving does not close a session: an archived session stays out of the report, and the archive notice says so.
 
 The agenda, timer, and comments become read-only. Forms stop accepting responses. Public agenda links remain readable within their usual scope. The owner, a workspace administrator, or an application administrator who has access to the session can reopen it. Duplicating a closed session creates a new editable personal session without copying sharing links or closure state.
 

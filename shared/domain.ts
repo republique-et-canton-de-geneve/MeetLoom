@@ -216,16 +216,30 @@ export function newBlock(
   return block;
 }
 
+// Building a format costs about 20 times more than using one, and the session
+// list needs a date per row. Only named timezones are kept (the runtime's own
+// can change), and at most 100 of them: timezones are user input.
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
 /** Calendar date (YYYY-MM-DD) of an instant in a timezone, or in the
  * runtime's own timezone when none is given. `toISOString()` would give the
  * UTC date, which is yesterday in Geneva until 01:00 or 02:00. */
 export function localDate(at: Date = new Date(), timeZone?: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(at);
+  let format = timeZone ? dateFormats.get(timeZone) : undefined;
+  if (!format) {
+    // An invalid timezone throws here, before anything is cached.
+    format = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    if (timeZone) {
+      if (dateFormats.size >= 100) dateFormats.clear();
+      dateFormats.set(timeZone, format);
+    }
+  }
+  const parts = format.formatToParts(at);
   const part = (type: string) =>
     parts.find((value) => value.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;

@@ -7,6 +7,7 @@ import type {
   LifecycleInfo,
   SessionLifecycle,
 } from "../shared/lifecycle.js";
+import { canCloseSession } from "../shared/lifecycle.js";
 import {
   accessibleSessionRows,
   mappedSession,
@@ -160,7 +161,7 @@ export async function installLifecycleApi(
         JSON.parse(state?.facilitators ?? "[]"),
       ),
       collaborators: await sessionCollaborators(db, session.id),
-      canClose: !state?.closed_at && ["owner", "editor"].includes(row.role),
+      canClose: !state?.closed_at && canCloseSession(row.role),
       canReopen: !!state?.closed_at && admin,
       canTrash: admin,
     };
@@ -185,7 +186,7 @@ export async function installLifecycleApi(
         ),
         state = await guardSessionLifecycle(sql, sid);
       if (input.action === "close") {
-        if (!["owner", "editor"].includes(role))
+        if (!canCloseSession(role))
           return fail(
             403,
             "FORBIDDEN",

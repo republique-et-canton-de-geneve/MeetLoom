@@ -39,6 +39,7 @@ import {
   FolderPlus,
   Pencil,
   MessageSquareWarning,
+  CalendarCheck,
 } from "lucide-react";
 import type {
   User,
@@ -47,6 +48,7 @@ import type {
   Role,
 } from "../shared/model";
 import { allBlocks, totalDuration } from "../shared/domain";
+import { sessionNeedsClosing } from "../shared/lifecycle";
 import { api, post, ApiError } from "./api";
 import { useI18n } from "./i18n";
 import {
@@ -112,6 +114,7 @@ const summaryOf = ({ session, role }: SessionResponse): SessionSummary => ({
   days: session.days.length,
   blocks: session.days.flatMap((day) => allBlocks(day.blocks)).length,
   duration: totalDuration(session),
+  needsClosing: sessionNeedsClosing(session, role, new Date()),
 });
 
 type AuthStatus = {
@@ -579,7 +582,7 @@ function Dashboard({
   const [sort, setSort] = useState("updated");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
   const [activityFilter, setActivityFilter] = useState<
-    "all" | "unread" | "recent"
+    "all" | "unread" | "recent" | "to-close"
   >("all");
   const [folder, setFolder] = useState<string | null>(null);
   const [folderListing, setFolderListing] = useState<FolderListing>({
@@ -756,10 +759,15 @@ function Dashboard({
       setNotice(
         session.archived
           ? t("Séance restaurée.", "Session restored.")
-          : t(
-              "Séance archivée. Retrouvez-la dans les archives.",
-              "Session archived. Find it in the archive.",
-            ),
+          : session.needsClosing
+            ? t(
+                "Séance archivée sans être clôturée : elle ne compte pas dans le rapport des séances. Retrouvez-la dans les archives.",
+                "Session archived without being closed: it does not count in the session report. Find it in the archive.",
+              )
+            : t(
+                "Séance archivée. Retrouvez-la dans les archives.",
+                "Session archived. Find it in the archive.",
+              ),
       );
     } catch (e) {
       setError(mutationMessage(e));
@@ -817,7 +825,9 @@ function Dashboard({
         (activityFilter === "all" ||
           (activityFilter === "unread"
             ? session.unreadActivity
-            : !!session.lastViewedAt)) &&
+            : activityFilter === "to-close"
+              ? !!session.needsClosing
+              : !!session.lastViewedAt)) &&
         `${session.title} ${session.description} ${session.client ?? ""} ${(session.tags ?? []).join(" ")}`
           .toLocaleLowerCase(locale)
           .includes(query),
@@ -834,6 +844,51 @@ function Dashboard({
               : b.updatedAt.localeCompare(a.updatedAt),
     );
   const activeSessions = workspaceSessions.filter((s) => !s.archived);
+  // Follows the workspace, not the folder or search, so the count is stable.
+  const toClose = workspaceSessions.filter((s) => s.needsClosing);
+  // The list shows exactly what the banner counts.
+  const showingToClose =
+    activityFilter === "to-close" &&
+    folder === null &&
+    !archived &&
+    !filter &&
+    !roleFilter;
+  const showToClose = () => {
+    setArchived(false);
+    setFolder(null);
+    setFilter("");
+    setRoleFilter("");
+    setActivityFilter("to-close");
+  };
+  // When empty: all are closed, or those to close are in another location.
+  const toCloseEmpty = activityFilter === "to-close" && !filter && !roleFilter;
+  const openLifecycle = (session: SessionSummary) => {
+    setMutationId(session.id);
+    void api<SessionResponse>(`/sessions/${session.id}`)
+      .then(setLifecycleSession)
+      .catch((error) => setError(error.message))
+      .finally(() => setMutationId(""));
+  };
+  // Opens the close dialog, which confirms and asks who facilitated.
+  const closingReminder = (session: SessionSummary) => (
+    <button
+      className="closing-reminder"
+      disabled={!!mutationId}
+      onClick={() => openLifecycle(session)}
+      aria-label={t(
+        `Séance terminée : clôturer « ${session.title} »`,
+        `Session over: close “${session.title}”`,
+      )}
+      title={t(
+        "Clôturez la séance pour figer son agenda et l’inclure dans le rapport des séances.",
+        "Close the session to freeze its agenda and include it in the session report.",
+      )}
+    >
+      <CalendarCheck size={15} aria-hidden="true" />
+      <strong>{t("Séance terminée", "Session over")}</strong>
+      <span>{t("Clôturer ?", "Close it?")}</span>
+    </button>
+  );
   const sessionActions = (session: SessionSummary) => (
     <details className="session-actions">
       <summary
@@ -851,11 +906,7 @@ function Dashboard({
           disabled={!!mutationId}
           onClick={(event) => {
             event.currentTarget.closest("details")?.removeAttribute("open");
-            setMutationId(session.id);
-            void api<SessionResponse>(`/sessions/${session.id}`)
-              .then(setLifecycleSession)
-              .catch((error) => setError(error.message))
-              .finally(() => setMutationId(""));
+            openLifecycle(session);
           }}
         >
           <CheckCircle2 size={16} />
@@ -1205,6 +1256,40 @@ function Dashboard({
               {notice}
             </p>
           )}
+          {!archived && toClose.length > 0 && (
+            <div className="closing-summary">
+              <CalendarCheck size={18} aria-hidden="true" />
+              <p>
+                <strong>
+                  {toClose.length === 1
+                    ? t(
+                        "1 séance terminée n’est pas encore clôturée",
+                        "1 finished session is not closed yet",
+                      )
+                    : t(
+                        `${toClose.length} séances terminées ne sont pas encore clôturées`,
+                        `${toClose.length} finished sessions are not closed yet`,
+                      )}
+                </strong>
+                <span>
+                  {t(
+                    "Seules les séances clôturées comptent dans le rapport des séances. Une séance n’a pas encore eu lieu ? Corrigez sa date dans l’agenda.",
+                    "Only closed sessions count in the session report. A session has not taken place yet? Correct its date in the agenda.",
+                  )}
+                </span>
+              </p>
+              <button
+                className="button secondary"
+                onClick={
+                  showingToClose ? () => setActivityFilter("all") : showToClose
+                }
+              >
+                {showingToClose
+                  ? t("Afficher toutes les séances", "Show all sessions")
+                  : t("Voir les séances à clôturer", "Show sessions to close")}
+              </button>
+            </div>
+          )}
           <div className="section-heading dashboard-section-heading">
             <div>
               <h2>
@@ -1280,6 +1365,9 @@ function Dashboard({
                   </option>
                   <option value="recent">
                     {t("Ouvertes récemment", "Recently opened")}
+                  </option>
+                  <option value="to-close">
+                    {t("À clôturer", "To close")}
                   </option>
                 </select>
               </label>
@@ -1457,6 +1545,7 @@ function Dashboard({
                               </span>
                             )}
                           </button>
+                          {session.needsClosing && closingReminder(session)}
                           <p>
                             {session.description ||
                               t("Aucune description", "No description")}
@@ -1602,6 +1691,7 @@ function Dashboard({
                         )}
                       </span>
                     </div>
+                    {s.needsClosing && closingReminder(s)}
                     <div className="session-card-bottom">
                       <Avatar src={user.avatar} name={user.name} small />
                       <span>
@@ -1642,37 +1732,57 @@ function Dashboard({
                 <BookOpen size={29} />
               </span>
               <h3>
-                {filter || roleFilter
-                  ? t("Aucune séance trouvée", "No sessions found")
-                  : childFolders.length
-                    ? t("Ouvrez un sous-dossier", "Open a subfolder")
-                    : folder !== null
-                      ? t(
-                          "Aucune séance à cet emplacement",
-                          "No sessions in this location",
-                        )
-                      : archived
-                        ? t("Vos archives sont vides", "Your archive is empty")
-                        : t(
-                            "Votre prochaine séance commence ici",
-                            "Your next session starts here",
-                          )}
+                {toCloseEmpty
+                  ? toClose.length
+                    ? t(
+                        "Aucune séance à clôturer ici",
+                        "No sessions to close here",
+                      )
+                    : t("Aucune séance à clôturer", "No sessions to close")
+                  : filter || roleFilter
+                    ? t("Aucune séance trouvée", "No sessions found")
+                    : childFolders.length
+                      ? t("Ouvrez un sous-dossier", "Open a subfolder")
+                      : folder !== null
+                        ? t(
+                            "Aucune séance à cet emplacement",
+                            "No sessions in this location",
+                          )
+                        : archived
+                          ? t(
+                              "Vos archives sont vides",
+                              "Your archive is empty",
+                            )
+                          : t(
+                              "Votre prochaine séance commence ici",
+                              "Your next session starts here",
+                            )}
               </h3>
               <p>
-                {filter || roleFilter
-                  ? t(
-                      "Essayez un autre terme ou changez le filtre de rôle.",
-                      "Try another search term or change the role filter.",
-                    )
-                  : folder !== null
+                {toCloseEmpty
+                  ? toClose.length
                     ? t(
-                        "Ce dossier est vide. Vous pouvez créer une séance ici, gérer le dossier ou revenir à tous les dossiers.",
-                        "This folder is empty. Create a session here, manage the folder, or return to all folders.",
+                        "Des séances terminées restent à clôturer dans un autre emplacement.",
+                        "Finished sessions still need closing in another location.",
                       )
                     : t(
-                        "Une réunion d’équipe, un atelier, une journée de travail…",
-                        "A team meeting, a workshop, a working day…",
-                      )}
+                        "Toutes les séances terminées sont clôturées : elles comptent dans le rapport des séances.",
+                        "Every finished session is closed: they all count in the session report.",
+                      )
+                  : filter || roleFilter
+                    ? t(
+                        "Essayez un autre terme ou changez le filtre de rôle.",
+                        "Try another search term or change the role filter.",
+                      )
+                    : folder !== null
+                      ? t(
+                          "Ce dossier est vide. Vous pouvez créer une séance ici, gérer le dossier ou revenir à tous les dossiers.",
+                          "This folder is empty. Create a session here, manage the folder, or return to all folders.",
+                        )
+                      : t(
+                          "Une réunion d’équipe, un atelier, une journée de travail…",
+                          "A team meeting, a workshop, a working day…",
+                        )}
               </p>
               {(filter || roleFilter) && (
                 <button
@@ -1685,7 +1795,21 @@ function Dashboard({
                   {t("Effacer les filtres", "Clear filters")}
                 </button>
               )}
-              {!filter && !roleFilter && !archived && (
+              {toCloseEmpty && (
+                <button
+                  className="button secondary"
+                  onClick={
+                    toClose.length
+                      ? showToClose
+                      : () => setActivityFilter("all")
+                  }
+                >
+                  {toClose.length
+                    ? t("Voir les séances à clôturer", "Show sessions to close")
+                    : t("Afficher toutes les séances", "Show all sessions")}
+                </button>
+              )}
+              {!filter && !roleFilter && !archived && !toCloseEmpty && (
                 <div className="button-row">
                   <button
                     className="button primary"
@@ -1840,6 +1964,14 @@ function Dashboard({
             onDeleted={() => {
               void refreshDashboard().catch((e) => setError(e.message));
             }}
+            onClosed={() =>
+              setNotice(
+                t(
+                  "Séance clôturée : elle compte désormais dans le rapport des séances.",
+                  "Session closed: it now counts in the session report.",
+                ),
+              )
+            }
           />
         )}
         {reportTrash && (
