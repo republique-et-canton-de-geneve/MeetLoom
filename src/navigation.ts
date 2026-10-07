@@ -16,6 +16,46 @@ async function mayLeave() {
   }
   return true;
 }
+const WORKSPACE_PARAM = "workspace";
+/** The dashboard address showing one scope: "all", "personal" or a workspace
+ * id. A bare "/" resumes the account's last choice instead. */
+export function dashboardUrl(scope: string) {
+  return `/?${new URLSearchParams({ [WORKSPACE_PARAM]: scope })}`;
+}
+const workspaceKey = (userId: string) => `meetloom.workspace.${userId}`;
+/** The scope a dashboard opens on: the address (reload, Back, bookmark), then
+ * this account's last choice in this browser, then every workspace. Storage
+ * may be missing or throw (private browsing, blocked site data). */
+export function dashboardWorkspace(
+  url: string,
+  userId: string,
+  storage?: Pick<Storage, "getItem">,
+) {
+  const asked = new URL(url, "http://localhost").searchParams
+    .get(WORKSPACE_PARAM)
+    ?.trim();
+  if (asked) return asked;
+  try {
+    return (
+      (storage ?? localStorage).getItem(workspaceKey(userId))?.trim() || "all"
+    );
+  } catch {
+    return "all";
+  }
+}
+/** Remembers the account's last scope; without storage, the address still
+ * carries it. */
+export function rememberWorkspace(
+  userId: string,
+  scope: string,
+  storage?: Pick<Storage, "setItem">,
+) {
+  try {
+    (storage ?? localStorage).setItem(workspaceKey(userId), scope);
+  } catch {
+    /* Storage is optional. */
+  }
+}
 const key = "__meetloomNavigation";
 interface Entry {
   url: string;
@@ -158,6 +198,26 @@ export class AsyncNavigation {
         this.pending = undefined;
       });
     return this.pending;
+  };
+  /** Rewrites the current entry's query without a guard, a new entry or a
+   * route change, for state that only refines the page shown (the dashboard's
+   * workspace). Another origin or path is refused, so it can never leave a
+   * page past its guards. It first waits for a navigation or Back/Forward
+   * that is settling, because the browser's current entry may already be the
+   * target, and React runs the effects of a page reached by a click before
+   * the navigation that mounted it has settled. */
+  replace = async (url: string) => {
+    await this.settled();
+    if (!this.active || this.pending || this.restoring) return false;
+    const from = new URL(this.current.url);
+    const target = new URL(url, from);
+    if (target.origin !== from.origin || target.pathname !== from.pathname)
+      return false;
+    if (target.href !== this.current.url) {
+      this.current = { ...this.current, url: target.href };
+      this.host.replace(this.current.state, target.href);
+    }
+    return true;
   };
   /** Allows tests and callers to await an already requested browser traversal. */
   settled() {

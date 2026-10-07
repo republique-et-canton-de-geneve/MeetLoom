@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { member, signIn } from "./helpers";
+import { createSession, member, signIn } from "./helpers";
 
 test("a visitor link shows the agenda but never the team's private notes", async ({
   browser,
@@ -113,4 +113,33 @@ test("participants and organizers talk in one conversation, answers marked as th
   await expect(answer).toHaveCount(0);
   await answered.locator(".chat-folded").click();
   await expect(answer).toContainText("Équipe");
+});
+
+test("the chosen workspace stays selected after one of its sessions and after a reload", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.getByRole("button", { name: "Créer un espace" }).click();
+  await page.getByLabel("Nom de l’espace").fill("Équipe E2E");
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  await page
+    .locator(".modal", { hasText: "Gérer l’espace" })
+    .getByRole("button", { name: "Fermer" })
+    .click();
+  const chosen = page.locator("#workspace-switcher option:checked");
+  await expect(chosen).toHaveText("Équipe E2E");
+  await createSession(page, "Rétro d’équipe");
+  await page.getByRole("button", { name: "Toutes les séances" }).click();
+  await expect(chosen).toHaveText("Équipe E2E");
+  await expect(page).toHaveURL(/\/\?workspace=[0-9a-f-]+$/);
+  await expect(page.getByText("Rétro d’équipe").first()).toBeVisible();
+  await page.reload();
+  await expect(chosen).toHaveText("Équipe E2E");
+  // Coming back without anything to save names "all" in the address too.
+  await page.locator("#workspace-switcher").selectOption("all");
+  await page.getByText("Rétro d’équipe").first().click();
+  await expect(page.locator(".display-time-control")).toBeVisible();
+  await page.getByRole("button", { name: "Toutes les séances" }).click();
+  await expect(chosen).toHaveText("Tous mes espaces");
+  await expect(page).toHaveURL(/\/\?workspace=all$/);
 });

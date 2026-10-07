@@ -2,7 +2,7 @@
 
 ## Workspaces and access
 
-The dashboard selector shows all accessible sessions, personal sessions only, or one workspace. **Create workspace** makes you its administrator. **Manage** lets you change its name, organization, logo, and members.
+The dashboard selector shows all accessible sessions, personal sessions only, or one workspace. The choice stays selected when you come back from a session (**All sessions**, the logo) or from the account pages, and after a reload. The address names it (`/?workspace=…`), so it can be bookmarked, and this browser remembers each account's last choice. A workspace you can no longer access falls back to all workspaces. Accepting an invitation opens all workspaces, so the session or workspace just shared is visible. **Create workspace** makes you its administrator. **Manage** lets you change its name, organization, logo, and members.
 
 Workspace administrators manage settings and access. Editors can create and edit workspace sessions; viewers can read them. Members can access all sessions in their workspace. Guests have only the access granted individually to selected sessions. The **Members and guests** tab shows the sessions each person can access and lets you remove all their access within that workspace.
 

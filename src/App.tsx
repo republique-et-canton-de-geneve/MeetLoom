@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   type ReactNode,
   useRef,
@@ -59,7 +60,13 @@ import {
 } from "./ui";
 import type { FolderListing } from "../shared/folders";
 import NotificationBell from "./NotificationBell";
-import { browserNavigation, type AsyncNavigation } from "./navigation";
+import {
+  browserNavigation,
+  dashboardUrl,
+  dashboardWorkspace,
+  rememberWorkspace,
+  type AsyncNavigation,
+} from "./navigation";
 import type { Workspace, WorkspaceSummary } from "../shared/workspaces";
 import "./dashboard.css";
 import "./workspaces.css";
@@ -143,6 +150,9 @@ function AppRoutes() {
   const navigate = (url: string) => {
     void navigation.current?.navigate(url);
   };
+  const replaceUrl = useCallback((url: string) => {
+    void navigation.current?.replace(url);
+  }, []);
   const refresh = () =>
     api<AuthStatus>("/auth/status")
       .then(setAuth)
@@ -199,7 +209,7 @@ function AppRoutes() {
           <AcceptSessionInvitation
             token={inviteToken}
             onAccepted={() => {
-              navigate("/");
+              navigate(dashboardUrl("all"));
               void refresh();
             }}
           />
@@ -215,7 +225,7 @@ function AppRoutes() {
         auth={auth}
         inviteToken={inviteToken}
         onSuccess={() => {
-          navigate("/");
+          navigate(inviteToken ? dashboardUrl("all") : "/");
           refresh();
         }}
       />,
@@ -249,7 +259,12 @@ function AppRoutes() {
       />,
     );
   return withAnnouncement(
-    <Dashboard user={auth.user} navigate={navigate} logout={logout} />,
+    <Dashboard
+      user={auth.user}
+      navigate={navigate}
+      replaceUrl={replaceUrl}
+      logout={logout}
+    />,
   );
 }
 
@@ -522,16 +537,20 @@ function AuthScreen({
 function Dashboard({
   user,
   navigate,
+  replaceUrl,
   logout,
 }: {
   user: User;
   navigate: (url: string) => void;
+  replaceUrl: (url: string) => void;
   logout: () => void;
 }) {
   const { t, locale } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
-  const [workspaceId, setWorkspaceId] = useState("all");
+  const [workspaceId, setWorkspaceId] = useState(() =>
+    dashboardWorkspace(location.href, user.id),
+  );
   const [workspacePanel, setWorkspacePanel] = useState("");
   const [lifecycleSession, setLifecycleSession] =
     useState<SessionResponse | null>(null);
@@ -546,8 +565,13 @@ function Dashboard({
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.id === workspaceId,
   );
+  // A remembered or linked workspace is trusted once the list has loaded.
+  const awaitingWorkspace =
+    workspaceId !== "all" && workspaceId !== "personal" && !selectedWorkspace;
   const canCreate =
-    !selectedWorkspace || ["admin", "editor"].includes(selectedWorkspace.role);
+    !awaitingWorkspace &&
+    (!selectedWorkspace ||
+      ["admin", "editor"].includes(selectedWorkspace.role));
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [archived, setArchived] = useState(false);
@@ -567,6 +591,7 @@ function Dashboard({
     "create" | "rename" | "delete" | null
   >(null);
   const loadFolders = async () => {
+    if (awaitingWorkspace) return;
     if (selectedWorkspace?.role === "guest") {
       setFolderListing({ version: 0, folders: [], editable: false });
       return;
@@ -609,6 +634,12 @@ function Dashboard({
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+  // The address and this browser keep the scope for reloads and returns.
+  useEffect(() => {
+    if (awaitingWorkspace) return;
+    rememberWorkspace(user.id, workspaceId);
+    replaceUrl(dashboardUrl(workspaceId));
+  }, [awaitingWorkspace, replaceUrl, user.id, workspaceId]);
   useEffect(() => {
     const closeMenus = (event: Event) => {
       if (event instanceof KeyboardEvent && event.key !== "Escape") return;
@@ -905,11 +936,11 @@ function Dashboard({
     <div className="app-shell dashboard-shell">
       <aside className="sidebar">
         <a
-          href="/"
+          href={dashboardUrl(workspaceId)}
           className="brand-link"
           onClick={(e) => {
             e.preventDefault();
-            navigate("/");
+            navigate(dashboardUrl(workspaceId));
           }}
         >
           <Brand />
@@ -927,6 +958,11 @@ function Dashboard({
               setFilter("");
             }}
           >
+            {awaitingWorkspace && (
+              <option value={workspaceId}>
+                {t("Chargement…", "Loading…")}
+              </option>
+            )}
             <option value="all">
               {t("Tous mes espaces", "All my workspaces")}
             </option>
