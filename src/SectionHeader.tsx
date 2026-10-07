@@ -1,4 +1,4 @@
-import { useState, type DragEventHandler } from "react";
+import { useState, type DragEventHandler, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Ungroup } from "lucide-react";
 import { useI18n } from "./i18n";
 
@@ -21,7 +21,8 @@ export default function SectionHeader({
 }: {
   label: string;
   span: string;
-  duration: string;
+  /** The planned duration, or planned against actual once played. */
+  duration: ReactNode;
   collapsed: boolean;
   editable: boolean;
   bodyId: string;

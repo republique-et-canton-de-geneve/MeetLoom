@@ -40,6 +40,13 @@ test("facilitating: start, move on, come back where the block was, visitors foll
   await expect(page.locator(".timer-bar")).toContainText("Idées");
   // The passed block shows its actual duration.
   await expect(page.locator(".actual-duration").first()).toHaveText("< 1 min");
+  // Next to it, the gap and the plan captured when the timer started.
+  const compared = page.locator(".duration-compare").first();
+  await expect(compared).toContainText("prévu 5 min");
+  await expect(compared.locator(".duration-gap")).toHaveAttribute(
+    "data-gap",
+    "early",
+  );
   await page.getByTitle(/Bloc précédent/).click();
   await expect(page.locator(".timer-bar")).toContainText("Accueil");
   // Five minutes planned: the time already spent is kept, not restarted.
@@ -109,6 +116,22 @@ test("a finished session shows no countdown, position or schedule estimate, and 
   await expect(bar).not.toContainText("Fin prévue");
   await expect(bar).not.toContainText("Dans le temps prévu");
   await expect(bar).not.toContainText(" / 3");
+  // Every step was played: the day, its section and the session total
+  // compare the plan with the time spent.
+  const section = page.locator(".agenda-section").filter({
+    has: page.getByRole("button", {
+      name: "Développer ou replier la section Construire",
+    }),
+  });
+  for (const total of [
+    page.locator(".duration-pill"),
+    page.locator(".agenda-end"),
+    page.locator(".agenda-summary-actual"),
+    section.locator(".section-totals"),
+  ])
+    await expect(total.locator(".run-compare")).toContainText(
+      /Prévu \d.*réel \d/,
+    );
 
   // "Use actual durations" rewrites the agenda, but the run history keeps
   // the initial plan, which can be put back at any time.
@@ -133,6 +156,7 @@ test("a finished session shows no countdown, position or schedule estimate, and 
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
   await expect(duration(page, "Idées")).toHaveValue(planned);
+  await expect(page.locator(".duration-pill .run-compare")).toHaveCount(0);
 });
 
 test("a visitor whose clock is ten minutes fast still sees the right countdown", async ({

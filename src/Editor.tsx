@@ -66,6 +66,7 @@ import {
   mapBlocks,
   blockDuration,
   cloneBlockTree,
+  runComparison,
 } from "../shared/domain";
 import { useI18n } from "./i18n";
 import {
@@ -88,10 +89,11 @@ import AssigneePicker from "./AssigneePicker";
 import { exportSessionCsv } from "./export";
 import { PrintableAgenda } from "./PrintableAgenda";
 import {
-  ActualDurationsContext,
   actualDurationLabel,
   ClockField,
   DurationField,
+  RunCompare,
+  RunContext,
 } from "./TimeFields";
 import SessionOverview from "./SessionOverview";
 import ColumnResizer from "./ColumnResizer";
@@ -674,10 +676,16 @@ export default function Editor({
       }
       label={`${t("Durée de", "Duration of")} ${block.title}`}
       change={(duration) => editBlock(block.id, { duration })}
-      blockId={block.id}
+      block={block}
     />
   );
   const dayDuration = day.blocks.reduce((sum, b) => sum + blockDuration(b), 0);
+  // Planned against actual, once every step of the day has been played.
+  const dayComparison = runComparison(session.run, day.blocks);
+  const runDay = session.days.find((d) => d.id === session.run.dayId);
+  const runDayComparison = runDay
+    ? runComparison(session.run, runDay.blocks)
+    : null;
   const saveText =
     status === "saved"
       ? t("Tout est enregistré", "All changes saved")
@@ -722,16 +730,32 @@ export default function Editor({
   // Every block renders the same way, at the top level or inside a group:
   // a group is only a container around its blocks.
   const actualChip = (block: Block) => {
-    const actual =
-      session.run.status === "idle"
-        ? undefined
-        : session.run.actualDurations?.[block.id];
-    return actual === undefined ? null : (
+    // Played, not just left: the timer can go back to a step it left.
+    const played = runComparison(session.run, [block]);
+    return played ? (
       <span
         className="actual-duration"
         title={t("Durée réelle", "Actual duration")}
       >
-        {actualDurationLabel(actual)}
+        {actualDurationLabel(played.actualSeconds)}
+      </span>
+    ) : null;
+  };
+  // A container compares its plan with the time spent once all its steps
+  // have been played; until then it shows its planned duration.
+  const containerDuration = (block: Block) => {
+    const comparison = runComparison(session.run, [block]);
+    return comparison ? (
+      <RunCompare comparison={comparison} />
+    ) : (
+      <span
+        className="container-duration"
+        title={t(
+          "Durée calculée à partir des activités",
+          "Duration computed from the activities",
+        )}
+      >
+        ({durationLabel(blockDuration(block))})
       </span>
     );
   };
@@ -787,16 +811,7 @@ export default function Editor({
       )}
       <div className="container-meta">
         {startTimeCell(block, startMinute, dayAnchor)}
-        <span
-          className="container-duration"
-          title={t(
-            "Durée calculée à partir des activités",
-            "Duration computed from the activities",
-          )}
-        >
-          ({durationLabel(blockDuration(block))})
-        </span>
-        {actualChip(block)}
+        {containerDuration(block)}
       </div>
       <div className="container-title-row">
         <button
@@ -1446,6 +1461,8 @@ export default function Editor({
   ): ReactNode => {
     const first = day.blocks[start],
       rows = scheduled.slice(start, end),
+      sectionBlocks = day.blocks.slice(start, end),
+      comparison = runComparison(session.run, sectionBlocks),
       key = `${day.id}:${label}`,
       collapsed = collapsedSections.has(key),
       atEnd: BlockDestination = {
@@ -1472,11 +1489,18 @@ export default function Editor({
         <SectionHeader
           label={label}
           span={`${formatTime(rows[0].startMinute)} – ${formatTime(rows.at(-1)!.endMinute)}`}
-          duration={durationLabel(
-            day.blocks
-              .slice(start, end)
-              .reduce((sum, block) => sum + blockDuration(block), 0),
-          )}
+          duration={
+            comparison ? (
+              <RunCompare comparison={comparison} />
+            ) : (
+              durationLabel(
+                sectionBlocks.reduce(
+                  (sum, block) => sum + blockDuration(block),
+                  0,
+                ),
+              )
+            )
+          }
           collapsed={collapsed}
           editable={editable}
           bodyId={`agenda-section-${rank}`}
@@ -1528,13 +1552,7 @@ export default function Editor({
   return (
     <DisplayTimeProvider userId={user.id}>
       <MentionProvider sessionId={session.id}>
-        <ActualDurationsContext.Provider
-          value={
-            session.run.status === "idle"
-              ? undefined
-              : session.run.actualDurations
-          }
-        >
+        <RunContext.Provider value={session.run}>
           <div
             className="app-shell editor-shell"
             onKeyDown={(e) => {
@@ -1680,6 +1698,12 @@ export default function Editor({
                 <div className="agenda-summary">
                   <span>{t("DURÉE TOTALE", "TOTAL DURATION")}</span>
                   <strong>{durationLabel(totalDuration(session))}</strong>
+                  {runDay && runDayComparison && (
+                    <p className="agenda-summary-actual">
+                      {session.days.length > 1 && <span>{runDay.title}</span>}
+                      <RunCompare comparison={runDayComparison} />
+                    </p>
+                  )}
                   <div className="category-bar">
                     {categories.map((category) => {
                       const n = session.days
@@ -1927,7 +1951,11 @@ export default function Editor({
                       </span>
                     </span>
                     <span className="duration-pill">
-                      {durationLabel(dayDuration)}
+                      {dayComparison ? (
+                        <RunCompare comparison={dayComparison} />
+                      ) : (
+                        durationLabel(dayDuration)
+                      )}
                     </span>
                   </div>
                   <Timer
@@ -2584,8 +2612,12 @@ export default function Editor({
                         </strong>
                         <span>{t("Fin de la séance", "End of session")}</span>
                         <span>
-                          {durationLabel(dayDuration)} · {day.blocks.length}{" "}
-                          {t("blocs", "blocks")}
+                          {dayComparison ? (
+                            <RunCompare comparison={dayComparison} />
+                          ) : (
+                            durationLabel(dayDuration)
+                          )}{" "}
+                          · {day.blocks.length} {t("blocs", "blocks")}
                         </span>
                       </div>
                     )}
@@ -3100,7 +3132,7 @@ export default function Editor({
               options={printAgenda?.options}
             />
           </div>
-        </ActualDurationsContext.Provider>
+        </RunContext.Provider>
       </MentionProvider>
     </DisplayTimeProvider>
   );

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Role, Session } from "../shared/model.js";
 import type { RunRecord } from "../shared/history.js";
-import { runnableBlocks } from "../shared/domain.js";
+import { runnableBlocks, wholeSeconds } from "../shared/domain.js";
 import type { Database, Sql } from "./db.js";
 
 /**
@@ -40,7 +40,8 @@ export async function recordFinishedRun(
       id: block.id,
       title: block.title,
       planned: run.plannedDurations?.[block.id] ?? block.duration * 60,
-      actual: Math.round(run.actualDurations?.[block.id] ?? 0),
+      // Counted like the agenda, so both show the same minutes and gap.
+      actual: wholeSeconds(run.actualDurations?.[block.id] ?? 0),
     })),
     plan: run.plannedDurations ?? {},
   };

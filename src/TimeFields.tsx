@@ -1,33 +1,101 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
+import { runComparison, type RunComparison } from "../shared/domain";
+import type { PublicBlock, RunState } from "../shared/model";
 import { useI18n } from "./i18n";
 import { parseClock, parseDuration, shiftClock } from "./time-input";
+import { durationGapLabel, durationLabel } from "./ui";
 
-/** Seconds actually spent per block during the current run, by block ID. */
-export const ActualDurationsContext = createContext<
-  Record<string, number> | undefined
+/** The session's run, so a played block compares its actual time with its
+ * plan. */
+export const RunContext = createContext<
+  | Pick<
+      RunState,
+      "status" | "blockId" | "plannedDurations" | "actualDurations"
+    >
+  | undefined
 >(undefined);
 
 export const actualDurationLabel = (seconds: number) =>
   seconds < 60 ? "< 1 min" : `${Math.floor(seconds / 60)} min`;
+
+const gapPhrase = (t: (fr: string, en: string) => string, minutes: number) =>
+  minutes === 0
+    ? t("Dans le temps prévu", "On schedule")
+    : minutes > 0
+      ? t(
+          `${durationLabel(minutes)} de retard`,
+          `${durationLabel(minutes)} late`,
+        )
+      : t(
+          `${durationLabel(-minutes)} d’avance`,
+          `${durationLabel(-minutes)} early`,
+        );
+
+/** The signed gap, coloured like the timer: blue early, amber late, red from
+ * five minutes late. */
+function GapBadge({
+  comparison,
+  hidden = false,
+}: {
+  comparison: RunComparison;
+  hidden?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <span
+      className="duration-gap"
+      data-gap={comparison.state}
+      title={gapPhrase(t, comparison.deltaMinutes)}
+      aria-hidden={hidden || undefined}
+    >
+      {durationGapLabel(comparison.deltaMinutes)}
+    </span>
+  );
+}
+
+/** "Prévu 30 min · réel 31 min [+1 min]", for a group, a day or a session. */
+export function RunCompare({ comparison }: { comparison: RunComparison }) {
+  const { t } = useI18n();
+  const planned = durationLabel(comparison.plannedMinutes),
+    actual = durationLabel(comparison.actualMinutes),
+    phrase = gapPhrase(t, comparison.deltaMinutes);
+  return (
+    <span
+      className="run-compare"
+      title={t(
+        `Prévu au lancement du minuteur : ${planned} · réel : ${actual} · ${phrase}`,
+        `Planned when the timer started: ${planned} · actual: ${actual} · ${phrase}`,
+      )}
+    >
+      <span>{`${t("Prévu", "Planned")} ${planned} ·`}</span>
+      <span>
+        {t("réel", "actual")}{" "}
+        <span className="run-compare-actual">{actual}</span>
+      </span>
+      <GapBadge comparison={comparison} />
+    </span>
+  );
+}
 
 export function DurationField({
   value,
   change,
   label,
   readOnly = false,
-  blockId,
+  block,
 }: {
   value: number;
   change: (value: number) => void;
   label: string;
   readOnly?: boolean;
-  /** Shows the block's actual duration once the timer has moved past it. */
-  blockId?: string;
+  /** Compares the block's actual time with its plan once the timer has
+   * moved past it. */
+  block?: PublicBlock;
 }) {
   const { t } = useI18n();
-  const actuals = useContext(ActualDurationsContext);
-  const actual = blockId === undefined ? undefined : actuals?.[blockId];
+  const run = useContext(RunContext);
+  const comparison = run && block ? runComparison(run, [block]) : null;
   const [showPlanned, setShowPlanned] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -69,28 +137,47 @@ export function DurationField({
     setInvalid(false);
     change(next);
   };
-  if (actual !== undefined && !showPlanned) {
-    const seconds = Math.round(actual);
+  if (comparison && !showPlanned) {
+    // The plan is the one captured when the timer started: extensions and
+    // applied actual durations change the agenda, not the comparison.
+    const planned = comparison.plannedMinutes;
+    // Whole seconds rounded down, like the chip and the gap.
+    const seconds = comparison.actualSeconds;
     const spent = `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
-    const explanation = t(
-      `Durée réelle : ${spent} · prévue : ${displayValue} min`,
-      `Actual duration: ${spent} · planned: ${displayValue} min`,
-    );
+    const phrase = gapPhrase(t, comparison.deltaMinutes);
+    const explanation =
+      t(
+        `Durée réelle : ${spent} · prévue : ${planned} min · ${phrase}`,
+        `Actual duration: ${spent} · planned: ${planned} min · ${phrase}`,
+      ) +
+      (Number(displayValue) !== planned
+        ? t(
+            ` · durée dans l’agenda : ${displayValue} min`,
+            ` · duration in the agenda: ${displayValue} min`,
+          )
+        : "");
     return (
-      <button
-        type="button"
-        className="actual-duration"
-        title={
-          readOnly
-            ? explanation
-            : `${explanation} · ${t("cliquer pour modifier la durée prévue", "click to edit the planned duration")}`
-        }
-        aria-label={`${label} · ${explanation}`}
-        disabled={readOnly}
-        onClick={() => setShowPlanned(true)}
-      >
-        {actualDurationLabel(actual)}
-      </button>
+      <span className="duration-compare">
+        <button
+          type="button"
+          className="actual-duration"
+          title={
+            readOnly
+              ? explanation
+              : `${explanation} · ${t("cliquer pour modifier la durée dans l’agenda", "click to edit the duration in the agenda")}`
+          }
+          aria-label={`${label} · ${explanation}`}
+          disabled={readOnly}
+          onClick={() => setShowPlanned(true)}
+        >
+          {actualDurationLabel(comparison.actualSeconds)}
+        </button>
+        <GapBadge comparison={comparison} hidden />
+        <span className="planned-duration" aria-hidden="true">
+          {/* A narrow column wraps it before the number, never before "min". */}
+          {t(`prévu ${planned}\u00a0min`, `planned ${planned}\u00a0min`)}
+        </span>
+      </span>
     );
   }
   const stepButton = (direction: -1 | 1) =>

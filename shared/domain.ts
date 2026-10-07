@@ -833,7 +833,7 @@ type TimedSession =
   | Pick<Session, "days" | "run" | "sound">
   | (PublicSession & { sound?: SoundSettings });
 const plannedBlockSeconds = (
-  run: RunState,
+  run: Pick<RunState, "plannedDurations">,
   block: PublicBlock | null | undefined,
 ): number => {
   if (!block) return 0;
@@ -841,6 +841,76 @@ const plannedBlockSeconds = (
     ? run.plannedDurations[block.id]
     : block.duration * 60;
 };
+/** Whole seconds rounded down, as the agenda and the run records count
+ * them. The tolerance absorbs the floating-point noise of adding up timer
+ * stints: 599.9999999999 s is ten minutes. */
+export const wholeSeconds = (seconds: number) => Math.floor(seconds + 1e-6);
+const wholeMinutes = (seconds: number) =>
+  Math.floor(wholeSeconds(seconds) / 60);
+export interface RunComparison {
+  plannedMinutes: number;
+  actualMinutes: number;
+  /** Time spent in whole seconds, for the "8 min 50 s" detail. */
+  actualSeconds: number;
+  /** actualMinutes − plannedMinutes: the difference of the two numbers shown. */
+  deltaMinutes: number;
+  /** 5 min or more over is very late, as on the timer. */
+  state: "on-time" | "early" | "late" | "very-late";
+}
+/** Whole minutes rounded down, like every agenda duration. */
+export function compareDurations(
+  plannedSeconds: number,
+  actualSeconds: number,
+): RunComparison {
+  const spent = wholeSeconds(actualSeconds),
+    plannedMinutes = wholeMinutes(plannedSeconds),
+    actualMinutes = Math.floor(spent / 60),
+    deltaMinutes = actualMinutes - plannedMinutes;
+  return {
+    plannedMinutes,
+    actualMinutes,
+    actualSeconds: spent,
+    deltaMinutes,
+    state:
+      deltaMinutes === 0
+        ? "on-time"
+        : deltaMinutes < 0
+          ? "early"
+          : deltaMinutes >= 5
+            ? "very-late"
+            : "late",
+  };
+}
+/** The plan captured when the timer started against the time spent, for the
+ * timed steps under `blocks` (one row, a group, a day). Null while idle, for
+ * notes and empty groups, and until every one of these steps was played. */
+export function runComparison(
+  run: Pick<
+    RunState,
+    "status" | "blockId" | "plannedDurations" | "actualDurations"
+  >,
+  blocks: readonly PublicBlock[],
+): RunComparison | null {
+  const actual = run.actualDurations,
+    steps = runnableBlocks(blocks),
+    // The timer can go back to a step it had left (+1/+5 on the previous
+    // step after an automatic advance): it keeps its key but is not over.
+    current =
+      run.status === "running" || run.status === "paused" ? run.blockId : null;
+  if (
+    run.status === "idle" ||
+    !actual ||
+    !steps.length ||
+    !steps.every(
+      (block) => block.id !== current && Object.hasOwn(actual, block.id),
+    )
+  )
+    return null;
+  return compareDurations(
+    steps.reduce((sum, block) => sum + plannedBlockSeconds(run, block), 0),
+    steps.reduce((sum, block) => sum + actual[block.id], 0),
+  );
+}
 /**
  * A day's blocks with new durations (seconds per timed step, from a run):
  * whole minutes rounded down when `actual`, and a parallel step spread over
@@ -862,11 +932,11 @@ export function withStepDurations<D extends { id: string; blocks: Block[] }>(
             if (actual && block.kind === "parallel")
               return spreadParallelActual(
                 block,
-                Math.floor(durations[block.id] / 60 + 1e-9),
+                wholeMinutes(durations[block.id]),
               );
             // Whole minutes, rounded down: the agenda never shows seconds.
             const duration = actual
-              ? Math.floor(durations[block.id] / 60 + 1e-9)
+              ? wholeMinutes(durations[block.id])
               : durations[block.id] / 60;
             if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
               throw new Error("Actual duration exceeds agenda limit");

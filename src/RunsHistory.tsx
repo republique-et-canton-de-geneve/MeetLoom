@@ -1,16 +1,9 @@
 import { Flag, RotateCcw, Timer as TimerIcon } from "lucide-react";
 import type { Session } from "../shared/model";
 import type { RunRecord } from "../shared/history";
+import { compareDurations } from "../shared/domain";
 import { useI18n } from "./i18n";
-import { durationLabel } from "./ui";
-
-/** Signed whole minutes: "+3 min", "−2 min", "=". */
-function gap(seconds: number) {
-  const minutes = Math.round(seconds / 60);
-  return minutes === 0
-    ? "="
-    : `${minutes > 0 ? "+" : "−"}${Math.abs(minutes)} min`;
-}
+import { durationGapLabel, durationLabel } from "./ui";
 
 /**
  * Every finished run, newest first. The first run of each day is the initial
@@ -69,12 +62,11 @@ export default function RunsHistory({
           played = run.blocks.filter((block) => block.actual > 0),
           planned = run.blocks.reduce((sum, block) => sum + block.planned, 0),
           actual = played.reduce((sum, block) => sum + block.actual, 0),
-          late = Math.round(
-            played.reduce(
-              (sum, block) => sum + block.actual - block.planned,
-              0,
-            ) / 60,
-          );
+          // Whole minutes rounded down, like the gaps shown in the agenda.
+          late = compareDurations(
+            played.reduce((sum, block) => sum + block.planned, 0),
+            actual,
+          ).deltaMinutes;
         return (
           <article
             className={`history-run ${first ? "is-initial" : ""}`}
@@ -139,7 +131,10 @@ export default function RunsHistory({
                       </td>
                       <td>
                         {block.actual > 0
-                          ? gap(block.actual - block.planned)
+                          ? durationGapLabel(
+                              compareDurations(block.planned, block.actual)
+                                .deltaMinutes,
+                            )
                           : "—"}
                       </td>
                     </tr>

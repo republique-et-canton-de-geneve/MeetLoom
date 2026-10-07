@@ -57,11 +57,12 @@
     visibility: visible;
   }
 }
-/* Completed blocks show their actual duration in a distinct colour. */
+/* Completed blocks show their actual duration in a dashed, neutral chip:
+ * the colour belongs to the gap next to it. */
 .actual-duration {
-  border: 1px dashed #c9a24a;
-  background: #fbf5e6;
-  color: #7a5a12;
+  border: 1px dashed #879783;
+  background: #fff;
+  color: var(--ink);
   border-radius: 4px;
   padding: 3px 7px;
   font-size: 12px;
@@ -1754,4 +1755,68 @@
   .session-navigation .content-nav-row .nav-item {
     max-width: 160px;
   }
+}
+/* Once played, a block's time cell stacks its actual time, the gap and the
+ * plan captured when the timer started; containers and days read
+ * "Prévu · réel · écart" on one line. */
+.duration-compare {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+}
+.duration-gap {
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 17px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: #f0f3f0;
+  color: #4f6357;
+}
+.duration-gap[data-gap="early"] {
+  background: #e1f0fb;
+  color: #184766;
+}
+.duration-gap[data-gap="late"] {
+  background: #fbeed7;
+  color: #6b4608;
+}
+.duration-gap[data-gap="very-late"] {
+  background: #fde2e1;
+  color: #7a1c1a;
+}
+.planned-duration {
+  font-size: 10.5px;
+  color: #5c6b62;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.run-compare {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #5c6b62;
+  font-variant-numeric: tabular-nums;
+}
+.run-compare-actual {
+  font-weight: 650;
+  color: var(--ink);
+}
+.agenda-end .run-compare {
+  font-size: 11px;
+}
+/* The sidebar is narrow: the run's day sits on its own line. */
+.agenda-summary-actual {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #5c6b62;
 }

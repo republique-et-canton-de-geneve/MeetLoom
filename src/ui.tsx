@@ -220,6 +220,11 @@ export function durationLabel(duration: number) {
     ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}`
     : `${value} min`;
 }
+/** A signed gap in whole minutes: "+3 min", "−2 min", "=". */
+export const durationGapLabel = (minutes: number) =>
+  minutes === 0
+    ? "="
+    : `${minutes > 0 ? "+" : "−"}${durationLabel(Math.abs(minutes))}`;
 export function Avatar({
   name,
   small = false,
