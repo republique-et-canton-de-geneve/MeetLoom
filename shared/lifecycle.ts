@@ -1,5 +1,5 @@
 import type { Role, Session } from "./model.js";
-import { localDate, runnableBlocks } from "./domain.js";
+import { DEFAULT_TIMEZONE, localDate, runnableBlocks } from "./domain.js";
 export interface SessionLifecycle {
   closedAt: string;
   facilitatorIds: string[];
@@ -74,7 +74,10 @@ export function sessionNeedsClosing(
   )
     return true;
   const created = new Date(session.createdAt);
-  return (
-    last < today && (Number.isNaN(created.getTime()) || dayOf(created) < last)
-  );
+  if (Number.isNaN(created.getTime())) return last < today;
+  // New sessions are dated in the default timezone: in the evening west of
+  // it, that is the day after their creation in their own timezone.
+  const own = dayOf(created),
+    dated = localDate(created, DEFAULT_TIMEZONE);
+  return last < today && (own > dated ? own : dated) < last;
 }

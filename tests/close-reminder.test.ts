@@ -130,6 +130,33 @@ test("a session still on its creation date is flagged only once its timer finish
   assert.equal(sessionNeedsClosing(dated, "owner", later), true);
 });
 
+test("a session created in the evening west of Zurich is not flagged while still on its creation date", () => {
+  // 19:00 in New York is already the next day in Zurich, where new sessions
+  // are dated: their date is a day after their creation in New York.
+  const zurich = createSession(
+      "o",
+      "W",
+      "en",
+      true,
+      at("2026-10-01T23:00:00Z"),
+    ),
+    newYork = { ...zurich, timezone: "America/New_York" };
+  assert.equal(zurich.days[0].date, "2026-10-02");
+  for (const now of ["2026-10-03T16:00:00Z", "2026-10-04T16:00:00Z"]) {
+    assert.equal(sessionNeedsClosing(newYork, "owner", at(now)), false, now);
+    assert.equal(sessionNeedsClosing(zurich, "owner", at(now)), false, now);
+  }
+  // Dated after its creation in both calendars, it is flagged once past.
+  const dated = {
+    ...newYork,
+    days: [{ ...newYork.days[0], date: "2026-10-03" }],
+  };
+  assert.equal(
+    sessionNeedsClosing(dated, "owner", at("2026-10-04T16:00:00Z")),
+    true,
+  );
+});
+
 test("checking a long session list reuses one date format per timezone", (t) => {
   const s = workshop(),
     now = at("2026-10-05T08:00:00Z"),
@@ -216,4 +243,36 @@ test("the session list flags a finished session for those who may close it, unti
   const summary = await listed(h.owner);
   assert.equal(summary.needsClosing, false);
   assert.ok(summary.closedAt);
+});
+
+test("a copy of a delivered session is not flagged on the dashboard", async (t) => {
+  const h = await harness(t);
+  await h.setup();
+  const s = await h.session();
+  const past = await h.owner.request(`/sessions/${s.id}`, "PUT", {
+    version: s.version,
+    session: { ...s, days: [{ ...s.days[0], date: "2020-01-15" }] },
+  });
+  assert.equal(past.status, 200, JSON.stringify(past.body));
+  // Prepared before its date, like a real workshop.
+  const [row] = await h.db.all<{ payload: string }>(
+    "SELECT payload FROM sessions WHERE id=$1",
+    [s.id],
+  );
+  await h.db.run("UPDATE sessions SET payload=$1 WHERE id=$2", [
+    JSON.stringify({
+      ...JSON.parse(row.payload),
+      createdAt: "2020-01-01T08:00:00.000Z",
+    }),
+    s.id,
+  ]);
+  // The copy keeps the past date but is created now: it has not taken place.
+  const copy = await h.owner.request(`/sessions/${s.id}/duplicate`, "POST", {});
+  assert.equal(copy.status, 201, JSON.stringify(copy.body));
+  assert.equal(copy.body.session.days[0].date, "2020-01-15");
+  const listed = (await h.owner.request("/sessions")).body.sessions;
+  const flag = (id: string) =>
+    listed.find((item: { id: string }) => item.id === id).needsClosing;
+  assert.equal(flag(s.id), true);
+  assert.equal(flag(copy.body.session.id), false);
 });

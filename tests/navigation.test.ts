@@ -6,6 +6,8 @@ import {
   dashboardWorkspace,
   registerNavigationGuard,
   rememberWorkspace,
+  resolveWorkspace,
+  signInTarget,
   type NavigationHost,
 } from "../src/navigation.js";
 function memory(initial = "/session/one") {
@@ -266,6 +268,29 @@ test("blocked browser storage (private browsing) falls back to all workspaces wi
   assert.equal(
     dashboardWorkspace("https://meetloom.test/?workspace=w-2", "u1", blocked),
     "w-2",
+  );
+});
+test("a workspace this account cannot see (deleted, left, or an old link) falls back to all of them", () => {
+  const listed = ["w-1", "w-2"];
+  for (const scope of ["all", "personal", "w-1", "w-2"])
+    assert.equal(resolveWorkspace(scope, listed), scope);
+  assert.equal(resolveWorkspace("w-gone", listed), "all");
+  assert.equal(resolveWorkspace("w-1", []), "all");
+});
+test("signing in keeps the workspace a dashboard address names, while an invitation opens all of them", () => {
+  const uuid = "6f1c2a52-7d3e-4b8a-9c1f-2e5d8a7b6c40";
+  assert.equal(
+    signInTarget(`https://meetloom.test/?workspace=${uuid}`, false),
+    `/?workspace=${uuid}`,
+  );
+  assert.equal(signInTarget("https://meetloom.test/", false), "/");
+  assert.equal(
+    signInTarget(`https://meetloom.test/join/token?workspace=${uuid}`, true),
+    dashboardUrl("all"),
+  );
+  assert.equal(
+    signInTarget("https://meetloom.test/session/one?block=b", false),
+    "/",
   );
 });
 test("replace rewrites the dashboard address without a guard, a new entry or a route change, and Back returns to it", async () => {
