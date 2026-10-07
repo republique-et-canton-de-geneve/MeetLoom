@@ -81,7 +81,8 @@ import {
 import { useSession } from "./useSession";
 import { api, download } from "./api";
 import Timer from "./Timer";
-import TimerMinimapProgress from "./TimerMinimapProgress";
+import AgendaMinimap from "./AgendaMinimap";
+import { categoryMinutes, openAncestors, type MinimapItem } from "./minimap";
 import { ColumnsPanel, SettingsPanel, SharePanel } from "./panels";
 import ImportPanel from "./ImportPanel";
 import LifecyclePanel from "./LifecyclePanel";
@@ -556,6 +557,26 @@ export default function Editor({
   const containsActive = (block: Block) =>
     ["running", "paused"].includes(session.run.status) &&
     allBlocks([block]).some((b) => b.id === session.run.blockId);
+  // The minimap shows blocks inside collapsed groups and other room tabs:
+  // open them so the title is rendered before it is scrolled to.
+  const jumpToBlock = ({ block, ancestors }: MinimapItem) => {
+    setSelectedContent(null);
+    setPanel(null);
+    setCollapsedSections(new Set());
+    if (ancestors.length) {
+      const open = openAncestors(
+        { collapsed: collapsedBlocks, roomTabs },
+        ancestors,
+      );
+      setCollapsedBlocks(open.collapsed);
+      setRoomTabs(open.roomTabs);
+    }
+    requestAnimationFrame(() => {
+      const input = titleInputs.current.get(block.id);
+      input?.scrollIntoView({ block: "center", behavior: "smooth" });
+      input?.focus({ preventScroll: true });
+    });
+  };
   const createBlock = (kind: Exclude<InsertKind, "section">) =>
     newBlock(locale, {
       ...(kind === "activity" ? {} : { kind }),
@@ -686,6 +707,10 @@ export default function Editor({
   const runDayComparison = runDay
     ? runComparison(session.run, runDay.blocks)
     : null;
+  // Activities inside groups and rooms count in their own category.
+  const minutesByCategory = categoryMinutes(
+    session.days.flatMap((d) => d.blocks),
+  );
   const saveText =
     status === "saved"
       ? t("Tout est enregistré", "All changes saved")
@@ -1654,47 +1679,11 @@ export default function Editor({
                 }}
               />
               <div className="sidebar-bottom">
-                <div
-                  className="agenda-minimap"
-                  aria-label={t(
-                    "Navigation dans l’agenda",
-                    "Agenda navigation",
-                  )}
-                >
-                  {scheduled.map(({ block, startMinute }) => (
-                    <button
-                      key={block.id}
-                      className={`category-bg-${block.category} ${containsActive(block) ? "minimap-current" : ""}`}
-                      style={{
-                        flex: Math.max(blockDuration(block), 1),
-                        backgroundColor: categoryColor(
-                          block.category,
-                          session.categories,
-                        ),
-                      }}
-                      title={`${formatTime(startMinute)} · ${block.title} · ${durationLabel(blockDuration(block))}`}
-                      aria-label={`${t("Aller à", "Jump to")} ${block.title}`}
-                      onClick={() => {
-                        setSelectedContent(null);
-                        setPanel(null);
-                        setCollapsedSections(new Set());
-                        requestAnimationFrame(() => {
-                          const input = titleInputs.current.get(block.id);
-                          input?.scrollIntoView({
-                            block: "center",
-                            behavior: "smooth",
-                          });
-                          input?.focus({ preventScroll: true });
-                        });
-                      }}
-                    >
-                      {containsActive(block) && (
-                        <TimerMinimapProgress session={session} block={block} />
-                      )}
-                      <span>{block.title}</span>
-                    </button>
-                  ))}
-                </div>
+                <AgendaMinimap
+                  session={session}
+                  day={day}
+                  onJump={jumpToBlock}
+                />
                 <div className="agenda-summary">
                   <span>{t("DURÉE TOTALE", "TOTAL DURATION")}</span>
                   <strong>{durationLabel(totalDuration(session))}</strong>
@@ -1706,10 +1695,7 @@ export default function Editor({
                   )}
                   <div className="category-bar">
                     {categories.map((category) => {
-                      const n = session.days
-                        .flatMap((d) => d.blocks)
-                        .filter((b) => b.category === category)
-                        .reduce((a, b) => a + b.duration, 0);
+                      const n = minutesByCategory.get(category) ?? 0;
                       return (
                         n > 0 && (
                           <span
