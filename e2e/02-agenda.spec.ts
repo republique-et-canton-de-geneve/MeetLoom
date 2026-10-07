@@ -129,13 +129,52 @@ test("on a phone the editor fits the screen and days keep their names", async ({
   ).toBe(true);
 });
 
-test("zoomed in, the whole sidebar can still be scrolled to", async ({
+test("the sidebar gives the folders the height left, and scrolls when zoomed in", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
+  const sidebar = page.locator(".sidebar");
+  const height = async (selector: string) =>
+    (await sidebar.locator(selector).boundingBox())?.height ?? 0;
+  // A desktop window about 900 px tall: the folders take what the
+  // navigation leaves, and the account footer shows the avatar beside the name.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(220);
+  const avatar = (await sidebar
+    .locator(".sidebar-user .avatar")
+    .boundingBox())!;
+  const name = (await sidebar.locator(".sidebar-user strong").boundingBox())!;
+  expect(name.x).toBeGreaterThanOrEqual(avatar.x + avatar.width);
+  // No placeholder card without a workspace; the hint shows only in "all",
+  // the one view where folders cannot be managed.
+  const card = sidebar.locator(".workspace-card");
+  const hint = sidebar.locator(".folder-note");
+  await expect(card).toHaveCount(0);
+  await expect(hint).toHaveText(
+    "Sélectionnez un espace pour gérer les dossiers.",
+  );
+  await page.locator("#workspace-switcher").selectOption("personal");
+  await expect(hint).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  // A narrower window: no height cap, and the name wraps instead of being cut.
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(250);
+  expect(
+    await sidebar
+      .locator(".sidebar-user strong")
+      .evaluate(
+        (element) =>
+          element.scrollWidth <= element.clientWidth &&
+          element.scrollHeight <= element.clientHeight,
+      ),
+  ).toBe(true);
   // A laptop browser zoomed to 150% leaves about this much room.
   await page.setViewportSize({ width: 900, height: 480 });
-  const sidebar = page.locator(".sidebar");
+  expect(await height(".dashboard-folders")).toBeGreaterThanOrEqual(150);
   for (const target of [
     sidebar.getByRole("button", { name: "Signaler un problème" }),
     sidebar.locator(".sidebar-user"),

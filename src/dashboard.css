@@ -1,9 +1,40 @@
 .dashboard-shell .dashboard-folders {
-  margin-top: 22px;
+  margin-top: 16px;
   min-height: 0;
 }
 .dashboard-shell .sidebar-user {
   margin-top: auto;
+}
+/* The dashboard's user block opens the account page. */
+.sidebar-user-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+  margin: -6px;
+  padding: 6px;
+}
+.sidebar-user-link > div {
+  min-width: 0;
+}
+.sidebar-user-link:hover {
+  background: #f3f7f3;
+}
+.sidebar-user-link:hover small {
+  color: var(--green);
+  text-decoration: underline;
+}
+/* The name wraps to a second line rather than being cut: the box is under
+   80 px wide in windows of 1180 px and narrower. */
+.dashboard-shell .sidebar-user strong {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 @media (min-width: 651px) {
   /* Folders take the remaining height and scroll, keeping every folder
@@ -11,8 +42,21 @@
   .dashboard-shell .dashboard-folders {
     flex: 1 1 auto;
     overflow-y: auto;
-    /* Short windows: a few folders stay visible; the sidebar scrolls. */
-    min-height: 120px;
+    /* Short windows: four folders stay visible; the sidebar scrolls. */
+    min-height: 160px;
+  }
+  .dashboard-shell .brand-link {
+    padding-bottom: 6px;
+  }
+  .dashboard-shell .workspace-selector {
+    margin-bottom: 16px;
+  }
+  .dashboard-shell .workspace-card {
+    margin-bottom: 16px;
+  }
+  .dashboard-shell .sidebar .nav-item {
+    padding-top: 9px;
+    padding-bottom: 9px;
   }
 }
 .dashboard-folders .nav-caption {
@@ -397,7 +441,6 @@
 }
 @media (max-width: 1000px) {
   .dashboard-shell .dashboard-folders {
-    max-height: 220px;
     overflow-y: auto;
   }
   .dashboard-controls {

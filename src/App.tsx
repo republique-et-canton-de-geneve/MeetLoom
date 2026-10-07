@@ -1048,28 +1048,27 @@ function Dashboard({
             )}
           </div>
         </div>
-        <div className="workspace-card">
-          <span className="workspace-icon">
-            {selectedWorkspace?.logo ? (
-              <img
-                src={selectedWorkspace.logo}
-                alt=""
-                className="workspace-small-logo"
-              />
-            ) : (
-              <Leaf size={19} />
-            )}
-          </span>
-          <div>
-            <strong>
-              {selectedWorkspace?.name ?? t("Mon espace", "My workspace")}
-            </strong>
-            <span>
-              {selectedWorkspace?.organization ||
-                t("Personnel & équipe", "Personal & team")}
+        {selectedWorkspace && (
+          <div className="workspace-card">
+            <span className="workspace-icon">
+              {selectedWorkspace.logo ? (
+                <img
+                  src={selectedWorkspace.logo}
+                  alt=""
+                  className="workspace-small-logo"
+                />
+              ) : (
+                <Leaf size={19} />
+              )}
             </span>
+            <div>
+              <strong>{selectedWorkspace.name}</strong>
+              {selectedWorkspace.organization && (
+                <span>{selectedWorkspace.organization}</span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <nav>
           <button className="nav-item" onClick={() => setReportTrash("report")}>
             <BarChart3 size={18} />
@@ -1155,12 +1154,14 @@ function Dashboard({
               <small>{folderContents(path).length}</small>
             </button>
           ))}
-          <p className="folder-note">
-            {t(
-              "Les dossiers et sous-dossiers vides sont conservés. Sélectionnez un espace pour les gérer.",
-              "Empty folders and subfolders are retained. Select a workspace to manage them.",
-            )}
-          </p>
+          {workspaceId === "all" && (
+            <p className="folder-note">
+              {t(
+                "Sélectionnez un espace pour gérer les dossiers.",
+                "Select a workspace to manage folders.",
+              )}
+            </p>
+          )}
         </nav>
         <div className="sidebar-user">
           <a
