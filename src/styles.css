@@ -843,12 +843,15 @@ hr {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Two lines, then an ellipsis: the box is exactly two of its own lines high
+   (the global paragraph line-height would cut the second line). */
 .session-card > p {
   color: #95a097;
   font-size: 13px;
   padding: 0 19px;
   margin: 4px 0 18px;
-  height: 37px;
+  line-height: 1.5;
+  height: 3em;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2187,155 +2190,258 @@ hr {
   border-radius: 6px;
   margin: 10px 0 0;
 }
+/* The always-on-top progress window. Its sizes come from floatingFit()
+   (src/floating-layout.ts) as pixel variables on <body>: --u (the title),
+   --clock, --detail, --button and the padding, with the same proportions as
+   SHAPES there. data-shape picks the arrangement (strip, box, column) and
+   data-hidden lists what is left out to keep the rest readable. */
 .floating-window {
   margin: 0;
   background: #254e40;
   color: #f5f8f1;
-  padding: 20px;
-  overflow: hidden;
   height: 100vh;
-  display: flex;
-  align-items: center;
-}
-.floating-window .timer-content {
-  width: 100%;
-  font-size: 14px;
-}
-.floating-window .timer-current strong {
-  font-size: 22px;
-}
-.floating-window .timer-clock strong {
-  font-size: 45px;
-}
-.floating-window .timer-kicker {
-  font-size: 12px;
-}
-.floating-window .timer-position,
-.floating-window .timer-schedule {
-  font-size: 12px;
-}
-.floating-window .timer-track {
-  height: 6px;
-  margin-top: 14px;
-}
-.floating-window .timer-track > span {
-  height: 6px;
-}
-/* The always-on-top window keeps its full content at its default size
-   (560 x 188) and larger. Shrinking it scales text down and sheds details
-   step by step; the remaining time and the progress bar always stay. */
-.floating-window {
-  padding: clamp(6px, 3vmin, 20px);
-}
-.floating-window .timer-clock strong {
-  font-size: clamp(18px, min(12vw, 26vh), 45px);
-  line-height: 1.1;
-}
-.floating-window .timer-current strong {
-  font-size: clamp(12px, min(4vw, 12vh), 22px);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (max-height: 150px) {
-  .floating-window .timer-position,
-  .floating-window .timer-left {
-    display: none;
-  }
-  .floating-window .timer-track {
-    margin-top: 6px;
-  }
-}
-@media (max-height: 110px) {
-  .floating-window .timer-kicker,
-  .floating-window .timer-clock span {
-    display: none;
-  }
-}
-/* A thin strip: the block on the left, the clock in the middle and the
-   expected end on the right, the progress bar underneath. */
-@media (max-height: 80px) {
-  .floating-window .timer-content {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: 16px;
-  }
-  .floating-window .timer-current {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .floating-window .timer-clock {
-    grid-column: 2;
-    grid-row: 1;
-    align-items: center;
-  }
-  .floating-window .timer-schedule {
-    grid-column: 3;
-    grid-row: 1;
-    justify-content: flex-end;
-    flex-wrap: nowrap;
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-  }
-  .floating-window .timer-track {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    margin-top: 4px;
-  }
-}
-@media (max-width: 380px) {
-  .floating-window .timer-position,
-  .floating-window .timer-left {
-    display: none;
-  }
-}
-@media (max-width: 260px) {
-  .floating-window .timer-current,
-  .floating-window .timer-schedule,
-  .floating-window .timer-clock span {
-    display: none;
-  }
-  .floating-window .timer-content {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-  .floating-window .timer-clock {
-    grid-column: 1;
-    align-items: center;
-  }
-  .floating-window .timer-track {
-    grid-column: 1;
-    width: 100%;
-  }
-}
-/* Facilitator controls beside the progress, big enough to hit while a
-   slideshow runs underneath. */
-.floating-layout {
   display: flex;
   align-items: center;
-  gap: clamp(6px, 2vw, 14px);
+  padding: var(--pad-y, 12px) var(--pad-x, 12px);
+  font-size: var(--u, 22px);
+}
+.floating-layout {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u, 22px) * 0.8);
   width: 100%;
   min-width: 0;
 }
 .floating-layout > .timer-content {
   flex: 1;
   min-width: 0;
+  gap: 0 calc(var(--u, 22px) * 0.8);
+  align-items: center;
 }
+.floating-window .timer-current {
+  gap: calc(var(--u, 22px) * 0.3);
+}
+.floating-window .timer-current > strong {
+  font-size: var(--u, 22px);
+  line-height: 1.2;
+  font-weight: 560;
+}
+.floating-window .timer-kicker,
+.floating-window .timer-position,
+.floating-window .timer-clock > span,
+.floating-window .timer-schedule,
+.floating-window .timer-delta {
+  font-size: var(--detail, 13px);
+  line-height: 1.3;
+}
+.floating-window .timer-kicker {
+  gap: 0.5em;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.floating-window .timer-position {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floating-window .timer-clock {
+  gap: 0.15em;
+}
+.floating-window .timer-clock strong {
+  font-size: var(--clock, 54px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.floating-window .timer-clock > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.floating-window .timer-track,
+.floating-window .timer-track > span {
+  height: max(4px, calc(var(--u, 22px) * 0.22));
+  border-radius: 99px;
+}
+.floating-window .timer-track {
+  margin-top: calc(var(--u, 22px) * 0.35);
+}
+.floating-window .timer-schedule {
+  margin-top: calc(var(--u, 22px) * 0.4);
+  gap: calc(var(--u, 22px) * 0.3) calc(var(--u, 22px) * 0.4);
+}
+.floating-window .timer-delta {
+  padding: 0.15em 0.6em 0.15em 0.5em;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+.floating-window .timer-delta svg {
+  width: 1em;
+  height: 1em;
+}
+.floating-window .timer-end,
+.floating-window .timer-left {
+  white-space: nowrap;
+}
+/* Facilitator controls and the dock button, sized with the text. */
 .floating-controls {
   display: flex;
   flex-shrink: 0;
-  gap: 2px;
+  gap: calc(var(--u, 22px) * 0.08);
   border-left: 1px solid #4b6c59;
-  padding-left: clamp(4px, 1.5vw, 10px);
+  padding-left: calc(var(--u, 22px) * 0.5);
 }
-.floating-controls .timer-control {
-  width: clamp(26px, min(8vw, 24vh), 38px);
-  height: clamp(26px, min(8vw, 24vh), 38px);
+.floating-window .timer-control {
+  width: var(--button, 40px);
+  height: var(--button, 40px);
+  flex-shrink: 0;
+}
+.floating-window .timer-control svg {
+  width: 50%;
+  height: 50%;
 }
 .floating-controls .timer-control:disabled {
   opacity: 0.35;
+}
+.floating-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: calc(var(--u, 22px) * 0.1);
+}
+/* The dock button: smaller (DOCK in floating-layout.ts) and discreet. */
+.floating-window .floating-dock-toggle {
+  width: calc(var(--button, 40px) * 0.6);
+  height: calc(var(--button, 40px) * 0.6);
+  opacity: 0.5;
+}
+.floating-window .floating-dock-toggle:hover,
+.floating-window .floating-dock-toggle:focus-visible,
+.floating-window .floating-dock-toggle[aria-expanded="true"] {
+  opacity: 1;
+}
+.floating-dock {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px;
+  background: #254e40f2;
+}
+.floating-window .floating-dock .timer-control {
+  width: clamp(28px, min(30vh, 12vw), 48px);
+  height: clamp(28px, min(30vh, 12vw), 48px);
+  background: #ffffff14;
+}
+/* What is left out. */
+.floating-window[data-hidden~="title"] .timer-current > strong,
+.floating-window[data-hidden~="kicker"] .timer-kicker,
+.floating-window[data-hidden~="position"] .timer-position,
+.floating-window[data-hidden~="label"] .timer-clock > span,
+.floating-window[data-hidden~="badge"] .timer-delta,
+.floating-window[data-hidden~="end"] .timer-end,
+.floating-window[data-hidden~="left"] .timer-left {
+  display: none;
+}
+.floating-window[data-hidden~="title"][data-hidden~="kicker"][data-hidden~="position"]
+  .timer-current,
+.floating-window[data-hidden~="badge"][data-hidden~="end"][data-hidden~="left"]
+  .timer-schedule {
+  display: none;
+}
+/* Strip: the block, the clock and the schedule on one line, the progress
+   underneath; the status and position under the title when there is room. */
+.floating-window[data-shape="strip"] .timer-content {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.floating-window[data-shape="strip"] .timer-current {
+  grid-area: 1 / 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--u, 22px) * 0.5);
+  row-gap: 0;
+}
+.floating-window[data-shape="strip"] .timer-current > strong {
+  flex-basis: 100%;
+  order: -1;
+}
+.floating-window[data-shape="strip"] .timer-position {
+  flex: 1;
+  min-width: 0;
+}
+.floating-window[data-shape="strip"] .timer-clock {
+  grid-area: 1 / 2;
+}
+.floating-window[data-shape="strip"] .timer-clock > span {
+  display: none;
+}
+.floating-window[data-shape="strip"] .timer-schedule {
+  grid-area: 1 / 3;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+.floating-window[data-shape="strip"] .timer-track {
+  grid-area: 2 / 1 / 3 / -1;
+}
+.floating-window[data-shape="strip"][data-hidden~="title"] .timer-clock {
+  grid-column: 1 / 3;
+  align-items: center;
+}
+/* Box: the block and the clock, the progress, then the schedule. The title
+   takes a second line when floatingFit gave it one. */
+.floating-window[data-shape="box"] .timer-current {
+  align-self: center;
+}
+.floating-window[data-title-lines="2"] .timer-current > strong {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* Column: everything stacked and centred, the title on two lines at most. */
+.floating-window[data-shape="column"] .floating-layout {
+  flex-direction: column;
+}
+.floating-window[data-shape="column"] .floating-layout > .timer-content {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+}
+.floating-window[data-shape="column"] .timer-current {
+  align-items: center;
+  width: 100%;
+}
+.floating-window[data-shape="column"] .timer-current > strong {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.floating-window[data-shape="column"] .timer-position {
+  max-width: 100%;
+}
+.floating-window[data-shape="column"] .timer-clock {
+  align-items: center;
+  margin-top: calc(var(--u, 22px) * 0.3);
+}
+.floating-window[data-shape="column"] .timer-track {
+  width: 100%;
+}
+.floating-window[data-shape="column"] .timer-schedule {
+  flex-direction: column;
+  align-items: center;
+}
+.floating-window[data-shape="column"] .floating-controls {
+  border-left: 0;
+  padding-left: 0;
 }
 .modal {
   width: min(550px, calc(100vw - 36px));

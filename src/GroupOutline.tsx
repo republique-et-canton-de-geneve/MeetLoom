@@ -10,6 +10,7 @@ import type { Block } from "../shared/model";
 import { blockDuration, newBlock } from "../shared/domain";
 import type { BlockDestination } from "./block-tree";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import { DurationField } from "./TimeFields";
 import { durationLabel } from "./ui";
 
@@ -114,7 +115,7 @@ export default function GroupOutline({
                 <GripVertical size={14} />
               </span>
             )}
-            <input
+            <TextField
               ref={(element) => {
                 if (element) inputs.current.set(child.id, element);
                 else inputs.current.delete(child.id);
@@ -123,7 +124,7 @@ export default function GroupOutline({
               value={child.title}
               readOnly={!editable}
               maxLength={200}
-              onChange={(e) => change(child.id, { title: e.target.value })}
+              change={(title) => change(child.id, { title })}
               onKeyDown={(event) => {
                 if (
                   event.key === "Enter" &&

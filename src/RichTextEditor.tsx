@@ -59,6 +59,32 @@ const Mention = TiptapNode.create({
   },
 });
 
+/** Where the editing bar goes: above the text by default, below it when the
+ * text sits too close to the top of the window or of its scrolling panel,
+ * and moved left when it would leave the window on the right. It floats, so
+ * the text under the pointer never moves. */
+function toolbarPlacement(
+  box: { top: number; left: number },
+  bar: { width: number; height: number },
+  limits: { top: number; right: number },
+): { below: boolean; shift: number } {
+  return {
+    below: box.top - bar.height - 4 < limits.top,
+    shift: Math.min(0, limits.right - 8 - (box.left + bar.width)),
+  };
+}
+
+/** The top of the area a bar above `element` can show in: the window, or a
+ * scrolling ancestor that would clip it. */
+function visibleTop(element: HTMLElement) {
+  let top = 0;
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (/(auto|scroll|hidden)/.test(getComputedStyle(node).overflowY))
+      top = Math.max(top, node.getBoundingClientRect().top);
+  }
+  return top;
+}
+
 export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -73,6 +99,8 @@ export interface RichTextEditorProps {
 /** Only the focused cell mounts ProseMirror, keeping large agendas inexpensive. */
 export function RichTextEditor(props: RichTextEditorProps) {
   const [active, setActive] = useState(false);
+  // Where the preview was clicked, so the caret lands there.
+  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
   if (props.disabled)
     return <RichText value={props.value} className={props.className} />;
   return (
@@ -92,7 +120,7 @@ export function RichTextEditor(props: RichTextEditorProps) {
       }}
     >
       {active ? (
-        <ActiveEditor {...props} />
+        <ActiveEditor {...props} point={point} />
       ) : (
         <div
           className="rich-editor-preview"
@@ -102,9 +130,16 @@ export function RichTextEditor(props: RichTextEditorProps) {
           aria-multiline="true"
           onMouseDown={(event) => {
             event.preventDefault();
-            flushSync(() => setActive(true));
+            const at = { x: event.clientX, y: event.clientY };
+            flushSync(() => {
+              setPoint(at);
+              setActive(true);
+            });
           }}
-          onFocus={() => setActive(true)}
+          onFocus={() => {
+            setPoint(null);
+            setActive(true);
+          }}
           onClick={() => setActive(true)}
         >
           {props.value ? (
@@ -124,9 +159,12 @@ function ActiveEditor({
   placeholder,
   ariaLabel,
   maxLength = RICH_TEXT_LIMIT,
-}: RichTextEditorProps) {
+  point,
+}: RichTextEditorProps & { point: { x: number; y: number } | null }) {
   const { t } = useI18n();
   const collaborators = useMentionCollaborators();
+  // Only the opening click places the caret; later clicks are the editor's.
+  const opening = useRef(point);
   const change = useRef(onChange),
     lastEmitted = useRef(value);
   change.current = onChange;
@@ -191,7 +229,9 @@ function ActiveEditor({
       Mention,
     ],
     content: richTextDocument(value),
-    autofocus: "end",
+    // Focus is set below, where the text was clicked: Tiptap's own autofocus
+    // would move the caret to the end and scroll the page there.
+    autofocus: false,
     immediatelyRender: true,
     editorProps: {
       handleKeyDown: (_view, event) => mentionKeys.current(event),
@@ -246,12 +286,46 @@ function ActiveEditor({
   useLayoutEffect(() => {
     if (!editor) return;
     // EditorContent attaches in its layout lifecycle. Focus synchronously so the
-    // first click and immediately typed characters land in the editable view.
+    // first click and immediately typed characters land in the editable view,
+    // at the clicked spot (the text is laid out exactly like the preview).
+    const { doc } = editor.state,
+      at = opening.current;
+    const hit = at ? editor.view.posAtCoords({ left: at.x, top: at.y }) : null;
     editor.view.dispatch(
-      editor.state.tr.setSelection(TextSelection.atEnd(editor.state.doc)),
+      editor.state.tr.setSelection(
+        hit
+          ? TextSelection.near(doc.resolve(hit.pos))
+          : TextSelection.atEnd(doc),
+      ),
     );
     editor.view.focus();
   }, [editor]);
+  const floating = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState({ below: false, shift: 0 });
+  useLayoutEffect(() => {
+    const place = () => {
+      const bar = floating.current,
+        box = bar?.parentElement;
+      if (!bar || !box) return;
+      const next = toolbarPlacement(
+        box.getBoundingClientRect(),
+        { width: bar.offsetWidth, height: bar.offsetHeight },
+        { top: visibleTop(box), right: document.documentElement.clientWidth },
+      );
+      setPlacement((current) =>
+        current.below === next.below && current.shift === next.shift
+          ? current
+          : next,
+      );
+    };
+    place();
+    window.addEventListener("scroll", place, { capture: true, passive: true });
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, { capture: true });
+      window.removeEventListener("resize", place);
+    };
+  }, [linkOpen]);
   useEffect(() => {
     if (editor && value !== lastEmitted.current) {
       editor.commands.setContent(richTextDocument(value), {
@@ -330,144 +404,154 @@ function ActiveEditor({
   return (
     <>
       <div
-        className="rich-toolbar"
-        role="toolbar"
-        aria-label={t("Mise en forme", "Text formatting")}
+        ref={floating}
+        className={`rich-floating ${placement.below ? "below" : ""}`}
+        style={{ left: placement.shift }}
       >
-        {button(
-          t("Gras", "Bold"),
-          <Bold size={15} />,
-          () => editor.chain().focus().toggleBold().run(),
-          state?.bold,
-        )}
-        {button(
-          t("Italique", "Italic"),
-          <Italic size={15} />,
-          () => editor.chain().focus().toggleItalic().run(),
-          state?.italic,
-        )}
-        {button(
-          t("Souligné", "Underline"),
-          <Underline size={15} />,
-          () => editor.chain().focus().toggleUnderline().run(),
-          state?.underline,
-        )}
-        <span className="rich-toolbar-divider" />
-        {([1, 2, 3] as const).map((level) => (
-          <span key={level}>
-            {button(
-              `${t("Titre", "Heading")} ${level}`,
-              `H${level}`,
-              () => editor.chain().focus().toggleHeading({ level }).run(),
-              state?.heading === level,
-            )}
-          </span>
-        ))}
-        {!!collaborators.length &&
-          button(
-            t("Mentionner un collaborateur", "Mention a collaborator"),
-            "@",
-            () => {
-              editor.commands.focus();
-              const { from, to } = editor.state.selection;
-              setMentionQuery({ from, to, query: "" });
-              setMentionIndex(0);
-            },
-          )}
-        {button(
-          t("Liste à puces", "Bullet list"),
-          <List size={15} />,
-          () => editor.chain().focus().toggleBulletList().run(),
-          state?.bulletList,
-        )}
-        {button(
-          t("Liste numérotée", "Numbered list"),
-          <ListOrdered size={15} />,
-          () => editor.chain().focus().toggleOrderedList().run(),
-          state?.orderedList,
-        )}
-        {button(
-          t("Liste de tâches", "Task list"),
-          <ListTodo size={15} />,
-          () => editor.chain().focus().toggleTaskList().run(),
-          state?.taskList,
-        )}
-        {button(
-          t("Insérer un lien", "Insert link"),
-          <Link2 size={15} />,
-          () => {
-            setLink(editor.getAttributes("link").href ?? "https://");
-            setLinkOpen(!linkOpen);
-          },
-          state?.link,
-        )}
-        {state?.link &&
-          button(
-            t("Retirer le lien", "Remove link"),
-            <Unlink size={15} />,
-            () => editor.chain().focus().unsetLink().run(),
-          )}
-        <label
-          className="rich-color"
-          title={t("Couleur du texte", "Text color")}
+        <div
+          className="rich-toolbar"
+          role="toolbar"
+          aria-label={t("Mise en forme", "Text formatting")}
         >
-          <span aria-hidden="true">A</span>
-          <input
-            type="color"
-            aria-label={t("Couleur du texte", "Text color")}
-            defaultValue="#354d46"
-            onInput={(event) =>
-              editor.chain().focus().setColor(event.currentTarget.value).run()
-            }
-          />
-        </label>
-        {button(
-          t("Surligner", "Highlight"),
-          <Highlighter size={15} />,
-          () =>
-            editor.chain().focus().toggleHighlight({ color: "#fff1a8" }).run(),
-          state?.highlight,
-        )}
-        {button(
-          t("Retirer la mise en forme", "Clear formatting"),
-          <Eraser size={15} />,
-          () => editor.chain().focus().unsetAllMarks().clearNodes().run(),
-        )}
-        {button(t("Annuler", "Undo"), <Undo2 size={15} />, () =>
-          editor.chain().focus().undo().run(),
-        )}
-        {button(t("Rétablir", "Redo"), <Redo2 size={15} />, () =>
-          editor.chain().focus().redo().run(),
+          {button(
+            t("Gras", "Bold"),
+            <Bold size={15} />,
+            () => editor.chain().focus().toggleBold().run(),
+            state?.bold,
+          )}
+          {button(
+            t("Italique", "Italic"),
+            <Italic size={15} />,
+            () => editor.chain().focus().toggleItalic().run(),
+            state?.italic,
+          )}
+          {button(
+            t("Souligné", "Underline"),
+            <Underline size={15} />,
+            () => editor.chain().focus().toggleUnderline().run(),
+            state?.underline,
+          )}
+          <span className="rich-toolbar-divider" />
+          {([1, 2, 3] as const).map((level) => (
+            <span key={level}>
+              {button(
+                `${t("Titre", "Heading")} ${level}`,
+                `H${level}`,
+                () => editor.chain().focus().toggleHeading({ level }).run(),
+                state?.heading === level,
+              )}
+            </span>
+          ))}
+          {!!collaborators.length &&
+            button(
+              t("Mentionner un collaborateur", "Mention a collaborator"),
+              "@",
+              () => {
+                editor.commands.focus();
+                const { from, to } = editor.state.selection;
+                setMentionQuery({ from, to, query: "" });
+                setMentionIndex(0);
+              },
+            )}
+          {button(
+            t("Liste à puces", "Bullet list"),
+            <List size={15} />,
+            () => editor.chain().focus().toggleBulletList().run(),
+            state?.bulletList,
+          )}
+          {button(
+            t("Liste numérotée", "Numbered list"),
+            <ListOrdered size={15} />,
+            () => editor.chain().focus().toggleOrderedList().run(),
+            state?.orderedList,
+          )}
+          {button(
+            t("Liste de tâches", "Task list"),
+            <ListTodo size={15} />,
+            () => editor.chain().focus().toggleTaskList().run(),
+            state?.taskList,
+          )}
+          {button(
+            t("Insérer un lien", "Insert link"),
+            <Link2 size={15} />,
+            () => {
+              setLink(editor.getAttributes("link").href ?? "https://");
+              setLinkOpen(!linkOpen);
+            },
+            state?.link,
+          )}
+          {state?.link &&
+            button(
+              t("Retirer le lien", "Remove link"),
+              <Unlink size={15} />,
+              () => editor.chain().focus().unsetLink().run(),
+            )}
+          <label
+            className="rich-color"
+            title={t("Couleur du texte", "Text color")}
+          >
+            <span aria-hidden="true">A</span>
+            <input
+              type="color"
+              aria-label={t("Couleur du texte", "Text color")}
+              defaultValue="#354d46"
+              onInput={(event) =>
+                editor.chain().focus().setColor(event.currentTarget.value).run()
+              }
+            />
+          </label>
+          {button(
+            t("Surligner", "Highlight"),
+            <Highlighter size={15} />,
+            () =>
+              editor
+                .chain()
+                .focus()
+                .toggleHighlight({ color: "#fff1a8" })
+                .run(),
+            state?.highlight,
+          )}
+          {button(
+            t("Retirer la mise en forme", "Clear formatting"),
+            <Eraser size={15} />,
+            () => editor.chain().focus().unsetAllMarks().clearNodes().run(),
+          )}
+          {button(t("Annuler", "Undo"), <Undo2 size={15} />, () =>
+            editor.chain().focus().undo().run(),
+          )}
+          {button(t("Rétablir", "Redo"), <Redo2 size={15} />, () =>
+            editor.chain().focus().redo().run(),
+          )}
+        </div>
+        {linkOpen && (
+          <div className="rich-link-form">
+            <input
+              type="url"
+              autoFocus
+              value={link}
+              aria-label={t("Adresse du lien", "Link address")}
+              onChange={(event) => setLink(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyLink();
+                }
+                if (event.key === "Escape") {
+                  setLinkOpen(false);
+                  editor.commands.focus();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="button secondary small"
+              onClick={applyLink}
+            >
+              {t("Appliquer", "Apply")}
+            </button>
+          </div>
         )}
       </div>
-      {linkOpen && (
-        <div className="rich-link-form">
-          <input
-            type="url"
-            autoFocus
-            value={link}
-            aria-label={t("Adresse du lien", "Link address")}
-            onChange={(event) => setLink(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                applyLink();
-              }
-              if (event.key === "Escape") {
-                setLinkOpen(false);
-                editor.commands.focus();
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="button secondary small"
-            onClick={applyLink}
-          >
-            {t("Appliquer", "Apply")}
-          </button>
-        </div>
-      )}
       <EditorContent editor={editor} />
       {mentionQuery && !!collaborators.length && (
         <div

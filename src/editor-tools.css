@@ -578,7 +578,8 @@
 .agenda-toolbar .toolbar-group {
   flex-wrap: wrap;
 }
-.block-column .rich-editor-preview {
+.block-column .rich-editor-preview,
+.block-column .rich-editor-content {
   font-size: 13px;
   line-height: 1.6;
 }

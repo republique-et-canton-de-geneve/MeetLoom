@@ -21,6 +21,7 @@ import {
 } from "../shared/domain";
 import { blockSchema } from "../shared/validation";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import AssigneePicker from "./AssigneePicker";
 import { DurationField } from "./TimeFields";
 import { RichTextEditor } from "./RichTextEditor";
@@ -166,13 +167,11 @@ export default function GroupEditor({
           <div className="group-editor-fields">
             <label>
               {t("Titre", "Title")}
-              <input
+              <TextField
                 value={child.title}
                 disabled={disabled}
                 maxLength={240}
-                onChange={(event) =>
-                  edit(child.id, { title: event.target.value })
-                }
+                change={(title) => edit(child.id, { title })}
               />
             </label>
             <div className="group-editor-actions">
@@ -420,17 +419,15 @@ export default function GroupEditor({
         {(value.rooms ?? []).map((room, index) => (
           <section key={room.id} className="group-editor-room">
             <div className="group-editor-room-heading">
-              <input
+              <TextField
                 aria-label={t("Nom de la salle", "Room name")}
                 value={room.title}
                 disabled={disabled}
                 maxLength={120}
-                onChange={(event) =>
+                change={(title) =>
                   edit(value.id, {
                     rooms: value.rooms!.map((item) =>
-                      item.id === room.id
-                        ? { ...item, title: event.target.value }
-                        : item,
+                      item.id === room.id ? { ...item, title } : item,
                     ),
                   })
                 }

@@ -89,7 +89,9 @@ test("facilitating: start, move on, come back where the block was, visitors foll
     "Accueil",
   );
   await expect(visitorFloating.locator(".floating-controls")).toHaveCount(0);
-  await expect(visitorFloating.getByRole("button")).toHaveCount(0);
+  await expect(visitorFloating.getByRole("button")).toHaveAccessibleName(
+    "Ancrer sur un bord de l’écran",
+  );
   await visitorFloating.close();
 
   await page.getByTitle("Pause").click();
@@ -263,4 +265,79 @@ test("a session whose timer finished asks to be closed from the dashboard", asyn
   await expect(
     card.getByRole("button", { name: /Séance terminée/ }),
   ).toHaveCount(0);
+});
+
+test("while it runs, the agenda follows the current block and the floating window grows with its size", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const created = await page.request.post("/api/sessions", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { title: "Suivi E2E", demo: true },
+  });
+  const { session } = await created.json();
+  await page.goto(`/session/${session.id}`);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  // The current block comes up under the sticky timer, and stays in view as
+  // the run moves on.
+  const current = page.locator(".current-block").last();
+  await expect(current).toBeInViewport();
+  for (let step = 0; step < 3; step++) {
+    await page.getByTitle("Bloc suivant").click();
+    await expect(
+      current.getByRole("textbox", { name: "Titre du bloc" }),
+    ).toHaveValue(
+      ["Ce qui fonctionne déjà", "Dessiner les prochaines étapes", "Pause"][
+        step
+      ],
+    );
+    await expect(current).toBeInViewport();
+  }
+  // Someone who scrolled away to read elsewhere is left there.
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  await expect
+    .poll(async () => {
+      const before = await scrollY();
+      await page.waitForTimeout(150);
+      return before === (await scrollY());
+    })
+    .toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(current).not.toBeInViewport();
+  const away = await scrollY();
+  await page.getByTitle("Bloc suivant").click();
+  await expect(
+    current.getByRole("textbox", { name: "Titre du bloc" }),
+  ).toHaveValue("Choisir une expérimentation");
+  await page.waitForTimeout(600);
+  expect(await scrollY()).toBe(away);
+
+  // The always-on-top window lays itself out for its shape, larger as it
+  // grows.
+  const floating = await openFloating(
+    page,
+    page.getByTitle("Fenêtre au premier plan"),
+  );
+  const body = floating.locator("body");
+  const clock = () =>
+    floating
+      .locator(".timer-clock strong")
+      .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+  await floating.setViewportSize({ width: 1400, height: 60 });
+  await expect(body).toHaveAttribute("data-shape", "strip");
+  const thin = await clock();
+  expect(thin).toBeGreaterThanOrEqual(30);
+  await expect(floating.locator(".timer-current strong")).toBeVisible();
+  await expect(floating.locator(".timer-delta")).toBeVisible();
+  await floating.setViewportSize({ width: 1400, height: 450 });
+  await expect(body).toHaveAttribute("data-shape", "box");
+  expect(await clock()).toBeGreaterThan(2.5 * thin);
+  await floating.setViewportSize({ width: 300, height: 800 });
+  await expect(body).toHaveAttribute("data-shape", "column");
+  await floating.close();
+  await page.getByTitle("Réinitialiser").click();
+  await expect(
+    page.getByRole("button", { name: /Animer la séance/ }),
+  ).toBeVisible();
 });
