@@ -243,10 +243,16 @@ export function floatingFit(
       const score = (Object.keys(WEIGHT) as FloatingItem[])
         .filter(show)
         .reduce((sum, item) => sum + WEIGHT[item], 0);
+      // Same information: the larger countdown wins (shapes scale it
+      // differently, so their units do not compare), then the larger text.
+      const countdown = unit * clock,
+        bestCountdown = best ? best.unit * SHAPES[best.shape].clock : 0;
       if (
         !best ||
         score > best.score ||
-        (score === best.score && unit > best.unit)
+        (score === best.score &&
+          (countdown > bestCountdown ||
+            (countdown === bestCountdown && unit > best.unit)))
       )
         best = {
           shape,

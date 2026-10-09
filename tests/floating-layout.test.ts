@@ -137,3 +137,25 @@ test("a finished run keeps its title: no room is kept for the schedule it no lon
   assert.ok(shown(finished, "title"), `hidden: ${finished.hidden}`);
   assert.ok(finished.title >= 14);
 });
+
+test("growing the window never shrinks the countdown while the same items show", () => {
+  // Codex review: 355 x 140 → 360 x 140 switched from a column to a box and
+  // the countdown went from 42.6 to 34.2 px.
+  for (const controls of [true, false])
+    for (let height = 40; height <= 880; height += 40)
+      for (let width = 200; width <= 1600; width += 10) {
+        const content = { controls, clockChars: 5, titleChars: 23 };
+        const from = floatingFit(width, height, content);
+        for (const [w, h] of [
+          [width + 5, height],
+          [width, height + 20],
+        ]) {
+          const to = floatingFit(w, h, content);
+          if (to.hidden.join() === from.hidden.join())
+            assert.ok(
+              to.clock >= from.clock,
+              `${width}x${height} → ${w}x${h}: ${from.shape} ${from.clock} → ${to.shape} ${to.clock}`,
+            );
+        }
+      }
+});

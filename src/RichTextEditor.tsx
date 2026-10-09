@@ -288,7 +288,7 @@ function ActiveEditor({
   }, [editor]);
   const floating = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState({
-    below: false,
+    top: -42,
     shift: 0,
     maxWidth: 560,
   });
@@ -299,6 +299,7 @@ function ActiveEditor({
       if (!bar || !box) return;
       const area = toolbarArea(clippingBoxes(box), {
           width: document.documentElement.clientWidth,
+          height: document.documentElement.clientHeight,
         }),
         maxWidth = Math.min(560, area.width);
       // Measured at the width it will have: a narrow panel wraps it.
@@ -312,7 +313,7 @@ function ActiveEditor({
         maxWidth,
       };
       setPlacement((current) =>
-        current.below === next.below &&
+        current.top === next.top &&
         current.shift === next.shift &&
         current.maxWidth === next.maxWidth
           ? current
@@ -406,8 +407,12 @@ function ActiveEditor({
     <>
       <div
         ref={floating}
-        className={`rich-floating ${placement.below ? "below" : ""}`}
-        style={{ left: placement.shift, maxWidth: placement.maxWidth }}
+        className="rich-floating"
+        style={{
+          top: placement.top,
+          left: placement.shift,
+          maxWidth: placement.maxWidth,
+        }}
       >
         <div
           className="rich-toolbar"

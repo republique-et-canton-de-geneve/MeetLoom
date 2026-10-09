@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { keptText } from "../src/text-input.ts";
+import { keptText, typedAgainst } from "../src/text-input.ts";
 import { normalizeFolder } from "../shared/folders.ts";
 
 test("a saved copy that only trims what is being typed keeps the typed text", () => {
@@ -26,4 +26,14 @@ test("folder paths keep a trailing slash until the next part is typed", () => {
     "Clients / ",
   );
   assert.equal(keptText("Clients/", "Projets", normalizeFolder), "Projets");
+});
+
+test("a real change from elsewhere drops the typed text for good", () => {
+  // Codex review: "Acme " kept, a collaborator writes "Beta", then "Acme"
+  // again: the stale trailing space must not come back.
+  let typed: string | null = "Acme ";
+  typed = typedAgainst(typed, "Beta");
+  assert.equal(typed, null);
+  assert.equal(keptText(typed, "Acme"), "Acme");
+  assert.equal(typedAgainst("Acme ", "Acme"), "Acme ");
 });
