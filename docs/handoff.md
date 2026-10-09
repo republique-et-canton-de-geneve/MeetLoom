@@ -18,6 +18,8 @@ Known limits: the Picture-in-Picture window cannot be placed by the page (browse
 
 Codex's first review (three P2, all confirmed and fixed with tests): a running multi-day session opened on its first day, so nothing was followed (`followedDay`: the editor's initial navigation and the visitor page select the day being run, a visitor's own day choice is kept); in the block inspector the 560 px bar overflowed the 420 px panel and its first buttons were clipped (`src/toolbar-placement.ts`: the area is narrowed by every clipping ancestor, the bar's `max-width` follows it and it wraps); a finished run's window kept room for its absent schedule and hid the title in a 300×100 window (`schedule: false` in `floatingFit`). 421 tests, 25/25 E2E; the new E2E step (second day, reload) failed on the previous head ("Jour 1").
 
+E2E lesson (CI failure on `071f24e`, test-only fix in `3008fe3`): clicking a button in the sticky timer while the follow smooth-scroll is still animating made Playwright scroll the moving button into view, and a sticky element's place is the top of the page; the hook then saw the current block out of view and stopped following, as designed. Journeys wait for the scroll to settle before such clicks.
+
 Next: CI and review on PR #42, then the user's acceptance in a real browser (manual-qa.md, "Still to check by the user"), merge when the user asks.
 
 **PR #37 note (October 7, 2026).** The user sent feedback on 0.1.5 (five screenshots and a screen recording, in French). Branch `claude/focused-archimedes-lyatav`, PR #37 against `main`, one commit per change plus two review-fix commits:
