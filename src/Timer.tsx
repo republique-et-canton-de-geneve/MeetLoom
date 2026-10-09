@@ -238,6 +238,21 @@ export function clock(seconds: number) {
   return `${seconds < 0 ? "+" : ""}${body}`;
 }
 
+/** The status line above the block's title. */
+function statusLine(
+  status: Session["run"]["status"],
+  waiting: boolean,
+  t: (fr: string, en: string) => string,
+) {
+  return waiting
+    ? t("DÉBUT DANS", "STARTS IN")
+    : status === "paused"
+      ? t("EN PAUSE", "PAUSED")
+      : status === "finished"
+        ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
+        : t("EN CE MOMENT", "RIGHT NOW");
+}
+
 export function TimerContent({
   session,
   now,
@@ -270,13 +285,7 @@ export function TimerContent({
               session.run.status === "running" ? "live-dot" : "paused-dot"
             }
           />
-          {waiting
-            ? t("DÉBUT DANS", "STARTS IN")
-            : session.run.status === "paused"
-              ? t("EN PAUSE", "PAUSED")
-              : session.run.status === "finished"
-                ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
-                : t("EN CE MOMENT", "RIGHT NOW")}
+          {statusLine(session.run.status, waiting, t)}
         </span>
         <strong>{block?.title ?? session.title}</strong>
         <span className="timer-position">
@@ -477,6 +486,8 @@ export function FloatingTimer({
     controls: !!children,
     clockChars: shown.length,
     titleChars: (view.block?.title ?? session.title).length,
+    kickerChars: statusLine(session.run.status, view.startsInSeconds > 0, t)
+      .length,
     // As in TimerContent: a finished run has no schedule line or label.
     schedule: session.run.status !== "finished" && view.projectedEnd !== null,
   });

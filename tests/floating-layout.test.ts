@@ -1,10 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { floatingBounds, floatingFit } from "../src/floating-layout.ts";
+import {
+  floatingBounds,
+  floatingFit,
+  statusWidth,
+} from "../src/floating-layout.ts";
 
-// "Bienvenue et intentions", the block of the feedback screenshots.
-const facilitator = { controls: true, clockChars: 5, titleChars: 23 };
-const visitor = { controls: false, clockChars: 5, titleChars: 23 };
+// "Bienvenue et intentions", the block of the feedback screenshots, under
+// "EN CE MOMENT".
+const facilitator = {
+  controls: true,
+  clockChars: 5,
+  titleChars: 23,
+  kickerChars: 12,
+};
+const visitor = { ...facilitator, controls: false };
 const shown = (fit: ReturnType<typeof floatingFit>, item: string) =>
   !fit.hidden.includes(item as never);
 
@@ -132,6 +142,7 @@ test("a finished run keeps its title: no room is kept for the schedule it no lon
     controls: true,
     clockChars: 1,
     titleChars: 23,
+    kickerChars: 15,
     schedule: false,
   });
   assert.ok(shown(finished, "title"), `hidden: ${finished.hidden}`);
@@ -144,7 +155,7 @@ test("growing the window never shrinks the countdown while the same items show",
   for (const controls of [true, false])
     for (let height = 40; height <= 880; height += 40)
       for (let width = 200; width <= 1600; width += 10) {
-        const content = { controls, clockChars: 5, titleChars: 23 };
+        const content = { ...facilitator, controls };
         const from = floatingFit(width, height, content);
         for (const [w, h] of [
           [width + 5, height],
@@ -158,4 +169,44 @@ test("growing the window never shrinks the countdown while the same items show",
             );
         }
       }
+});
+
+test("the status line gets the room its own text needs", () => {
+  // Codex review: under a short title ("Pause") a strip kept no room for
+  // "EN CE MOMENT"; the position then wrapped onto a third line and the
+  // content left 800 x 64 to 1400 x 110 windows. Widths in ems of detail
+  // text, as rendered in Chromium (spaced capitals and the dot before them).
+  for (const [text, rendered] of [
+    ["EN CE MOMENT", 10.06],
+    ["SÉANCE TERMINÉE", 11.98],
+    ["SESSION COMPLETE", 12.76],
+    ["DÉBUT DANS", 8.47],
+    ["PAUSED", 5.61],
+  ] as const)
+    assert.ok(
+      statusWidth(text.length) >= rendered,
+      `${text}: ${statusWidth(text.length)} < ${rendered}`,
+    );
+  // Under "Pause", the sizes that overflowed keep the status line and the
+  // position when they are readable, now with room for them.
+  for (const [width, height] of [
+    [900, 70],
+    [1400, 110],
+  ]) {
+    const short = floatingFit(width, height, { ...facilitator, titleChars: 5 });
+    assert.equal(short.shape, "strip");
+    assert.ok(
+      shown(short, "kicker") && shown(short, "position"),
+      `${width}x${height}: ${short.hidden}`,
+    );
+  }
+});
+
+test("a short title takes one line in a column, leaving room for the rest", () => {
+  const column = floatingFit(200, 350, { ...facilitator, titleChars: 5 });
+  assert.equal(column.shape, "column");
+  assert.equal(column.titleLines, 1);
+  assert.equal(column.hidden.length, 0, `${column.hidden}`);
+  // A long one still gets two.
+  assert.equal(floatingFit(200, 350, facilitator).titleLines, 2);
 });

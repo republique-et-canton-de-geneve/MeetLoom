@@ -4,6 +4,7 @@ import {
   createSession,
   duration,
   member,
+  setDuration,
   signIn,
 } from "./helpers";
 
@@ -341,6 +342,38 @@ test("while it runs, the agenda follows the current block and the floating windo
   expect(await clock()).toBeGreaterThan(2.5 * thin);
   await floating.setViewportSize({ width: 300, height: 800 });
   await expect(body).toHaveAttribute("data-shape", "column");
+  // Whatever the size, nothing it shows is cut off by the window's edges.
+  const cutOff = (win = floating) =>
+    win.evaluate(() =>
+      // HTML boxes: an icon's inner SVG shapes report boxes of their own.
+      [...document.querySelectorAll<HTMLElement>(".floating-layout *")]
+        .filter(
+          (element) =>
+            element instanceof HTMLElement &&
+            getComputedStyle(element).display !== "none" &&
+            element.getBoundingClientRect().width > 0,
+        )
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return (
+            box.left < -1 ||
+            box.top < -1 ||
+            box.right > innerWidth + 1 ||
+            box.bottom > innerHeight + 1
+          );
+        })
+        .map((element) => element.getAttribute("class") ?? element.tagName),
+    );
+  for (const [width, height] of [
+    [200, 70],
+    [200, 350],
+    [402, 152],
+    [731, 59],
+    [1400, 60],
+  ]) {
+    await floating.setViewportSize({ width, height });
+    await expect.poll(() => cutOff()).toEqual([]);
+  }
   await floating.close();
   await page.getByTitle("Réinitialiser").click();
   await expect(
@@ -350,9 +383,28 @@ test("while it runs, the agenda follows the current block and the floating windo
   // Run on its second day, the session opens on that day, for the team and
   // for visitors, so they follow it there.
   await page.getByTitle("Ajouter un jour").click();
-  await addActivities(page, ["Rétrospective", "Suite", "Clôture"]);
+  await addActivities(page, ["Bilan", "Suite", "Clôture"]);
+  await setDuration(page, "Suite", 90);
   await page.getByRole("button", { name: /Animer la séance/ }).click();
-  await expect(page.locator(".timer-bar")).toContainText("Rétrospective");
+  await expect(page.locator(".timer-bar")).toContainText("Bilan");
+  // A title shorter than its status line, with the schedule at its widest
+  // ("Dans le temps prévu", "reste 1 h 50 min"): "Bilan" under "EN CE
+  // MOMENT" once ran onto three lines, out of these strips.
+  const short = await openFloating(
+    page,
+    page.getByTitle("Fenêtre au premier plan"),
+  );
+  await expect(short.locator(".timer-delta")).toContainText(
+    "Dans le temps prévu",
+  );
+  for (const [width, height] of [
+    [900, 70],
+    [1400, 110],
+  ]) {
+    await short.setViewportSize({ width, height });
+    await expect.poll(() => cutOff(short)).toEqual([]);
+  }
+  await short.close();
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Nom du jour" })).toHaveValue(
     "Jour 2",

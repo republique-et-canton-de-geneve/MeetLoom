@@ -70,9 +70,13 @@ const CHAR = 0.56,
   GAP = 0.3,
   GROUP = 0.8,
   TRACK = 0.35 + 0.22;
-/** Characters of each detail ("EN CE MOMENT", "1 / 7 · Jour 1", "Dans le
- * temps prévu", "Fin prévue 15:47", "· reste 1 h 38 min", "restantes"). */
-const CHARS = { kicker: 12 * 1.3, position: 16, badge: 19, end: 16, left: 18 };
+/** Characters of each detail ("1 / 7 · Jour 1", "Dans le temps prévu",
+ * "Fin prévue 15:47", "· reste 1 h 38 min"). */
+const CHARS = { position: 16, badge: 19, end: 16, left: 18 };
+/** Width of the status line ("EN CE MOMENT": spaced capitals after a dot),
+ * in units of detail text, for its number of characters. It never shrinks,
+ * so it is kept whole. */
+export const statusWidth = (chars: number) => chars * 0.7 + 1.8;
 /** The dock button's size, relative to the facilitator buttons. */
 const DOCK = 0.6;
 /** Characters of the title given room for (longer ones end with an
@@ -88,6 +92,8 @@ interface Content {
   titleChars: number;
   /** Characters of the clock ("05:00", "+1:05:00", "✓" once finished). */
   clockChars: number;
+  /** Characters of the status line ("EN CE MOMENT", "SÉANCE TERMINÉE"). */
+  kickerChars: number;
   /** False when the schedule line and the clock's label are not shown (a
    * finished run): no room is kept for them. */
   schedule?: boolean;
@@ -97,13 +103,14 @@ interface Content {
 function measure(
   shape: FloatingShape,
   show: (item: FloatingItem) => boolean,
-  { controls, clockChars, titleChars }: Content,
+  { controls, clockChars, titleChars, kickerChars }: Content,
   { wrapSchedule, titleLines }: { wrapSchedule: boolean; titleLines: 1 | 2 },
 ): [number, number] {
   const { clock, detail, button } = SHAPES[shape];
   const line = detail * LINE,
     badge = detail * 1.6,
     clockWidth = Math.max(clockChars, 1) * DIGIT * clock,
+    kicker = show("kicker") ? statusWidth(kickerChars) * detail : 0,
     title = Math.max(titleChars, 6),
     titleWidth = !show("title")
       ? 0
@@ -118,9 +125,29 @@ function measure(
     show("end") ? CHARS.end * CHAR * detail : 0,
     show("left") ? CHARS.left * CHAR * detail : 0,
   ].filter(Boolean);
-  const scheduleWidth =
-    schedule.reduce((sum, width) => sum + width, 0) +
-    Math.max(0, schedule.length - 1) * 0.4;
+  const row = (items: number[]) =>
+    items.reduce((sum, width) => sum + width, 0) +
+    Math.max(0, items.length - 1) * 0.4;
+  const scheduleWidth = row(schedule);
+  // The narrowest width that wraps the schedule onto two rows, no more: the
+  // best place to break it (the line wraps where an item no longer fits).
+  const twoRows = Math.min(
+    scheduleWidth,
+    ...schedule
+      .slice(1)
+      .map((_, index) =>
+        Math.max(
+          row(schedule.slice(0, index + 1)),
+          row(schedule.slice(index + 1)),
+        ),
+      ),
+  );
+  // The title's column also holds the status line, which never shrinks.
+  // In a strip the position follows it on the same line, after a gap.
+  const titleColumn = Math.max(
+    titleWidth,
+    kicker + (shape === "strip" && kicker && show("position") ? 0.5 : 0),
+  );
   // The facilitator's three buttons (with their separator) and the dock
   // button, smaller, after them.
   const actions = {
@@ -137,7 +164,7 @@ function measure(
         actions.height,
       ) + TRACK;
     const width =
-      (show("title") ? titleWidth + GROUP : 0) +
+      (titleColumn ? titleColumn + GROUP : 0) +
       clockWidth +
       (schedule.length ? GROUP + scheduleWidth : 0) +
       GROUP +
@@ -157,14 +184,15 @@ function measure(
       (schedule.length ? 0.4 + rows * badge + (rows - 1) * GAP : 0);
     const width =
       Math.max(
-        (show("title") ? titleWidth + GROUP : 0) + clockWidth,
-        scheduleWidth / rows,
+        (titleColumn ? titleColumn + GROUP : 0) + clockWidth,
+        rows === 2 ? twoRows : scheduleWidth,
       ) +
       GROUP +
       actions.width;
     return [width, height];
   }
-  // A column: everything stacked and centred, the title on up to two lines.
+  // A column: everything stacked and centred, the title on one line when
+  // it fits, else on two.
   const height =
     (show("kicker") ? line + GAP : 0) +
     (show("title") ? titleLines * TITLE_LINE + GAP : 0) +
@@ -175,11 +203,17 @@ function measure(
     (schedule.length
       ? 0.4 + (show("badge") ? badge : 0) + (schedule.length - 1) * (GAP + line)
       : 0) +
-    0.5 +
+    // The same gap as .floating-layout's between the content and the buttons.
+    GROUP +
     actions.height;
   const width = Math.max(
     clockWidth,
-    show("title") ? 10 * TITLE_CHAR : 0,
+    !show("title")
+      ? 0
+      : titleLines === 1
+        ? title * TITLE_CHAR
+        : 10 * TITLE_CHAR,
+    kicker,
     ...[
       show("badge") ? (CHARS.badge * CHAR + 2.4) * detail : 0,
       show("end") ? CHARS.end * CHAR * detail : 0,
@@ -211,7 +245,8 @@ export function floatingFit(
     for (const drop of [...DROPS[shape], all]) {
       hidden.push(...drop.filter((item) => !hidden.includes(item)));
       const show = (item: FloatingItem) => !hidden.includes(item);
-      // A box may wrap its title and its schedule onto a second line.
+      // A box may wrap its title and its schedule onto a second line, a
+      // column its title.
       const variants =
         shape === "box"
           ? ([1, 2] as const).flatMap((titleLines) =>
@@ -220,12 +255,12 @@ export function floatingFit(
                 wrapSchedule,
               })),
             )
-          : [
-              {
-                titleLines: shape === "column" ? (2 as const) : (1 as const),
+          : shape === "column"
+            ? ([1, 2] as const).map((titleLines) => ({
+                titleLines,
                 wrapSchedule: false,
-              },
-            ];
+              }))
+            : [{ titleLines: 1 as const, wrapSchedule: false }];
       const [unit, variant] = variants
         .map((option) => {
           const [w, h] = measure(shape, show, content, option);

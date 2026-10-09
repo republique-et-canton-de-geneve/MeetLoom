@@ -323,11 +323,18 @@ function ActiveEditor({
     place();
     window.addEventListener("scroll", place, { capture: true, passive: true });
     window.addEventListener("resize", place);
+    // The bar changes size with its own controls (remove link, the link
+    // form) and the field with its text: place it again then too.
+    const resized = new ResizeObserver(place);
+    if (floating.current) resized.observe(floating.current);
+    if (floating.current?.parentElement)
+      resized.observe(floating.current.parentElement);
     return () => {
       window.removeEventListener("scroll", place, { capture: true });
       window.removeEventListener("resize", place);
+      resized.disconnect();
     };
-  }, [linkOpen]);
+  }, []);
   useEffect(() => {
     if (editor && value !== lastEmitted.current) {
       editor.commands.setContent(richTextDocument(value), {

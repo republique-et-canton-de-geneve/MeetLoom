@@ -200,6 +200,33 @@ test("typing stays put: spaces survive the autosave, the editing bar floats, the
   await client.click();
   await expect(description.locator("p").first()).toHaveText(/^» Chacun/);
   await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  // Opened on a link, the editor adds "Retirer le lien" to the bar: grown
+  // near the window's right edge, the bar moves back inside.
+  await description.click();
+  await page.keyboard.press("Control+End");
+  for (let step = 0; step < 4; step++)
+    await page.keyboard.press("Shift+ArrowLeft");
+  await page.getByRole("button", { name: "Insérer un lien" }).click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("https://example.org/fin");
+  await page.keyboard.press("Enter");
+  await client.click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  await page.setViewportSize({ width: 800, height: 720 });
+  await description.getByRole("link", { name: "Fin." }).click();
+  await expect(
+    page.getByRole("button", { name: "Retirer le lien" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".rich-floating")
+        .evaluate((bar) => bar.getBoundingClientRect().right - innerWidth),
+    )
+    .toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await client.click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
 
   // On the dashboard, the card's description shows two whole lines.
   await page.goto("/");
