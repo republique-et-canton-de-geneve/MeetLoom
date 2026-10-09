@@ -280,10 +280,23 @@ test("while it runs, the agenda follows the current block and the floating windo
   await page.goto(`/session/${session.id}`);
   await page.getByRole("button", { name: /Animer la séance/ }).click();
   // The current block comes up under the sticky timer, and stays in view as
-  // the run moves on.
+  // the run moves on. Each click waits for the smooth scroll to end: a
+  // button that is still moving makes Playwright scroll it into view, and a
+  // sticky one's place is at the top of the page (scrolling away from the
+  // run, which then stops following).
   const current = page.locator(".current-block").last();
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const settled = () =>
+    expect
+      .poll(async () => {
+        const before = await scrollY();
+        await page.waitForTimeout(150);
+        return before === (await scrollY());
+      })
+      .toBe(true);
   await expect(current).toBeInViewport();
   for (let step = 0; step < 3; step++) {
+    await settled();
     await page.getByTitle("Bloc suivant").click();
     await expect(
       current.getByRole("textbox", { name: "Titre du bloc" }),
@@ -295,14 +308,7 @@ test("while it runs, the agenda follows the current block and the floating windo
     await expect(current).toBeInViewport();
   }
   // Someone who scrolled away to read elsewhere is left there.
-  const scrollY = () => page.evaluate(() => window.scrollY);
-  await expect
-    .poll(async () => {
-      const before = await scrollY();
-      await page.waitForTimeout(150);
-      return before === (await scrollY());
-    })
-    .toBe(true);
+  await settled();
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(current).not.toBeInViewport();
   const away = await scrollY();
