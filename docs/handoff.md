@@ -4,7 +4,7 @@ Last updated: October 9, 2026. Read this file first when continuing in Codex, Cl
 
 ## Current stopping point
 
-**Feedback of October 9, 2026 (branch `claude/admiring-mccarthy-gvyn41`).** PR #37 is merged and `package.json` is at 1.0.0. The user then reported, in French with four screenshots and two recordings (the recordings were not readable by the agent): a session card's description cut, the formatting bar moving the text under the mouse and scrolling the page, spaces disappearing in "Client ou équipe", and asked for the agenda to follow the running block and for a larger, adaptive always-on-top window that can be docked to the screen edges. Root causes and fixes (gstack `/investigate`):
+**Feedback of October 9, 2026 (branch `claude/admiring-mccarthy-gvyn41`, PR #42).** PR #37 is merged and `package.json` is at 1.0.0. The user then reported, in French with four screenshots and two recordings (the recordings were not readable by the agent): a session card's description cut, the formatting bar moving the text under the mouse and scrolling the page, spaces disappearing in "Client ou équipe", and asked for the agenda to follow the running block and for a larger, adaptive always-on-top window that can be docked to the screen edges. Root causes and fixes (gstack `/investigate`):
 
 1. **Card description** (`src/styles.css` `.session-card > p`): fixed `height: 37px` with a two-line clamp, while paragraphs inherit `line-height: 1.7` (two lines = 44 px). Now `line-height: 1.5; height: 3em`.
 2. **Formatting bar** (`src/RichTextEditor.tsx`, `src/richtext.css`, `src/editor-tools.css`): the bar was inserted above the text in the flow (68 px shift in an agenda cell), Tiptap's `autofocus: "end"` put the caret at the end with `scrollIntoView`, and the preview and editor had different padding, minimum height and `white-space`. The bar now floats (`.rich-floating`, z-index 9, above the sticky timer heading; `toolbarPlacement` puts it below near the top of the window or of a scrolling panel and shifts it left at the right edge), the caret goes where the preview was clicked (`posAtCoords`), and both views lay text out identically (`break-spaces` in the preview).
@@ -16,7 +16,7 @@ Tests: `tests/text-input.test.ts`, `tests/follow-current.test.ts`, `tests/floati
 
 Known limits: the Picture-in-Picture window cannot be placed by the page (browser rule); the visitor page scrolls its live timer out of view when following a block far down (the editor keeps its timer sticky); while editing, the floating formatting bar covers what is just above the text (the block title in agenda rows); the window layout's widths are estimates from French label lengths, checked without overflow at 7 sizes in French and English.
 
-Next: CI and review on the PR, then the user's acceptance in a real browser (manual-qa.md, "Still to check by the user"), merge when the user asks.
+Next: CI and review on PR #42, then the user's acceptance in a real browser (manual-qa.md, "Still to check by the user"), merge when the user asks.
 
 **PR #37 note (October 7, 2026).** The user sent feedback on 0.1.5 (five screenshots and a screen recording, in French). Branch `claude/focused-archimedes-lyatav`, PR #37 against `main`, one commit per change plus two review-fix commits:
 
