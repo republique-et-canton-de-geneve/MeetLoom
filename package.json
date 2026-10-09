@@ -21,7 +21,7 @@
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@tiptap/extension-highlight": "^3.31.4",
     "@tiptap/extension-list": "^3.31.4",
     "@tiptap/extension-text-style": "^3.31.4",
@@ -32,12 +32,12 @@
     "csv-parse": "^7.0.3",
     "docx": "^9.8.1",
     "express": "^5.1.0",
-    "express-rate-limit": "^8.7.0",
+    "express-rate-limit": "^8.7.1",
     "helmet": "^8.1.0",
     "jszip": "^3.10.2",
     "lucide-react": "^1.52.0",
     "mammoth": "^1.13.0",
-    "nodemailer": "^10.0.14",
+    "nodemailer": "^10.0.15",
     "openid-client": "^6.8.8",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.1",
