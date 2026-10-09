@@ -97,27 +97,49 @@
   background: #fff;
   box-shadow: 0 0 0 2px #9db5a21c;
 }
-.rich-editor-preview {
+/* The preview and the editing view lay text out identically (box, spacing,
+   wrapping), so the text under the pointer stays put when editing starts. */
+.rich-editor-preview,
+.rich-editor-content {
   min-height: 2.2em;
   padding: 7px 8px;
-  cursor: text;
   outline: none;
 }
-.rich-editor-compact .rich-editor-preview {
+.rich-editor-preview {
+  cursor: text;
+}
+.rich-editor-preview > .rich-text {
+  white-space: break-spaces;
+}
+.rich-editor-compact .rich-editor-preview,
+.rich-editor-compact .rich-editor-content {
   min-height: 1.65em;
   padding: 4px;
 }
 .rich-placeholder {
   color: #8b958e;
 }
+/* The editing bar floats over what is above the text instead of pushing
+   the text down (toolbarPlacement sets its top: under the text near the top
+   of the window, or at the top of what is visible over a tall field). Above
+   the sticky timer heading (z-index 8), below menus and the side panel. */
+.rich-floating {
+  position: absolute;
+  top: -42px;
+  left: 0;
+  z-index: 9;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 16px));
+  background: #f7f8f4;
+  border: 1px solid #d5ded2;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px #213f3220;
+}
 .rich-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
   align-items: center;
-  background: #f7f8f4;
-  border-bottom: 1px solid #e1e6dc;
-  border-radius: 5px 5px 0 0;
   padding: 4px;
 }
 .rich-tool {
@@ -166,11 +188,6 @@
   opacity: 0;
   cursor: pointer;
 }
-.rich-editor-content {
-  min-height: 75px;
-  padding: 8px;
-  outline: none;
-}
 .rich-editor-content p.is-editor-empty:first-child::before {
   color: #8b958e;
   content: attr(data-placeholder);
@@ -182,6 +199,7 @@
   display: flex;
   gap: 6px;
   padding: 6px;
+  border-top: 1px solid #e1e6dc;
 }
 .rich-link-form input {
   min-width: 0;
@@ -253,7 +271,7 @@
   .rich-text a {
     color: inherit;
   }
-  .rich-toolbar {
+  .rich-floating {
     display: none;
   }
 }

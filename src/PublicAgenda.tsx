@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   Clock3,
@@ -25,7 +25,8 @@ import {
   Loading,
   durationLabel,
 } from "./ui";
-import { TimerContent, useFloatingWindow } from "./Timer";
+import { FloatingTimer, TimerContent, useFloatingWindow } from "./Timer";
+import { followedDay, useFollowCurrent } from "./useFollowCurrent";
 import { createPortal } from "react-dom";
 import { columnValue, exportSessionCsv } from "./export";
 import { recordServerTime, serverNow } from "./clock";
@@ -152,7 +153,22 @@ export default function PublicAgenda({ token }: { token: string }) {
     };
   }, [token, reload]);
 
-  const { floating, openFloating, floatingNotice } = useFloatingWindow();
+  const { floating, movable, openFloating, floatingNotice } =
+    useFloatingWindow();
+  // Visitors follow the block being run without scrolling themselves, on
+  // its day unless they picked another one.
+  const pickedDay = useRef(false);
+  const runDay = session ? followedDay(session.run, session.days) : null;
+  useEffect(() => {
+    if (runDay && !pickedDay.current) setSelectedDay(runDay);
+  }, [runDay]);
+  useFollowCurrent(
+    session &&
+      (session.run.status === "running" || session.run.status === "paused")
+      ? `${session.run.runStartedAt}:${session.run.dayId}:${session.run.blockId}`
+      : null,
+    ".public-block.is-current",
+  );
   useEffect(() => {
     // The always-on-top window keeps ticking while this tab is hidden.
     const owner = floating && !floating.closed ? floating : window;
@@ -297,7 +313,12 @@ export default function PublicAgenda({ token }: { token: string }) {
                 {floatingNotice && <p className="notice">{floatingNotice}</p>}
                 {floating &&
                   createPortal(
-                    <TimerContent session={session} now={now} compact />,
+                    <FloatingTimer
+                      win={floating}
+                      movable={movable}
+                      session={session}
+                      now={now}
+                    />,
                     floating.document.body,
                   )}
               </section>
@@ -337,7 +358,10 @@ export default function PublicAgenda({ token }: { token: string }) {
                         : ""
                     }
                     onClick={() => {
-                      if (value.kind === "day") setSelectedDay(value.id);
+                      if (value.kind === "day") {
+                        pickedDay.current = true;
+                        setSelectedDay(value.id);
+                      }
                       setSelectedPage(value.kind === "page" ? value.id : "");
                       setSelectedForm(value.kind === "form" ? value.id : "");
                     }}

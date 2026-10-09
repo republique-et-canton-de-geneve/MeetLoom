@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   Pause,
@@ -14,6 +21,13 @@ import {
   FastForward,
   TriangleAlert,
   History,
+  LayoutPanelTop,
+  PanelTop,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  RectangleHorizontal,
+  X,
 } from "lucide-react";
 import type {
   Locale,
@@ -32,6 +46,12 @@ import { useI18n } from "./i18n";
 import { TIMER_COLORS, timerVisualState } from "../shared/timer-visual";
 import { serverNow } from "./clock";
 import { durationLabel } from "./ui";
+import {
+  FLOATING_SIZE,
+  floatingBounds,
+  floatingFit,
+  type FloatingTarget,
+} from "./floating-layout";
 
 let audioContext: AudioContext | null = null;
 async function enableAudio() {
@@ -218,6 +238,21 @@ export function clock(seconds: number) {
   return `${seconds < 0 ? "+" : ""}${body}`;
 }
 
+/** The status line above the block's title. */
+function statusLine(
+  status: Session["run"]["status"],
+  waiting: boolean,
+  t: (fr: string, en: string) => string,
+) {
+  return waiting
+    ? t("DÉBUT DANS", "STARTS IN")
+    : status === "paused"
+      ? t("EN PAUSE", "PAUSED")
+      : status === "finished"
+        ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
+        : t("EN CE MOMENT", "RIGHT NOW");
+}
+
 export function TimerContent({
   session,
   now,
@@ -250,13 +285,7 @@ export function TimerContent({
               session.run.status === "running" ? "live-dot" : "paused-dot"
             }
           />
-          {waiting
-            ? t("DÉBUT DANS", "STARTS IN")
-            : session.run.status === "paused"
-              ? t("EN PAUSE", "PAUSED")
-              : session.run.status === "finished"
-                ? t("SÉANCE TERMINÉE", "SESSION COMPLETE")
-                : t("EN CE MOMENT", "RIGHT NOW")}
+          {statusLine(session.run.status, waiting, t)}
         </span>
         <strong>{block?.title ?? session.title}</strong>
         <span className="timer-position">
@@ -347,6 +376,8 @@ function ScheduleBadge({ delta }: { delta: number }) {
 export function useFloatingWindow() {
   const { t } = useI18n();
   const [floating, setFloating] = useState<Window | null>(null);
+  // A popup can be moved by the page; the always-on-top window cannot.
+  const [movable, setMovable] = useState(false);
   const [floatingNotice, setNotice] = useState("");
   useEffect(
     () => () => {
@@ -372,8 +403,12 @@ export function useFloatingWindow() {
         }
       ).documentPictureInPicture;
       const win = pip
-        ? await pip.requestWindow({ width: 560, height: 188 })
-        : window.open("", "meetloom-progress", "popup,width=560,height=230");
+        ? await pip.requestWindow(FLOATING_SIZE)
+        : window.open(
+            "",
+            "meetloom-progress",
+            `popup,width=${FLOATING_SIZE.width},height=${FLOATING_SIZE.height + 42}`,
+          );
       if (!win) {
         setNotice(
           t(
@@ -389,6 +424,7 @@ export function useFloatingWindow() {
         .forEach((node) => win.document.head.appendChild(node.cloneNode(true)));
       win.document.body.className = "floating-window";
       win.addEventListener("pagehide", () => setFloating(null), { once: true });
+      setMovable(!pip);
       setFloating(win);
       if (!pip)
         setNotice(
@@ -406,7 +442,201 @@ export function useFloatingWindow() {
       );
     }
   };
-  return { floating, openFloating, floatingNotice };
+  return { floating, movable, openFloating, floatingNotice };
+}
+
+/** The content of the always-on-top window. Its text follows the window's
+ * size (see floating-layout.ts), and a button docks it along an edge of
+ * the screen. `children` are the facilitator's controls. */
+export function FloatingTimer({
+  win,
+  movable,
+  session,
+  now,
+  children,
+}: {
+  win: Window;
+  movable: boolean;
+  session: Session | PublicSession;
+  now: number;
+  children?: ReactNode;
+}) {
+  const { t } = useI18n();
+  const [size, setSize] = useState({
+    width: win.innerWidth,
+    height: win.innerHeight,
+  });
+  const [docking, setDocking] = useState(false);
+  useEffect(() => {
+    const resize = () =>
+      setSize({ width: win.innerWidth, height: win.innerHeight });
+    win.addEventListener("resize", resize);
+    return () => win.removeEventListener("resize", resize);
+  }, [win]);
+  const view = timerView(session, now);
+  const shown =
+    session.run.status === "finished"
+      ? "✓"
+      : clock(
+          view.startsInSeconds > 0
+            ? view.startsInSeconds
+            : view.remainingSeconds,
+        );
+  const fit = floatingFit(size.width, size.height, {
+    controls: !!children,
+    clockChars: shown.length,
+    titleChars: (view.block?.title ?? session.title).length,
+    kickerChars: statusLine(session.run.status, view.startsInSeconds > 0, t)
+      .length,
+    // As in TimerContent: a finished run has no schedule line or label.
+    schedule: session.run.status !== "finished" && view.projectedEnd !== null,
+  });
+  useLayoutEffect(() => {
+    const body = win.document.body;
+    body.setAttribute("data-shape", fit.shape);
+    body.setAttribute("data-hidden", fit.hidden.join(" "));
+    body.setAttribute("data-title-lines", String(fit.titleLines));
+    for (const [name, value] of Object.entries({
+      u: fit.title,
+      clock: fit.clock,
+      detail: fit.detail,
+      button: fit.button,
+      "pad-x": fit.padX,
+      "pad-y": fit.padY,
+    }))
+      body.style.setProperty(`--${name}`, `${value}px`);
+  });
+  const dock = (target: FloatingTarget) => {
+    const screen = win.screen as Screen & {
+      availLeft?: number;
+      availTop?: number;
+    };
+    const bounds = floatingBounds(
+      target,
+      {
+        left: screen.availLeft ?? 0,
+        top: screen.availTop ?? 0,
+        width: screen.availWidth,
+        height: screen.availHeight,
+      },
+      {
+        width: win.outerWidth - win.innerWidth,
+        height: win.outerHeight - win.innerHeight,
+      },
+      movable,
+    );
+    try {
+      win.resizeTo(bounds.width, bounds.height);
+      if (bounds.left !== undefined && bounds.top !== undefined)
+        win.moveTo(bounds.left, bounds.top);
+    } catch {
+      /* The browser may refuse; the person can still resize it by hand. */
+    }
+    setDocking(false);
+  };
+  const targets: [FloatingTarget, ReactNode, string][] = movable
+    ? [
+        [
+          "top",
+          <PanelTop key="top" />,
+          t("Bandeau en haut de l’écran", "Strip along the top of the screen"),
+        ],
+        [
+          "bottom",
+          <PanelBottom key="bottom" />,
+          t(
+            "Bandeau en bas de l’écran",
+            "Strip along the bottom of the screen",
+          ),
+        ],
+        [
+          "left",
+          <PanelLeft key="left" />,
+          t("Colonne à gauche de l’écran", "Column on the left of the screen"),
+        ],
+        [
+          "right",
+          <PanelRight key="right" />,
+          t("Colonne à droite de l’écran", "Column on the right of the screen"),
+        ],
+      ]
+    : [
+        // Chrome and Edge never let a page move this window: it takes the
+        // shape, the person drags it to the edge, and it reopens there.
+        [
+          "top",
+          <PanelTop key="top" />,
+          t(
+            "Bandeau : faites-le glisser en haut ou en bas de l’écran",
+            "Strip: drag it to the top or bottom of the screen",
+          ),
+        ],
+        [
+          "left",
+          <PanelLeft key="left" />,
+          t(
+            "Colonne : faites-la glisser sur un côté de l’écran",
+            "Column: drag it to a side of the screen",
+          ),
+        ],
+      ];
+  return (
+    <div className="floating-layout">
+      <TimerContent session={session} now={now} compact />
+      <div className="floating-actions">
+        {children}
+        <button
+          className="timer-control floating-dock-toggle"
+          title={t("Ancrer sur un bord de l’écran", "Dock to a screen edge")}
+          aria-label={t(
+            "Ancrer sur un bord de l’écran",
+            "Dock to a screen edge",
+          )}
+          aria-expanded={docking}
+          onClick={() => setDocking(!docking)}
+        >
+          <LayoutPanelTop />
+        </button>
+      </div>
+      {docking && (
+        <div
+          className="floating-dock"
+          role="group"
+          aria-label={t(
+            "Ancrer sur un bord de l’écran",
+            "Dock to a screen edge",
+          )}
+        >
+          {[
+            ...targets,
+            [
+              "default",
+              <RectangleHorizontal key="default" />,
+              t("Taille d’origine", "Original size"),
+            ] as [FloatingTarget, ReactNode, string],
+          ].map(([target, icon, label]) => (
+            <button
+              key={target}
+              className="timer-control"
+              title={label}
+              aria-label={label}
+              onClick={() => dock(target)}
+            >
+              {icon}
+            </button>
+          ))}
+          <button
+            className="timer-control"
+            title={t("Fermer", "Close")}
+            aria-label={t("Fermer", "Close")}
+            onClick={() => setDocking(false)}
+          >
+            <X />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Timer({
@@ -427,7 +657,8 @@ export default function Timer({
   const [now, setNow] = useState(serverNow);
   const [sound, setSound] = useState(false);
   const [startMode, setStartMode] = useState<"now" | "planned">("now");
-  const { floating, openFloating, floatingNotice } = useFloatingWindow();
+  const { floating, movable, openFloating, floatingNotice } =
+    useFloatingWindow();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const previous = useRef<AudioFrame | null>(null);
@@ -741,8 +972,12 @@ export default function Timer({
       {floatingNotice && <p className="notice">{floatingNotice}</p>}
       {floating &&
         createPortal(
-          <div className="floating-layout">
-            <TimerContent session={session} now={now} compact />
+          <FloatingTimer
+            win={floating}
+            movable={movable}
+            session={session}
+            now={now}
+          >
             {/* Facilitators move on without leaving the slideshow; visitors'
                 windows (PublicAgenda) have no controls. */}
             {canRun && (
@@ -796,7 +1031,7 @@ export default function Timer({
                 </button>
               </div>
             )}
-          </div>,
+          </FloatingTimer>,
           floating.document.body,
         )}
     </div>

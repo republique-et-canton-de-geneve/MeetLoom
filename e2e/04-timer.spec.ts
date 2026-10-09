@@ -4,6 +4,7 @@ import {
   createSession,
   duration,
   member,
+  setDuration,
   signIn,
 } from "./helpers";
 
@@ -89,7 +90,9 @@ test("facilitating: start, move on, come back where the block was, visitors foll
     "Accueil",
   );
   await expect(visitorFloating.locator(".floating-controls")).toHaveCount(0);
-  await expect(visitorFloating.getByRole("button")).toHaveCount(0);
+  await expect(visitorFloating.getByRole("button")).toHaveAccessibleName(
+    "Ancrer sur un bord de l’écran",
+  );
   await visitorFloating.close();
 
   await page.getByTitle("Pause").click();
@@ -263,4 +266,162 @@ test("a session whose timer finished asks to be closed from the dashboard", asyn
   await expect(
     card.getByRole("button", { name: /Séance terminée/ }),
   ).toHaveCount(0);
+});
+
+test("while it runs, the agenda follows the current block and the floating window grows with its size", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const created = await page.request.post("/api/sessions", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { title: "Suivi E2E", demo: true },
+  });
+  const { session } = await created.json();
+  await page.goto(`/session/${session.id}`);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  // The current block comes up under the sticky timer, and stays in view as
+  // the run moves on. Each click waits for the smooth scroll to end: a
+  // button that is still moving makes Playwright scroll it into view, and a
+  // sticky one's place is at the top of the page (scrolling away from the
+  // run, which then stops following).
+  const current = page.locator(".current-block").last();
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const settled = () =>
+    expect
+      .poll(async () => {
+        const before = await scrollY();
+        await page.waitForTimeout(150);
+        return before === (await scrollY());
+      })
+      .toBe(true);
+  await expect(current).toBeInViewport();
+  for (let step = 0; step < 3; step++) {
+    await settled();
+    await page.getByTitle("Bloc suivant").click();
+    await expect(
+      current.getByRole("textbox", { name: "Titre du bloc" }),
+    ).toHaveValue(
+      ["Ce qui fonctionne déjà", "Dessiner les prochaines étapes", "Pause"][
+        step
+      ],
+    );
+    await expect(current).toBeInViewport();
+  }
+  // Someone who scrolled away to read elsewhere is left there.
+  await settled();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(current).not.toBeInViewport();
+  const away = await scrollY();
+  await page.getByTitle("Bloc suivant").click();
+  await expect(
+    current.getByRole("textbox", { name: "Titre du bloc" }),
+  ).toHaveValue("Choisir une expérimentation");
+  await page.waitForTimeout(600);
+  expect(await scrollY()).toBe(away);
+
+  // The always-on-top window lays itself out for its shape, larger as it
+  // grows.
+  const floating = await openFloating(
+    page,
+    page.getByTitle("Fenêtre au premier plan"),
+  );
+  const body = floating.locator("body");
+  const clock = () =>
+    floating
+      .locator(".timer-clock strong")
+      .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+  await floating.setViewportSize({ width: 1400, height: 60 });
+  await expect(body).toHaveAttribute("data-shape", "strip");
+  const thin = await clock();
+  expect(thin).toBeGreaterThanOrEqual(30);
+  await expect(floating.locator(".timer-current strong")).toBeVisible();
+  await expect(floating.locator(".timer-delta")).toBeVisible();
+  await floating.setViewportSize({ width: 1400, height: 450 });
+  await expect(body).toHaveAttribute("data-shape", "box");
+  expect(await clock()).toBeGreaterThan(2.5 * thin);
+  await floating.setViewportSize({ width: 300, height: 800 });
+  await expect(body).toHaveAttribute("data-shape", "column");
+  // Whatever the size, nothing it shows is cut off by the window's edges.
+  const cutOff = (win = floating) =>
+    win.evaluate(() =>
+      // HTML boxes: an icon's inner SVG shapes report boxes of their own.
+      [...document.querySelectorAll<HTMLElement>(".floating-layout *")]
+        .filter(
+          (element) =>
+            element instanceof HTMLElement &&
+            getComputedStyle(element).display !== "none" &&
+            element.getBoundingClientRect().width > 0,
+        )
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return (
+            box.left < -1 ||
+            box.top < -1 ||
+            box.right > innerWidth + 1 ||
+            box.bottom > innerHeight + 1
+          );
+        })
+        .map((element) => element.getAttribute("class") ?? element.tagName),
+    );
+  for (const [width, height] of [
+    [200, 70],
+    [200, 350],
+    [402, 152],
+    [731, 59],
+    [1400, 60],
+  ]) {
+    await floating.setViewportSize({ width, height });
+    await expect.poll(() => cutOff()).toEqual([]);
+  }
+  await floating.close();
+  await page.getByTitle("Réinitialiser").click();
+  await expect(
+    page.getByRole("button", { name: /Animer la séance/ }),
+  ).toBeVisible();
+
+  // Run on its second day, the session opens on that day, for the team and
+  // for visitors, so they follow it there.
+  await page.getByTitle("Ajouter un jour").click();
+  await addActivities(page, ["Bilan", "Suite", "Clôture"]);
+  await setDuration(page, "Suite", 90);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  await expect(page.locator(".timer-bar")).toContainText("Bilan");
+  // A title shorter than its status line, with the schedule at its widest
+  // ("Dans le temps prévu", "reste 1 h 50 min"): "Bilan" under "EN CE
+  // MOMENT" once ran onto three lines, out of these strips.
+  const short = await openFloating(
+    page,
+    page.getByTitle("Fenêtre au premier plan"),
+  );
+  await expect(short.locator(".timer-delta")).toContainText(
+    "Dans le temps prévu",
+  );
+  for (const [width, height] of [
+    [900, 70],
+    [1400, 110],
+  ]) {
+    await short.setViewportSize({ width, height });
+    await expect.poll(() => cutOff(short)).toEqual([]);
+  }
+  await short.close();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Nom du jour" })).toHaveValue(
+    "Jour 2",
+  );
+  await expect(current).toBeInViewport();
+  const shared = await page.request.post(`/api/sessions/${session.id}/shares`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { label: "Suivi", mode: "agenda" },
+  });
+  const { share } = await shared.json();
+  const visitor = await (
+    await browser.newContext({ viewport: { width: 1280, height: 600 } })
+  ).newPage();
+  await visitor.goto(`/s/${share.token}`);
+  await expect(visitor.locator(".public-block.is-current")).toBeInViewport();
+  await page.getByTitle("Réinitialiser").click();
+  await expect(
+    page.getByRole("button", { name: /Animer la séance/ }),
+  ).toBeVisible();
 });
