@@ -4,6 +4,23 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+### Added
+
+- Sections can be inserted from the agenda like blocks, groups and notes: they gather the blocks that follow, show their times and duration, and can be renamed, collapsed or removed in place. Adding or moving blocks (including with the arrows) keeps sections whole, and a section containing a group is no longer announced twice in the visitor agenda, print and CSV.
+- The dashboard flags sessions that are over but not closed yet ("Séance terminée · Clôturer ?" / "Session over · Close it?"), once their timer finishes or the date set in the agenda has passed, with a count banner and a new "To close" activity filter, so they can be closed in two clicks and counted in the session report.
+
+### Changed
+
+- After the timer passes a block, its time cell shows the actual time, a coloured gap (= on schedule, blue early, amber late, red from five minutes late) and the time planned when the timer started, so overruns stay visible even after +1/+5 or "Use actual durations". Group and section headers, the day duration, the end of the agenda and the sidebar total read "Planned X · actual Y" with the gap once all their steps have been played. Past runs count the same whole seconds and minutes, including a step left after less than a second, so they show the same gap as the agenda, "very late" in red included.
+- The agenda minimap shows the activities inside groups and parallel rooms in their own colours. During a run, finished activities fade and the running one shows its progress; a long minimap scrolls to keep the current step in view. Clicking any of them opens its group or room tab, and the total duration bar counts activities inside groups by their own category.
+
+### Fixed
+
+- The dashboard keeps the chosen workspace when you come back from a session ("All sessions", the logo) or from the account pages, and after a reload. The address names it (`/?workspace=…`) and the browser remembers each account's last choice. A workspace address opened before signing in with a password, and the email telling an existing account it was added to a workspace, open that workspace; accepting an invitation still opens all workspaces.
+- The dashboard's folder list uses the sidebar's remaining height (about 7 folders instead of 3 in a 1080p window, with no scroll bar when every folder fits), and the account footer shows the avatar beside the name again without first opening the account page. "Tous mes espaces" and "Séances personnelles" no longer show a placeholder workspace card, and the folder hint only appears where folders cannot be managed.
+- "Gérer l’espace" > "Membres et invités": member names and e-mails are readable again, no longer squeezed one letter per line by a role selector that filled the row; on a phone the role and the remove button share one line under the name, and "Ajouter / inviter" lines up with its fields.
+- Checkboxes sit on the same line as their text in the AI connectors (MCP) panel, the closing dialog's facilitator list, document import, the export block filter and PowerPoint notes option, and the workspace "Landscape Word documents" default. The MCP panel also lists the open session first, counts the selected sessions, explains what each permission shares or allows, and warns before granting write access to a session you can only read.
+
 ## [0.1.5] - 2026-10-06
 
 ### Fixed

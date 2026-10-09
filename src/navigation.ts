@@ -16,6 +16,66 @@ async function mayLeave() {
   }
   return true;
 }
+const WORKSPACE_PARAM = "workspace";
+/** The dashboard address showing one scope: "all", "personal" or a workspace
+ * id. A bare "/" resumes the account's last choice instead. */
+export function dashboardUrl(scope: string) {
+  return `/?${new URLSearchParams({ [WORKSPACE_PARAM]: scope })}`;
+}
+const workspaceKey = (userId: string) => `meetloom.workspace.${userId}`;
+/** Each account's last scope in this tab, for when the browser keeps none. */
+const tabWorkspaces = new Map<string, string>();
+/** The scope a dashboard opens on: the address (reload, Back, bookmark), then
+ * this account's last choice in this browser (or in this tab, when storage is
+ * missing or throws: private browsing, blocked site data), then every
+ * workspace. */
+export function dashboardWorkspace(
+  url: string,
+  userId: string,
+  storage?: Pick<Storage, "getItem">,
+) {
+  const asked = new URL(url, "http://localhost").searchParams
+    .get(WORKSPACE_PARAM)
+    ?.trim();
+  if (asked) return asked;
+  let stored: string | undefined;
+  try {
+    stored = (storage ?? localStorage).getItem(workspaceKey(userId))?.trim();
+  } catch {
+    /* Storage is optional. */
+  }
+  return stored || tabWorkspaces.get(userId) || "all";
+}
+/** A scope from the address or this browser is trusted once the account's
+ * workspaces are listed: one it cannot see (deleted, left, an old link) falls
+ * back to every workspace. */
+export function resolveWorkspace(scope: string, workspaceIds: string[]) {
+  return scope === "all" || scope === "personal" || workspaceIds.includes(scope)
+    ? scope
+    : "all";
+}
+/** Where signing in leads: an invitation opens every workspace, so what was
+ * just shared is visible; the dashboard keeps the workspace its address names
+ * (a bookmark, an emailed link); any other page leads to the dashboard. */
+export function signInTarget(url: string, invited: boolean) {
+  if (invited) return dashboardUrl("all");
+  const { pathname, search } = new URL(url, "http://localhost");
+  return pathname === "/" ? `/${search}` : "/";
+}
+/** Remembers the account's last scope; without storage, this tab and the
+ * address still carry it. */
+export function rememberWorkspace(
+  userId: string,
+  scope: string,
+  storage?: Pick<Storage, "setItem">,
+) {
+  tabWorkspaces.set(userId, scope);
+  try {
+    (storage ?? localStorage).setItem(workspaceKey(userId), scope);
+  } catch {
+    /* Storage is optional. */
+  }
+}
 const key = "__meetloomNavigation";
 interface Entry {
   url: string;
@@ -158,6 +218,26 @@ export class AsyncNavigation {
         this.pending = undefined;
       });
     return this.pending;
+  };
+  /** Rewrites the current entry's query without a guard, a new entry or a
+   * route change, for state that only refines the page shown (the dashboard's
+   * workspace). Another origin or path is refused, so it can never leave a
+   * page past its guards. It first waits for a navigation or Back/Forward
+   * that is settling, because the browser's current entry may already be the
+   * target, and React runs the effects of a page reached by a click before
+   * the navigation that mounted it has settled. */
+  replace = async (url: string) => {
+    await this.settled();
+    if (!this.active || this.pending || this.restoring) return false;
+    const from = new URL(this.current.url);
+    const target = new URL(url, from);
+    if (target.origin !== from.origin || target.pathname !== from.pathname)
+      return false;
+    if (target.href !== this.current.url) {
+      this.current = { ...this.current, url: target.href };
+      this.host.replace(this.current.state, target.href);
+    }
+    return true;
   };
   /** Allows tests and callers to await an already requested browser traversal. */
   settled() {

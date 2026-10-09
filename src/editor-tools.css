@@ -57,11 +57,12 @@
     visibility: visible;
   }
 }
-/* Completed blocks show their actual duration in a distinct colour. */
+/* Completed blocks show their actual duration in a dashed, neutral chip:
+ * the colour belongs to the gap next to it. */
 .actual-duration {
-  border: 1px dashed #c9a24a;
-  background: #fbf5e6;
-  color: #7a5a12;
+  border: 1px dashed #879783;
+  background: #fff;
+  color: var(--ink);
   border-radius: 4px;
   padding: 3px 7px;
   font-size: 12px;
@@ -709,13 +710,16 @@
   flex-direction: column;
   gap: 2px;
   border-radius: 5px;
-  overflow: hidden;
+  /* A long day scrolls instead of losing its last items. */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
 .agenda-minimap:empty {
   display: none;
 }
 .agenda-minimap button {
-  min-height: 6px;
+  min-height: 4px;
   border: 0;
   text-align: left;
   padding: 0 8px;
@@ -746,6 +750,71 @@
 .agenda-minimap .minimap-current > span {
   position: relative;
   z-index: 1;
+}
+/* Groups and parallel blocks are frames in the agenda's container colors,
+ * with a rail that jumps to the container. Containers never clip, so their
+ * automatic min-height keeps every child's minimum visible. */
+.minimap-container {
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  border-radius: 3px;
+  position: relative;
+}
+.minimap-group {
+  background: #eaf3fb;
+  box-shadow: inset 0 0 0 1px #b9d3ec;
+}
+.minimap-parallel {
+  background: #fff1e7;
+  box-shadow: inset 0 0 0 1px #f1c4a3;
+}
+.agenda-minimap .minimap-rail {
+  flex: 0 0 6px;
+  padding: 0;
+  border-radius: 2px;
+  align-self: stretch;
+}
+.minimap-group > .minimap-rail {
+  background: #9fc3e6;
+}
+.minimap-parallel > .minimap-rail {
+  background: #eeb48a;
+}
+.minimap-list {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.minimap-rooms {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 1px;
+}
+.minimap-container .minimap-leaf {
+  padding: 0 4px;
+}
+/* Only buttons fade, so opacity never compounds through nested frames. */
+.agenda-minimap button.minimap-done {
+  opacity: 0.45;
+  filter: saturate(0.3);
+}
+.minimap-parallel > .minimap-timer-progress {
+  opacity: 0.4;
+  z-index: 1;
+}
+/* Rooms run at the same time: the fill goes down across all of them, along
+ * the minimap's time axis, instead of sweeping one room after the other. */
+.agenda-minimap .minimap-timer-vertical {
+  inset: 0 0 auto 0;
+  border-inline-end: 0;
+  border-block-end: 2px solid #fff;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+  transition-property: height;
 }
 @media (max-width: 1250px) {
   .editor-inspector {
@@ -1415,8 +1484,16 @@
   z-index: 4;
   cursor: pointer;
 }
+/* An open menu stays above the insert lines of the rows below it (and below
+   the sticky timer bar). */
+.insert-slot.open {
+  z-index: 7;
+}
 .container-block > .insert-slot {
   top: -13px;
+}
+.agenda-section > .insert-slot {
+  top: -14px;
 }
 .insert-slot::before {
   content: "";
@@ -1552,7 +1629,8 @@
 .room-panel {
   padding: 4px 0 0;
 }
-.group-children > .group-drop {
+.group-children > .group-drop,
+.agenda-section-body > .section-drop {
   margin: 0 0 8px;
 }
 /* Compact header of a group or parallel activities: time, computed
@@ -1745,4 +1823,68 @@
   .session-navigation .content-nav-row .nav-item {
     max-width: 160px;
   }
+}
+/* Once played, a block's time cell stacks its actual time, the gap and the
+ * plan captured when the timer started; containers and days read
+ * "Prévu · réel · écart" on one line. */
+.duration-compare {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+}
+.duration-gap {
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 17px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: #f0f3f0;
+  color: #4f6357;
+}
+.duration-gap[data-gap="early"] {
+  background: #e1f0fb;
+  color: #184766;
+}
+.duration-gap[data-gap="late"] {
+  background: #fbeed7;
+  color: #6b4608;
+}
+.duration-gap[data-gap="very-late"] {
+  background: #fde2e1;
+  color: #7a1c1a;
+}
+.planned-duration {
+  font-size: 10.5px;
+  color: #5c6b62;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.run-compare {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #5c6b62;
+  font-variant-numeric: tabular-nums;
+}
+.run-compare-actual {
+  font-weight: 650;
+  color: var(--ink);
+}
+.agenda-end .run-compare {
+  font-size: 11px;
+}
+/* The sidebar is narrow: the run's day sits on its own line. */
+.agenda-summary-actual {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #5c6b62;
 }

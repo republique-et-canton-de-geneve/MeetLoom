@@ -24,6 +24,7 @@ import { durationLabel } from "./ui";
 import { ClockField, DurationField } from "./TimeFields";
 import { LocalClock, DisplayTimeControl } from "./DisplayTime";
 import { categoryColor } from "./categories";
+import { insertBlockInto } from "./block-tree";
 
 export default function SessionOverview({
   session,
@@ -61,13 +62,11 @@ export default function SessionOverview({
         blocks: copy ? d.blocks : d.blocks.filter((b) => b.id !== dragged),
       }));
       const target = days.find((d) => d.id === dayId)!;
-      const at = beforeId
-        ? target.blocks.findIndex((b) => b.id === beforeId)
-        : target.blocks.length;
-      target.blocks.splice(
-        at < 0 ? target.blocks.length : at,
-        0,
+      // Like a drop in the editor: the block joins the section it lands in.
+      target.blocks = insertBlockInto(
+        target.blocks,
         copy ? cloneBlockTree(block) : block,
+        { listId: null, beforeId },
       );
       return { ...s, days };
     });

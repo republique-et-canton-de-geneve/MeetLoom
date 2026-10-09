@@ -131,6 +131,8 @@ export interface SessionSummary {
   blocks: number;
   role: Role;
   archived: boolean;
+  /** Over but not closed, and this account may close it (shared/lifecycle.ts). */
+  needsClosing?: boolean;
 }
 export interface SessionResponse {
   session: Session;

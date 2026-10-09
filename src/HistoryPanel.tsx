@@ -27,7 +27,7 @@ import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { durationLabel, ErrorBanner, Inspector, Loading } from "./ui";
 import { RichText } from "./RichText";
-import RunsHistory from "./RunsHistory";
+import RunsHistory, { actualDurationsOf } from "./RunsHistory";
 import "./history.css";
 
 type Tab = "versions" | "journal" | "runs" | "deleted";
@@ -745,13 +745,7 @@ function HistoryPanel({
                   days: withStepDurations(
                     current.days,
                     run.dayId,
-                    durations === "plan"
-                      ? run.plan
-                      : Object.fromEntries(
-                          run.blocks
-                            .filter((block) => block.actual > 0)
-                            .map((block) => [block.id, block.actual]),
-                        ),
+                    durations === "plan" ? run.plan : actualDurationsOf(run),
                     durations === "actual",
                   ),
                 }));

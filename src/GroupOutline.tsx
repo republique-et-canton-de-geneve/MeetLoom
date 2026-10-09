@@ -146,7 +146,6 @@ export default function GroupOutline({
                 ["note", "group", "parallel"].includes(child.kind ?? "")
               }
               change={(duration) => change(child.id, { duration })}
-              blockId={child.id}
             />
             {editable && (
               <button

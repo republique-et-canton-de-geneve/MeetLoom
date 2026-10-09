@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import {
   addActivities,
   createSession,
@@ -8,7 +8,7 @@ import {
   signIn,
 } from "./helpers";
 
-test("editing an agenda saves blocks, durations and groups across reloads", async ({
+test("editing an agenda saves blocks, durations, groups and sections across reloads", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
@@ -30,6 +30,113 @@ test("editing an agenda saves blocks, durations and groups across reloads", asyn
     "Nouveau groupe",
   );
   await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
+  // A section inserted above a block gathers it and the blocks that follow.
+  await page
+    .locator(".block-group")
+    .filter({ has: duration(page, "Idées") })
+    .locator("> .insert-slot")
+    .click();
+  await page.getByRole("menuitem", { name: /^Section/ }).click();
+  const section = page.locator(".agenda-section");
+  await expect(section).toHaveCount(1);
+  for (const [title, inside] of [
+    ["Accueil", 0],
+    ["Idées", 1],
+    ["Décision", 1],
+  ] as const)
+    await expect(section.filter({ has: duration(page, title) })).toHaveCount(
+      inside,
+    );
+  const heading = section.locator(".section-title");
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveValue("Nouvelle section");
+  await heading.fill("Construire");
+  // Clicking one of its blocks names the section and keeps that block's focus.
+  const decision = page
+    .locator(".agenda-row")
+    .filter({ has: duration(page, "Décision") })
+    .getByRole("textbox", { name: "Titre du bloc" });
+  await decision.click();
+  await expect(decision).toBeFocused();
+  await expect(heading).toHaveValue("Construire");
+  await expect(section.locator(".section-totals")).toContainText("35 min");
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".section-title")).toHaveValue("Construire");
+  await expect(
+    page.getByRole("button", {
+      name: "Développer ou replier la section Construire",
+    }),
+  ).toHaveAttribute("aria-expanded", "true");
+  // A block dropped where it already is leaves nothing to undo: the first
+  // block on its section's header, the last one on the section's footer.
+  const handle = (title: string) =>
+    page
+      .locator(".agenda-row")
+      .filter({ has: duration(page, title) })
+      .locator(".drag-handle");
+  const undo = page.getByTitle("Annuler", { exact: true });
+  await handle("Idées").dragTo(page.locator(".section-totals"));
+  await handle("Décision").dragTo(page.locator(".section-drop"));
+  await expect(undo).toBeDisabled();
+  // A block that does move there joins the section, and Undo takes it out.
+  const accueil = section.filter({ has: duration(page, "Accueil") });
+  await handle("Accueil").dragTo(page.locator(".section-drop"));
+  await expect(accueil).toHaveCount(1);
+  await undo.click();
+  await expect(accueil).toHaveCount(0);
+  await expect(page.locator(".agenda-summary strong")).toHaveText("40 min");
+  // A collapsed section stays collapsed when it is renamed.
+  const toggle = (name: string) =>
+    page.getByRole("button", {
+      name: `Développer ou replier la section ${name}`,
+      exact: true,
+    });
+  await toggle("Construire").click();
+  await heading.fill("Construire ensemble");
+  await heading.press("Enter");
+  await expect(toggle("Construire ensemble")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await heading.fill("Construire");
+  await heading.press("Enter");
+  await expect(toggle("Construire")).toHaveAttribute("aria-expanded", "false");
+  await toggle("Construire").click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  // A collaborator adds a section above while this title is being typed:
+  // the draft goes rather than renaming the section that takes its place.
+  await heading.fill("Construire ensemble");
+  const api = `/api/sessions/${page.url().split("/").pop()}`;
+  const { session: remote } = await (await page.request.get(api)).json();
+  // Accueil and the group before Construire.
+  for (const block of remote.days[0].blocks.slice(0, 2))
+    block.section = "Ouverture";
+  const saved = await page.request.put(api, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { session: remote, version: remote.version },
+  });
+  expect(saved.ok()).toBe(true);
+  const titles = page.locator(".section-title");
+  await expect(titles).toHaveCount(2);
+  await page.keyboard.type(" final");
+  await page.keyboard.press("Enter");
+  await expect(titles.nth(0)).toHaveValue("Ouverture");
+  await expect(titles.nth(1)).toHaveValue("Construire");
+  // Renaming a section to its neighbour's name merges them; Undo splits
+  // them again.
+  await titles.nth(0).fill("Construire");
+  await titles.nth(0).press("Enter");
+  await expect(titles).toHaveCount(1);
+  await expect(accueil).toHaveCount(1);
+  await undo.click();
+  await expect(titles).toHaveCount(2);
+  const opening = page.locator(".section-header").first();
+  await opening.hover();
+  await opening.locator(".section-ungroup").click();
+  await expect(titles).toHaveCount(1);
+  await expect(accueil).toHaveCount(0);
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
 });
 
 test("Escape closes the actions menu and side panels, and returns focus", async ({
@@ -129,13 +236,52 @@ test("on a phone the editor fits the screen and days keep their names", async ({
   ).toBe(true);
 });
 
-test("zoomed in, the whole sidebar can still be scrolled to", async ({
+test("the sidebar gives the folders the height left, and scrolls when zoomed in", async ({
   browser,
 }) => {
   const page = await signIn(browser, member);
+  const sidebar = page.locator(".sidebar");
+  const height = async (selector: string) =>
+    (await sidebar.locator(selector).boundingBox())?.height ?? 0;
+  // A desktop window about 900 px tall: the folders take what the
+  // navigation leaves, and the account footer shows the avatar beside the name.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(220);
+  const avatar = (await sidebar
+    .locator(".sidebar-user .avatar")
+    .boundingBox())!;
+  const name = (await sidebar.locator(".sidebar-user strong").boundingBox())!;
+  expect(name.x).toBeGreaterThanOrEqual(avatar.x + avatar.width);
+  // No placeholder card without a workspace; the hint shows only in "all",
+  // the one view where folders cannot be managed.
+  const card = sidebar.locator(".workspace-card");
+  const hint = sidebar.locator(".folder-note");
+  await expect(card).toHaveCount(0);
+  await expect(hint).toHaveText(
+    "Sélectionnez un espace pour gérer les dossiers.",
+  );
+  await page.locator("#workspace-switcher").selectOption("personal");
+  await expect(hint).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  // A narrower window: no height cap, and the name wraps instead of being cut.
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect
+    .poll(() => height(".dashboard-folders"))
+    .toBeGreaterThanOrEqual(250);
+  expect(
+    await sidebar
+      .locator(".sidebar-user strong")
+      .evaluate(
+        (element) =>
+          element.scrollWidth <= element.clientWidth &&
+          element.scrollHeight <= element.clientHeight,
+      ),
+  ).toBe(true);
   // A laptop browser zoomed to 150% leaves about this much room.
   await page.setViewportSize({ width: 900, height: 480 });
-  const sidebar = page.locator(".sidebar");
+  expect(await height(".dashboard-folders")).toBeGreaterThanOrEqual(150);
   for (const target of [
     sidebar.getByRole("button", { name: "Signaler un problème" }),
     sidebar.locator(".sidebar-user"),
@@ -169,10 +315,43 @@ test("without a configured LLM no AI feature shows, and MCP connectors stay reac
   await expect(page.locator(".editor-inspector")).toContainText(
     "Connecteur MCP interne",
   );
+  // Each checkbox sits on its text's line, not above it; the open session
+  // comes first, ticked, and the count follows the selection.
+  const sameLine = async (box: Locator, text: Locator) => {
+    const b = (await box.boundingBox())!,
+      s = (await text.boundingBox())!;
+    expect(s.x).toBeGreaterThanOrEqual(b.x + b.width);
+    expect(s.y).toBeLessThan(b.y + b.height);
+  };
+  const current = page.locator(".mcp-session-list .checkbox-row").first();
+  await expect(current).toContainText("Atelier E2E");
+  await expect(current).toContainText("Séance actuelle");
+  await expect(current.getByRole("checkbox")).toBeChecked();
+  await sameLine(current.getByRole("checkbox"), current.locator("strong"));
+  const write = page.getByRole("checkbox", {
+    name: "Autoriser les modifications et la création de jours",
+  });
+  await sameLine(
+    write,
+    page.locator("label", { has: write }).locator("strong"),
+  );
+  await expect(write).toHaveAccessibleDescription(/historique/);
+  await expect(page.getByText(/^1 séance sélectionnée sur \d+$/)).toBeVisible();
+  await current.getByRole("checkbox").uncheck();
+  await expect(page.getByText(/^0 séance sélectionnée sur \d+$/)).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: /Exporter/ })
     .first()
     .click();
   await expect(page.getByText(/avec l’IA interne/)).toHaveCount(0);
+  // The block filter's compact rows leave room before the note under them.
+  await page.getByText("Filtrer les blocs et catégories").click();
+  const last = page.locator(".slide-outline > .checkbox-row").last();
+  await expect(last).toBeVisible();
+  const row = (await last.boundingBox())!,
+    note = (await page
+      .getByText(/^Les groupes nécessaires restent/)
+      .boundingBox())!;
+  expect(note.y - (row.y + row.height)).toBeGreaterThanOrEqual(8);
 });

@@ -4,6 +4,7 @@ import {
   createSession,
   newBlock,
   plannedStartTimestamp,
+  runComparison,
   timerView,
   transitionRun,
 } from "../shared/domain.js";
@@ -140,4 +141,25 @@ test("timer clocks switch to hours past sixty minutes", async () => {
   assert.equal(clock(3599), "59:59");
   assert.equal(clock(34_658), "9:37:38");
   assert.equal(clock(-3_725), "+1:02:05");
+});
+
+test("a run stopped before its scheduled start played nothing, so it compares nothing", () => {
+  const started = transitionRun(plan(), "start", { startMode: "planned" }, now);
+  const [a] = started.days[0].blocks;
+  const stopped = transitionRun(started, "stop", {}, now + 60_000);
+  assert.equal(stopped.run.status, "finished");
+  assert.deepEqual(
+    stopped.run.actualDurations,
+    {},
+    "the countdown is no stint",
+  );
+  assert.equal(runComparison(stopped.run, [a]), null);
+  const paused = transitionRun(started, "pause", {}, now + 30_000);
+  assert.deepEqual(
+    transitionRun(paused, "stop", {}, now + 60_000).run.actualDurations,
+    {},
+  );
+  // Once the start is reached, the time spent counts as usual.
+  const late = transitionRun(started, "stop", {}, nine + 30_000);
+  assert.deepEqual(late.run.actualDurations, { [a.id]: 30 });
 });

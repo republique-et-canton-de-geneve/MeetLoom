@@ -129,8 +129,20 @@ export function moveBlockToList(
 
 /** Where a block goes: a list (the day's top level when `listId` is null, a
  * group's children, or a parallel room) and the sibling it is placed before
- * (the end of the list when omitted or unknown). */
-export type BlockDestination = { listId: string | null; beforeId?: string };
+ * (the end of the list when omitted or unknown). `section` applies only at the
+ * top level. When it is omitted, the block takes the section of the block it
+ * is placed before, or of the last block when it lands at the end. */
+export type BlockDestination = {
+  listId: string | null;
+  beforeId?: string;
+  section?: string;
+};
+
+const topLevelSection = (blocks: Block[], destination: BlockDestination) =>
+  destination.section ??
+  (blocks.find((block) => block.id === destination.beforeId) ?? blocks.at(-1))
+    ?.section ??
+  "";
 
 const insertInList = (
   items: Block[],
@@ -150,7 +162,13 @@ export function insertBlockInto(
   destination: BlockDestination,
 ): Block[] {
   if (destination.listId === null)
-    return normalized(insertInList(blocks, inserted, destination.beforeId));
+    return normalized(
+      insertInList(
+        blocks,
+        { ...inserted, section: topLevelSection(blocks, destination) },
+        destination.beforeId,
+      ),
+    );
   return mapBlocks(blocks, (block) => {
     if (block.kind === "group" && block.id === destination.listId)
       return {
@@ -197,6 +215,27 @@ export function relocateBlock(
   id: string,
   destination: BlockDestination,
 ): Block[] {
+  const at =
+    destination.listId === null
+      ? blocks.findIndex((block) => block.id === id)
+      : -1;
+  if (
+    at >= 0 &&
+    (id === destination.beforeId || blocks[at + 1]?.id === destination.beforeId)
+  ) {
+    // In place, dropped on itself, on the block after it or, for the last
+    // block, at the end: only its section can change. An explicit one wins,
+    // as on a section's footer; otherwise it joins the block it stays before.
+    const section =
+      destination.section ??
+      (id === destination.beforeId ? undefined : blocks[at + 1]?.section) ??
+      blocks[at].section;
+    return section === blocks[at].section
+      ? blocks
+      : blocks.map((block) =>
+          block.id === id ? { ...block, section } : block,
+        );
+  }
   if (id === destination.beforeId) return blocks;
   const source = allBlocks(blocks).find((block) => block.id === id);
   if (!source || !listExists(blocks, destination.listId)) return blocks;
@@ -211,4 +250,169 @@ export function relocateBlock(
   )
     return blocks;
   return insertBlockInto(removeBlockFromTree(blocks, id), source, destination);
+}
+
+/** Where Monter/Descendre and Alt+↑/↓ move a top-level block one step: past
+ * its neighbour in the same section, or, when the neighbour is in another
+ * section, across that boundary in place, so no section is skipped. Undefined
+ * when there is no neighbour in that direction. */
+export function stepDestination(
+  blocks: Block[],
+  id: string,
+  up: boolean,
+): BlockDestination | undefined {
+  const index = blocks.findIndex((block) => block.id === id);
+  const neighbour = index < 0 ? undefined : blocks[up ? index - 1 : index + 1];
+  if (!neighbour) return undefined;
+  const { section } = blocks[index];
+  return neighbour.section === section
+    ? {
+        listId: null,
+        beforeId: blocks[up ? index - 1 : index + 2]?.id,
+        section,
+      }
+    : { listId: null, beforeId: id, section: neighbour.section };
+}
+
+/** The day's top level as maximal runs of consecutive blocks sharing a
+ * section label, unlabelled runs included (label ""). */
+export function sectionRuns(
+  blocks: { section: string }[],
+): { label: string; start: number; end: number }[] {
+  const runs: { label: string; start: number; end: number }[] = [];
+  blocks.forEach((block, index) => {
+    const last = runs.at(-1);
+    if (last?.label === block.section) last.end = index + 1;
+    else runs.push({ label: block.section, start: index, end: index + 1 });
+  });
+  return runs;
+}
+
+/** The identity of the section holding the top-level block at `index`, for
+ * state kept beside it such as collapse: its label and how many earlier
+ * sections share it. Two sections with the same name stay apart, and adding
+ * a block at a section's top keeps it. Undefined outside every section. */
+export function sectionKey(
+  blocks: { section: string }[],
+  index: number,
+): string | undefined {
+  const runs = sectionRuns(blocks),
+    at = runs.findIndex((run) => index >= run.start && index < run.end),
+    label = runs[at]?.label;
+  if (!label) return undefined;
+  return `${label}#${runs.slice(0, at).filter((run) => run.label === label).length}`;
+}
+
+/**
+ * Carries one day's collapsed sections (`keys` starting with `prefix`) across
+ * any change of its blocks: a rename, a deletion, an undo, a collaborator's
+ * edit. Each collapsed section follows the first of its blocks still in a
+ * section of the same name, or else the first still at the top level (a
+ * rename); a section that is gone leaves no key. Returns `keys` itself when
+ * nothing changes.
+ */
+export function carrySectionKeys(
+  keys: Set<string>,
+  prefix: string,
+  before: { id: string; section: string }[],
+  after: { id: string; section: string }[],
+): Set<string> {
+  const next = new Set([...keys].filter((key) => !key.startsWith(prefix)));
+  const index = new Map(after.map((block, i) => [block.id, i]));
+  for (const run of sectionRuns(before)) {
+    const key = sectionKey(before, run.start);
+    if (!key || !keys.has(prefix + key)) continue;
+    const kept = before
+      .slice(run.start, run.end)
+      .flatMap((block) => index.get(block.id) ?? []);
+    const at = kept.find((i) => after[i].section === run.label) ?? kept[0];
+    const carried = at === undefined ? undefined : sectionKey(after, at);
+    if (carried) next.add(prefix + carried);
+  }
+  return next.size === keys.size && [...next].every((key) => keys.has(key))
+    ? keys
+    : next;
+}
+
+/** Whether the top-level block at `index` is the first of a section. */
+export function startsSection(
+  blocks: { section: string }[],
+  index: number,
+): boolean {
+  return (
+    !!blocks[index]?.section &&
+    (index === 0 || blocks[index - 1].section !== blocks[index].section)
+  );
+}
+
+/** Inserts a section before a top-level block, like a heading typed in a
+ * document: the blocks from there to the end of their run move into it. Where
+ * a section already starts, or at the end of the day, the new section starts
+ * with `placeholder`. The label is `base`, numbered when the day already uses
+ * it, so two new sections never merge. */
+export function insertSection(
+  blocks: Block[],
+  base: string,
+  placeholder: Block,
+  beforeId?: string,
+): { blocks: Block[]; firstId: string } {
+  const used = new Set(blocks.map((block) => block.section));
+  let label = base;
+  for (let n = 2; used.has(label); n++) label = `${base} ${n}`;
+  const index = beforeId
+    ? blocks.findIndex((block) => block.id === beforeId)
+    : -1;
+  if (index < 0 || startsSection(blocks, index))
+    return {
+      blocks: insertBlockInto(blocks, placeholder, {
+        listId: null,
+        beforeId: index < 0 ? undefined : beforeId,
+        section: label,
+      }),
+      firstId: placeholder.id,
+    };
+  const run = blocks[index].section;
+  let end = index + 1;
+  while (end < blocks.length && blocks[end].section === run) end++;
+  return {
+    blocks: blocks.map((block, i) =>
+      i >= index && i < end ? { ...block, section: label } : block,
+    ),
+    firstId: blocks[index].id,
+  };
+}
+
+/** Renames the section whose first block is `firstId`. An empty name removes
+ * the section and keeps its blocks. */
+export function renameSection(
+  blocks: Block[],
+  firstId: string,
+  label: string,
+): Block[] {
+  const start = blocks.findIndex((block) => block.id === firstId);
+  const run = sectionRuns(blocks).find(
+    (candidate) => candidate.start === start && candidate.label,
+  );
+  const section = label.trim();
+  if (!run || run.label === section) return blocks;
+  return blocks.map((block, i) =>
+    i >= run.start && i < run.end ? { ...block, section } : block,
+  );
+}
+
+/** Replaces the selected top-level blocks with `group`, placed where the
+ * first of them was and in its section. */
+export function groupBlocks(
+  blocks: Block[],
+  ids: Set<string>,
+  group: Block,
+): Block[] {
+  const at = blocks.findIndex((block) => ids.has(block.id));
+  if (at < 0) return blocks;
+  const rest = blocks.filter((block) => !ids.has(block.id));
+  return [
+    ...rest.slice(0, at),
+    { ...group, section: blocks[at].section },
+    ...rest.slice(at),
+  ];
 }

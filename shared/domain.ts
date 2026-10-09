@@ -216,22 +216,36 @@ export function newBlock(
   return block;
 }
 
+// Building a format costs about 20 times more than using one, and the session
+// list needs a date per row. Only named timezones are kept (the runtime's own
+// can change), and at most 100 of them: timezones are user input.
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
 /** Calendar date (YYYY-MM-DD) of an instant in a timezone, or in the
  * runtime's own timezone when none is given. `toISOString()` would give the
  * UTC date, which is yesterday in Geneva until 01:00 or 02:00. */
 export function localDate(at: Date = new Date(), timeZone?: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(at);
+  let format = timeZone ? dateFormats.get(timeZone) : undefined;
+  if (!format) {
+    // An invalid timezone throws here, before anything is cached.
+    format = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    if (timeZone) {
+      if (dateFormats.size >= 100) dateFormats.clear();
+      dateFormats.set(timeZone, format);
+    }
+  }
+  const parts = format.formatToParts(at);
   const part = (type: string) =>
     parts.find((value) => value.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-const DEFAULT_TIMEZONE = "Europe/Zurich";
+export const DEFAULT_TIMEZONE = "Europe/Zurich";
 
 export function createSession(
   userId: string,
@@ -447,6 +461,9 @@ export interface ScheduledTreeBlock<
 > extends ScheduledBlock<T> {
   depth: number;
   roomPath: string[];
+  /** The section of the row's top-level block: nested rows follow their
+   * container. Computed, never stored. */
+  section: string;
 }
 function blockAnchor(block: PublicBlock): number | null {
   if (block.lockedStart !== undefined) return minuteOfDay(block.lockedStart);
@@ -472,6 +489,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
     depth: number,
     roomPath: string[],
     backCalculate: boolean,
+    section?: string,
   ): ScheduledTreeBlock<T>[] => {
     let cursor = initial;
     if (backCalculate) {
@@ -495,6 +513,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
       // neither a gap nor an overlap.
       const gapMinutes =
         Math.abs(startMinute - cursor) < 1 ? 0 : startMinute - cursor;
+      const rowSection = section ?? block.section;
       const children =
         block.kind === "group"
           ? sequence(
@@ -503,6 +522,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
               depth + 1,
               roomPath,
               false,
+              rowSection,
             )
           : block.kind === "parallel"
             ? (block.rooms ?? []).flatMap((room) =>
@@ -512,6 +532,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
                   depth + 1,
                   [...roomPath, room.title],
                   false,
+                  rowSection,
                 ),
               )
             : [];
@@ -529,6 +550,7 @@ export function scheduleTreeDay<T extends PublicBlock>(day: {
           conflict: gapMinutes < 0 || children.some((row) => row.conflict),
           depth,
           roomPath,
+          section: rowSection,
         },
         ...children,
       ];
@@ -645,13 +667,18 @@ export function publicProjection(
     (column) =>
       !BUILTIN_COLUMNS.includes(column.id as (typeof BUILTIN_COLUMNS)[number]),
   );
-  const projectBlock = (block: Block | PublicBlock): PublicBlock => {
+  // A nested block is in its top-level container's section, as the agenda
+  // shows it: a label it kept from before being grouped is never sent.
+  const projectBlock = (
+    block: Block | PublicBlock,
+    section = block.section,
+  ): PublicBlock => {
     const projected: PublicBlock = {
       id: block.id,
       title: block.title,
       duration: blockDuration(block),
       category: block.category,
-      section: block.section,
+      section,
       fields: Object.fromEntries(
         publicFields.flatMap((column) =>
           Object.hasOwn(block.fields, column.id)
@@ -663,12 +690,14 @@ export function publicProjection(
     if (["activity", "note", "group", "parallel"].includes(block.kind ?? ""))
       projected.kind = block.kind;
     if (block.kind === "group")
-      projected.children = (block.children ?? []).map(projectBlock);
+      projected.children = (block.children ?? []).map((child) =>
+        projectBlock(child, section),
+      );
     if (block.kind === "parallel")
       projected.rooms = (block.rooms ?? []).map((room) => ({
         id: room.id,
         title: room.title,
-        blocks: room.blocks.map(projectBlock),
+        blocks: room.blocks.map((child) => projectBlock(child, section)),
       }));
     if (block.lockedStart !== undefined)
       projected.lockedStart = block.lockedStart;
@@ -683,7 +712,7 @@ export function publicProjection(
     title: day.title,
     date: day.date,
     startTime: day.startTime,
-    blocks: day.blocks.map(projectBlock),
+    blocks: day.blocks.map((block) => projectBlock(block)),
   }));
   const run = session.run;
   const pages = pageProjection(session.pages);
@@ -825,7 +854,7 @@ type TimedSession =
   | Pick<Session, "days" | "run" | "sound">
   | (PublicSession & { sound?: SoundSettings });
 const plannedBlockSeconds = (
-  run: RunState,
+  run: Pick<RunState, "plannedDurations">,
   block: PublicBlock | null | undefined,
 ): number => {
   if (!block) return 0;
@@ -833,6 +862,78 @@ const plannedBlockSeconds = (
     ? run.plannedDurations[block.id]
     : block.duration * 60;
 };
+/** Whole seconds rounded down, as the agenda and the run records count
+ * them. The tolerance absorbs the floating-point noise of adding up timer
+ * stints: 599.9999999999 s is ten minutes. */
+export const wholeSeconds = (seconds: number) => Math.floor(seconds + 1e-6);
+const wholeMinutes = (seconds: number) =>
+  Math.floor(wholeSeconds(seconds) / 60);
+export interface RunComparison {
+  plannedMinutes: number;
+  actualMinutes: number;
+  /** Time spent in whole seconds, for the "8 min 50 s" detail. */
+  actualSeconds: number;
+  /** actualMinutes − plannedMinutes: the difference of the two numbers shown. */
+  deltaMinutes: number;
+  /** 5 min or more over is very late, as on the timer. */
+  state: "on-time" | "early" | "late" | "very-late";
+}
+/** Whole minutes rounded down, like every agenda duration. */
+export function compareDurations(
+  plannedSeconds: number,
+  actualSeconds: number,
+): RunComparison {
+  const spent = wholeSeconds(actualSeconds),
+    plannedMinutes = wholeMinutes(plannedSeconds),
+    actualMinutes = Math.floor(spent / 60),
+    deltaMinutes = actualMinutes - plannedMinutes;
+  return {
+    plannedMinutes,
+    actualMinutes,
+    actualSeconds: spent,
+    deltaMinutes,
+    state:
+      deltaMinutes === 0
+        ? "on-time"
+        : deltaMinutes < 0
+          ? "early"
+          : deltaMinutes >= 5
+            ? "very-late"
+            : "late",
+  };
+}
+/** The plan captured when the timer started against the time spent, for the
+ * timed steps under `blocks` (one row, a group, a day). Null while idle, for
+ * notes and empty groups, and until every one of these steps was played. */
+export function runComparison(
+  run: Pick<
+    RunState,
+    "status" | "blockId" | "plannedDurations" | "actualDurations"
+  >,
+  blocks: readonly PublicBlock[],
+): RunComparison | null {
+  const actual = run.actualDurations,
+    steps = runnableBlocks(blocks),
+    // The timer can go back to a step it had left (+1/+5 on the previous
+    // step after an automatic advance): it keeps its key but is not over.
+    current =
+      run.status === "running" || run.status === "paused" ? run.blockId : null;
+  if (
+    run.status === "idle" ||
+    !actual ||
+    !steps.length ||
+    !steps.every(
+      (block) => block.id !== current && Object.hasOwn(actual, block.id),
+    )
+  )
+    return null;
+  // Whole seconds per step, as each run record keeps them, so a past run
+  // adds up to the same minutes.
+  return compareDurations(
+    steps.reduce((sum, block) => sum + plannedBlockSeconds(run, block), 0),
+    steps.reduce((sum, block) => sum + wholeSeconds(actual[block.id]), 0),
+  );
+}
 /**
  * A day's blocks with new durations (seconds per timed step, from a run):
  * whole minutes rounded down when `actual`, and a parallel step spread over
@@ -854,11 +955,11 @@ export function withStepDurations<D extends { id: string; blocks: Block[] }>(
             if (actual && block.kind === "parallel")
               return spreadParallelActual(
                 block,
-                Math.floor(durations[block.id] / 60 + 1e-9),
+                wholeMinutes(durations[block.id]),
               );
             // Whole minutes, rounded down: the agenda never shows seconds.
             const duration = actual
-              ? Math.floor(durations[block.id] / 60 + 1e-9)
+              ? wholeMinutes(durations[block.id])
               : durations[block.id] / 60;
             if (!Number.isFinite(duration) || duration < 0 || duration > 1440)
               throw new Error("Actual duration exceeds agenda limit");
@@ -1194,7 +1295,13 @@ export function transitionRun(
     (current.status === "running" || current.status === "paused")
   ) {
     run.elapsedBeforePause = elapsedSeconds(current, now);
-    if (block)
+    // Stopped during the countdown to a scheduled start, the step was never
+    // reached: it gets no actual time, so it never reads as played.
+    if (
+      block &&
+      (run.elapsedBeforePause > 0 ||
+        Object.hasOwn(current.actualDurations ?? {}, block.id))
+    )
       run.actualDurations = {
         ...current.actualDurations,
         [block.id]:

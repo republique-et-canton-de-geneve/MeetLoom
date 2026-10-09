@@ -97,8 +97,8 @@ export function PrintableAgenda({
                       : undefined,
                   }}
                 >
-                  {item.block.section !== rows[index - 1]?.block.section &&
-                    item.block.section && <h3>{item.block.section}</h3>}
+                  {item.section !== rows[index - 1]?.section &&
+                    item.section && <h3>{item.section}</h3>}
                   {item.roomPath.join(" / ") !==
                     rows[index - 1]?.roomPath.join(" / ") &&
                     item.roomPath.length > 0 && (

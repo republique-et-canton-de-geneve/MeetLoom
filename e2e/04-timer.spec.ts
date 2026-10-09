@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { duration, member, signIn } from "./helpers";
+import {
+  addActivities,
+  createSession,
+  duration,
+  member,
+  signIn,
+} from "./helpers";
 
 /** Headless Chromium has no always-on-top window: the popup fallback shows
  * the same content. */
@@ -40,6 +46,13 @@ test("facilitating: start, move on, come back where the block was, visitors foll
   await expect(page.locator(".timer-bar")).toContainText("Idées");
   // The passed block shows its actual duration.
   await expect(page.locator(".actual-duration").first()).toHaveText("< 1 min");
+  // Next to it, the gap and the plan captured when the timer started.
+  const compared = page.locator(".duration-compare").first();
+  await expect(compared).toContainText("prévu 5 min");
+  await expect(compared.locator(".duration-gap")).toHaveAttribute(
+    "data-gap",
+    "early",
+  );
   await page.getByTitle(/Bloc précédent/).click();
   await expect(page.locator(".timer-bar")).toContainText("Accueil");
   // Five minutes planned: the time already spent is kept, not restarted.
@@ -109,6 +122,22 @@ test("a finished session shows no countdown, position or schedule estimate, and 
   await expect(bar).not.toContainText("Fin prévue");
   await expect(bar).not.toContainText("Dans le temps prévu");
   await expect(bar).not.toContainText(" / 3");
+  // Every step was played: the day, its section and the session total
+  // compare the plan with the time spent.
+  const section = page.locator(".agenda-section").filter({
+    has: page.getByRole("button", {
+      name: "Développer ou replier la section Construire",
+    }),
+  });
+  for (const total of [
+    page.locator(".duration-pill"),
+    page.locator(".agenda-end"),
+    page.locator(".agenda-summary-actual"),
+    section.locator(".section-totals"),
+  ])
+    await expect(total.locator(".run-compare")).toContainText(
+      /Prévu \d.*réel \d/,
+    );
 
   // "Use actual durations" rewrites the agenda, but the run history keeps
   // the initial plan, which can be put back at any time.
@@ -133,6 +162,7 @@ test("a finished session shows no countdown, position or schedule estimate, and 
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
   await expect(duration(page, "Idées")).toHaveValue(planned);
+  await expect(page.locator(".duration-pill .run-compare")).toHaveCount(0);
 });
 
 test("a visitor whose clock is ten minutes fast still sees the right countdown", async ({
@@ -191,4 +221,46 @@ test("late and early stand out from on schedule, not only by their wording", asy
   );
   await expect(page.locator(".timer-bar .timer-left")).toContainText("reste");
   await page.getByTitle("Réinitialiser").click();
+});
+
+test("a session whose timer finished asks to be closed from the dashboard", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Bilan E2E");
+  await addActivities(page, ["Ouverture", "Conclusion"]);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  const bar = page.locator(".timer-bar");
+  await expect(bar).toContainText("Ouverture");
+  await page.getByTitle("Bloc suivant").click();
+  await expect(bar).toContainText("Conclusion");
+  await page.getByTitle("Bloc suivant").click();
+  await expect(bar).toContainText("SÉANCE TERMINÉE");
+
+  await page.goto("/");
+  // Other journeys may leave finished sessions: stay on this card.
+  const card = page.locator(".session-card", { hasText: "Bilan E2E" });
+  const toClose = { name: "Voir les séances à clôturer" };
+  // The banner leads to what it counts, whatever filter hides it.
+  await page.getByLabel("Mon rôle").selectOption("facilitator");
+  await expect(card).toHaveCount(0);
+  await page.locator(".closing-summary").getByRole("button", toClose).click();
+  await expect(card).toBeVisible();
+  // Archived sessions are never to close: the filter does not claim all are.
+  await page.getByRole("button", { name: "Archives", exact: true }).click();
+  await expect(page.locator(".empty-state h3")).toHaveText(
+    "Aucune séance à clôturer ici",
+  );
+  await page.locator(".empty-state").getByRole("button", toClose).click();
+  await card.getByRole("button", { name: /Séance terminée/ }).click();
+  await page.getByRole("button", { name: "Clôturer la séance" }).click();
+  await expect(
+    page.getByText("elle compte désormais dans le rapport"),
+  ).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByLabel("Activité").selectOption("all");
+  await expect(card).toContainText("Clôturée");
+  await expect(
+    card.getByRole("button", { name: /Séance terminée/ }),
+  ).toHaveCount(0);
 });

@@ -1,16 +1,19 @@
 import { Flag, RotateCcw, Timer as TimerIcon } from "lucide-react";
 import type { Session } from "../shared/model";
 import type { RunRecord } from "../shared/history";
+import { compareDurations } from "../shared/domain";
 import { useI18n } from "./i18n";
-import { durationLabel } from "./ui";
+import { actualDurationLabel, gapPhrase } from "./TimeFields";
+import { durationGapLabel, durationLabel } from "./ui";
 
-/** Signed whole minutes: "+3 min", "−2 min", "=". */
-function gap(seconds: number) {
-  const minutes = Math.round(seconds / 60);
-  return minutes === 0
-    ? "="
-    : `${minutes > 0 ? "+" : "−"}${Math.abs(minutes)} min`;
-}
+/** The steps a run reached, as the agenda counts them: a step skipped in
+ * under a second was played for 0 s. */
+export const playedSteps = (run: RunRecord) =>
+  run.blocks.filter((block) => block.played ?? block.actual > 0);
+
+/** What "Apply these actual durations" puts back: each played step's time. */
+export const actualDurationsOf = (run: RunRecord) =>
+  Object.fromEntries(playedSteps(run).map((block) => [block.id, block.actual]));
 
 /**
  * Every finished run, newest first. The first run of each day is the initial
@@ -66,14 +69,13 @@ export default function RunsHistory({
       {[...runs].reverse().map((run) => {
         const day = session.days.find((value) => value.id === run.dayId),
           first = rank.get(run.id) === 1,
-          played = run.blocks.filter((block) => block.actual > 0),
+          played = playedSteps(run),
           planned = run.blocks.reduce((sum, block) => sum + block.planned, 0),
           actual = played.reduce((sum, block) => sum + block.actual, 0),
-          late = Math.round(
-            played.reduce(
-              (sum, block) => sum + block.actual - block.planned,
-              0,
-            ) / 60,
+          // Whole minutes rounded down, like the gaps shown in the agenda.
+          gap = compareDurations(
+            played.reduce((sum, block) => sum + block.planned, 0),
+            actual,
           );
         return (
           <article
@@ -104,15 +106,8 @@ export default function RunsHistory({
               {t("Prévu", "Planned")} {durationLabel(planned / 60)} ·{" "}
               {t("réel", "actual")} {durationLabel(actual / 60)}
               {played.length > 0 && (
-                <span
-                  className="history-run-gap"
-                  data-gap={late > 0 ? "late" : late < 0 ? "early" : "on-time"}
-                >
-                  {late > 0
-                    ? t(`${late} min de retard`, `${late} min late`)
-                    : late < 0
-                      ? t(`${-late} min d’avance`, `${-late} min early`)
-                      : t("Dans le temps prévu", "On schedule")}
+                <span className="history-run-gap" data-gap={gap.state}>
+                  {gapPhrase(t, gap.deltaMinutes)}
                 </span>
               )}
             </p>
@@ -133,13 +128,18 @@ export default function RunsHistory({
                       <td>{block.title}</td>
                       <td>{durationLabel(block.planned / 60)}</td>
                       <td>
-                        {block.actual > 0
-                          ? durationLabel(block.actual / 60)
+                        {played.includes(block)
+                          ? block.actual < 60
+                            ? actualDurationLabel(block.actual)
+                            : durationLabel(block.actual / 60)
                           : "—"}
                       </td>
                       <td>
-                        {block.actual > 0
-                          ? gap(block.actual - block.planned)
+                        {played.includes(block)
+                          ? durationGapLabel(
+                              compareDurations(block.planned, block.actual)
+                                .deltaMinutes,
+                            )
                           : "—"}
                       </td>
                     </tr>

@@ -287,6 +287,10 @@
   background: #e1f0fb;
   color: #184766;
 }
+.history-run-gap[data-gap="very-late"] {
+  background: #fde2e1;
+  color: #7a1c1a;
+}
 .history-run details summary {
   cursor: pointer;
   line-height: 1.8;

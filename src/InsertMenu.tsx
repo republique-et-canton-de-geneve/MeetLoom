@@ -1,15 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { Columns3, FolderTree, Plus, Square, StickyNote } from "lucide-react";
+import {
+  Columns3,
+  FolderTree,
+  Heading,
+  Plus,
+  Square,
+  StickyNote,
+} from "lucide-react";
 import { useI18n } from "./i18n";
 
-export type InsertKind = "activity" | "group" | "note" | "parallel";
+export type InsertKind = "activity" | "group" | "section" | "note" | "parallel";
 
 /** Thin line between two agenda rows: hovering shows a "+" that opens a menu
- * to insert a block, a group, a note or parallel activities at that spot. */
+ * to insert a block, a group, a note or parallel activities at that spot, and
+ * with `withSection` a section that gathers the blocks below it. */
 export default function InsertMenu({
   pick,
+  withSection = false,
 }: {
   pick: (kind: InsertKind) => void;
+  withSection?: boolean;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -31,7 +41,7 @@ export default function InsertMenu({
       document.removeEventListener("keydown", close);
     };
   }, [open]);
-  const options: [InsertKind, typeof Square, string, string][] = [
+  const kinds: [InsertKind, typeof Square, string, string][] = [
     [
       "activity",
       Square,
@@ -43,6 +53,15 @@ export default function InsertMenu({
       FolderTree,
       t("Groupe", "Group"),
       t("Regrouper des activités", "Group activities together"),
+    ],
+    [
+      "section",
+      Heading,
+      t("Section", "Section"),
+      t(
+        "Réunir les blocs qui suivent sous un titre",
+        "Gather the blocks that follow under a heading",
+      ),
     ],
     [
       "note",
@@ -57,6 +76,9 @@ export default function InsertMenu({
       t("Plusieurs salles en même temps", "Several rooms at the same time"),
     ],
   ];
+  const options = withSection
+    ? kinds
+    : kinds.filter(([kind]) => kind !== "section");
   return (
     <div
       className={`insert-slot ${open ? "open" : ""}`}
