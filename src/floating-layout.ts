@@ -86,8 +86,11 @@ interface Content {
   controls: boolean;
   /** Characters of the current block's title. */
   titleChars: number;
-  /** Characters of the clock ("05:00", "+1:05:00"). */
+  /** Characters of the clock ("05:00", "+1:05:00", "✓" once finished). */
   clockChars: number;
+  /** False when the schedule line and the clock's label are not shown (a
+   * finished run): no room is kept for them. */
+  schedule?: boolean;
 }
 
 /** Width and height, in units, of one arrangement. */
@@ -100,7 +103,7 @@ function measure(
   const { clock, detail, button } = SHAPES[shape];
   const line = detail * LINE,
     badge = detail * 1.6,
-    clockWidth = Math.max(clockChars, 5) * DIGIT * clock,
+    clockWidth = Math.max(clockChars, 1) * DIGIT * clock,
     title = Math.max(titleChars, 6),
     titleWidth = !show("title")
       ? 0
@@ -201,15 +204,12 @@ export function floatingFit(
   const inner = [Math.max(1, width - 2 * padX), Math.max(1, height - 2 * padY)];
   let best: (FloatingFit & { score: number; unit: number }) | null = null;
   for (const shape of ["box", "strip", "column"] as const) {
-    const hidden: FloatingItem[] = [];
-    for (const drop of [...DROPS[shape], ["*" as FloatingItem]]) {
-      if (drop[0] === ("*" as FloatingItem))
-        hidden.push(
-          ...(Object.keys(WEIGHT) as FloatingItem[]).filter(
-            (item) => !hidden.includes(item),
-          ),
-        );
-      else hidden.push(...drop);
+    const all = Object.keys(WEIGHT) as FloatingItem[];
+    // What is not rendered at all takes no room and counts for nothing.
+    const hidden: FloatingItem[] =
+      content.schedule === false ? ["badge", "end", "left", "label"] : [];
+    for (const drop of [...DROPS[shape], all]) {
+      hidden.push(...drop.filter((item) => !hidden.includes(item)));
       const show = (item: FloatingItem) => !hidden.includes(item);
       // A box may wrap its title and its schedule onto a second line.
       const variants =
@@ -239,7 +239,7 @@ export function floatingFit(
       const readable =
         (!show("title") || unit >= MIN_TITLE) &&
         (!details || unit * detail >= MIN_DETAIL);
-      if (!readable && hidden.length < 7) continue;
+      if (!readable && hidden.length < all.length) continue;
       const score = (Object.keys(WEIGHT) as FloatingItem[])
         .filter(show)
         .reduce((sum, item) => sum + WEIGHT[item], 0);

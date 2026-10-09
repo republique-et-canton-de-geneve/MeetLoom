@@ -34,6 +34,7 @@ import {
   serializeRichText,
 } from "../shared/richtext";
 import { RichText } from "./RichText";
+import { toolbarArea, toolbarPlacement } from "./toolbar-placement";
 import { useI18n } from "./i18n";
 import { useMentionCollaborators } from "./MentionContext";
 import type { Collaborator } from "../shared/comments";
@@ -59,30 +60,15 @@ const Mention = TiptapNode.create({
   },
 });
 
-/** Where the editing bar goes: above the text by default, below it when the
- * text sits too close to the top of the window or of its scrolling panel,
- * and moved left when it would leave the window on the right. It floats, so
- * the text under the pointer never moves. */
-function toolbarPlacement(
-  box: { top: number; left: number },
-  bar: { width: number; height: number },
-  limits: { top: number; right: number },
-): { below: boolean; shift: number } {
-  return {
-    below: box.top - bar.height - 4 < limits.top,
-    shift: Math.min(0, limits.right - 8 - (box.left + bar.width)),
-  };
-}
-
-/** The top of the area a bar above `element` can show in: the window, or a
- * scrolling ancestor that would clip it. */
-function visibleTop(element: HTMLElement) {
-  let top = 0;
+/** The boxes of the ancestors that clip what overflows them. */
+function clippingBoxes(element: HTMLElement) {
+  const boxes: DOMRect[] = [];
   for (let node = element.parentElement; node; node = node.parentElement) {
-    if (/(auto|scroll|hidden)/.test(getComputedStyle(node).overflowY))
-      top = Math.max(top, node.getBoundingClientRect().top);
+    const style = getComputedStyle(node);
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowX + style.overflowY))
+      boxes.push(node.getBoundingClientRect());
   }
-  return top;
+  return boxes;
 }
 
 export interface RichTextEditorProps {
@@ -301,19 +287,34 @@ function ActiveEditor({
     editor.view.focus();
   }, [editor]);
   const floating = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState({ below: false, shift: 0 });
+  const [placement, setPlacement] = useState({
+    below: false,
+    shift: 0,
+    maxWidth: 560,
+  });
   useLayoutEffect(() => {
     const place = () => {
       const bar = floating.current,
         box = bar?.parentElement;
       if (!bar || !box) return;
-      const next = toolbarPlacement(
-        box.getBoundingClientRect(),
-        { width: bar.offsetWidth, height: bar.offsetHeight },
-        { top: visibleTop(box), right: document.documentElement.clientWidth },
-      );
+      const area = toolbarArea(clippingBoxes(box), {
+          width: document.documentElement.clientWidth,
+        }),
+        maxWidth = Math.min(560, area.width);
+      // Measured at the width it will have: a narrow panel wraps it.
+      bar.style.maxWidth = `${maxWidth}px`;
+      const next = {
+        ...toolbarPlacement(
+          box.getBoundingClientRect(),
+          { width: bar.offsetWidth, height: bar.offsetHeight },
+          area,
+        ),
+        maxWidth,
+      };
       setPlacement((current) =>
-        current.below === next.below && current.shift === next.shift
+        current.below === next.below &&
+        current.shift === next.shift &&
+        current.maxWidth === next.maxWidth
           ? current
           : next,
       );
@@ -406,7 +407,7 @@ function ActiveEditor({
       <div
         ref={floating}
         className={`rich-floating ${placement.below ? "below" : ""}`}
-        style={{ left: placement.shift }}
+        style={{ left: placement.shift, maxWidth: placement.maxWidth }}
       >
         <div
           className="rich-toolbar"

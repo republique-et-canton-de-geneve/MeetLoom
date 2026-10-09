@@ -477,6 +477,8 @@ export function FloatingTimer({
     controls: !!children,
     clockChars: shown.length,
     titleChars: (view.block?.title ?? session.title).length,
+    // As in TimerContent: a finished run has no schedule line or label.
+    schedule: session.run.status !== "finished" && view.projectedEnd !== null,
   });
   useLayoutEffect(() => {
     const body = win.document.body;

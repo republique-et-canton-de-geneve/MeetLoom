@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   Clock3,
@@ -26,7 +26,7 @@ import {
   durationLabel,
 } from "./ui";
 import { FloatingTimer, TimerContent, useFloatingWindow } from "./Timer";
-import { useFollowCurrent } from "./useFollowCurrent";
+import { followedDay, useFollowCurrent } from "./useFollowCurrent";
 import { createPortal } from "react-dom";
 import { columnValue, exportSessionCsv } from "./export";
 import { recordServerTime, serverNow } from "./clock";
@@ -155,7 +155,13 @@ export default function PublicAgenda({ token }: { token: string }) {
 
   const { floating, movable, openFloating, floatingNotice } =
     useFloatingWindow();
-  // Visitors follow the block being run without scrolling themselves.
+  // Visitors follow the block being run without scrolling themselves, on
+  // its day unless they picked another one.
+  const pickedDay = useRef(false);
+  const runDay = session ? followedDay(session.run, session.days) : null;
+  useEffect(() => {
+    if (runDay && !pickedDay.current) setSelectedDay(runDay);
+  }, [runDay]);
   useFollowCurrent(
     session &&
       (session.run.status === "running" || session.run.status === "paused")
@@ -352,7 +358,10 @@ export default function PublicAgenda({ token }: { token: string }) {
                         : ""
                     }
                     onClick={() => {
-                      if (value.kind === "day") setSelectedDay(value.id);
+                      if (value.kind === "day") {
+                        pickedDay.current = true;
+                        setSelectedDay(value.id);
+                      }
                       setSelectedPage(value.kind === "page" ? value.id : "");
                       setSelectedForm(value.kind === "form" ? value.id : "");
                     }}

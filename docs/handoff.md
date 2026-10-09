@@ -16,6 +16,8 @@ Tests: `tests/text-input.test.ts`, `tests/follow-current.test.ts`, `tests/floati
 
 Known limits: the Picture-in-Picture window cannot be placed by the page (browser rule); the visitor page scrolls its live timer out of view when following a block far down (the editor keeps its timer sticky); while editing, the floating formatting bar covers what is just above the text (the block title in agenda rows); the window layout's widths are estimates from French label lengths, checked without overflow at 7 sizes in French and English.
 
+Codex's first review (three P2, all confirmed and fixed with tests): a running multi-day session opened on its first day, so nothing was followed (`followedDay`: the editor's initial navigation and the visitor page select the day being run, a visitor's own day choice is kept); in the block inspector the 560 px bar overflowed the 420 px panel and its first buttons were clipped (`src/toolbar-placement.ts`: the area is narrowed by every clipping ancestor, the bar's `max-width` follows it and it wraps); a finished run's window kept room for its absent schedule and hid the title in a 300×100 window (`schedule: false` in `floatingFit`). 421 tests, 25/25 E2E; the new E2E step (second day, reload) failed on the previous head ("Jour 1").
+
 Next: CI and review on PR #42, then the user's acceptance in a real browser (manual-qa.md, "Still to check by the user"), merge when the user asks.
 
 **PR #37 note (October 7, 2026).** The user sent feedback on 0.1.5 (five screenshots and a screen recording, in French). Branch `claude/focused-archimedes-lyatav`, PR #37 against `main`, one commit per change plus two review-fix commits:

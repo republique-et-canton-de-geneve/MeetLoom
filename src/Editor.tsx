@@ -122,7 +122,7 @@ import {
 } from "./block-tree";
 import SectionHeader from "./SectionHeader";
 import { TextField } from "./TextField";
-import { useFollowCurrent } from "./useFollowCurrent";
+import { followedDay, useFollowCurrent } from "./useFollowCurrent";
 import {
   categoriesFor,
   categoryColor,
@@ -244,6 +244,9 @@ export default function Editor({
       if (target) setSelectedDay(target.id);
       setCommentTarget({ blockId, commentId });
       setPanel("comments");
+    } else if (followedDay(session.run, session.days)) {
+      // A running session opens on the day being run, to follow it there.
+      setSelectedDay(session.run.dayId!);
     } else if (session.contentOrder?.[0]) {
       const first = session.contentOrder[0];
       if (first.kind === "day") setSelectedDay(first.id);

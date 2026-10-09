@@ -340,4 +340,30 @@ test("while it runs, the agenda follows the current block and the floating windo
   await expect(
     page.getByRole("button", { name: /Animer la séance/ }),
   ).toBeVisible();
+
+  // Run on its second day, the session opens on that day, for the team and
+  // for visitors, so they follow it there.
+  await page.getByTitle("Ajouter un jour").click();
+  await addActivities(page, ["Rétrospective", "Suite", "Clôture"]);
+  await page.getByRole("button", { name: /Animer la séance/ }).click();
+  await expect(page.locator(".timer-bar")).toContainText("Rétrospective");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Nom du jour" })).toHaveValue(
+    "Jour 2",
+  );
+  await expect(current).toBeInViewport();
+  const shared = await page.request.post(`/api/sessions/${session.id}/shares`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { label: "Suivi", mode: "agenda" },
+  });
+  const { share } = await shared.json();
+  const visitor = await (
+    await browser.newContext({ viewport: { width: 1280, height: 600 } })
+  ).newPage();
+  await visitor.goto(`/s/${share.token}`);
+  await expect(visitor.locator(".public-block.is-current")).toBeInViewport();
+  await page.getByTitle("Réinitialiser").click();
+  await expect(
+    page.getByRole("button", { name: /Animer la séance/ }),
+  ).toBeVisible();
 });

@@ -14,6 +14,18 @@ export function needsFollow(
   );
 }
 
+/** The day being run, which an opened agenda shows rather than its first
+ * day so it can follow the run; null when nothing runs. */
+export function followedDay(
+  run: { status: string; dayId: string | null },
+  days: { id: string }[],
+): string | null {
+  return (run.status === "running" || run.status === "paused") &&
+    days.some((day) => day.id === run.dayId)
+    ? run.dayId
+    : null;
+}
+
 const typing = () =>
   !!document.activeElement?.matches(
     "input, textarea, select, [contenteditable='true']",

@@ -125,3 +125,15 @@ test("edges: a popup moves there; the always-on-top window only takes the shape"
     height: 232,
   });
 });
+
+test("a finished run keeps its title: no room is kept for the schedule it no longer shows", () => {
+  // Codex review: a 300 x 100 facilitator window once the run is over.
+  const finished = floatingFit(300, 100, {
+    controls: true,
+    clockChars: 1,
+    titleChars: 23,
+    schedule: false,
+  });
+  assert.ok(shown(finished, "title"), `hidden: ${finished.hidden}`);
+  assert.ok(finished.title >= 14);
+});
