@@ -64,6 +64,11 @@ export default tseslint.config(
             Array.isArray(level) ? ["warn", ...level.slice(1)] : "warn",
           ]),
       ),
+      // TextField renders the <input> its label wraps.
+      "jsx-a11y/label-has-associated-control": [
+        "warn",
+        { controlComponents: ["TextField"] },
+      ],
     },
   },
   {

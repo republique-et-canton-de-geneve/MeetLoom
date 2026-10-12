@@ -139,6 +139,111 @@ test("editing an agenda saves blocks, durations, groups and sections across relo
   await expect(page.getByText("Tout est enregistré")).toBeVisible();
 });
 
+test("typing stays put: spaces survive the autosave, the editing bar floats, the caret lands where clicked", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, member);
+  await createSession(page, "Saisie E2E");
+  await addActivities(page, ["Bienvenue"]);
+  // Saving trims "Acme " to "Acme": the copy coming back while the next
+  // word is typed must not swallow the space (nor a folder's "/").
+  const savedAfter = async (field: Locator, typed: string) => {
+    await field.click();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" &&
+        /^\/api\/sessions\/[^/]+$/.test(new URL(response.url()).pathname),
+    );
+    await page.keyboard.type(typed);
+    await saved;
+    await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  };
+  const client = page.getByRole("textbox", { name: "Client ou équipe" });
+  await savedAfter(client, "Acme ");
+  await page.keyboard.type("Corp");
+  await expect(client).toHaveValue("Acme Corp");
+  const folder = page.getByRole("textbox", { name: "Dossier" });
+  await savedAfter(folder, "Clients/");
+  await page.keyboard.type("Acme");
+  await expect(folder).toHaveValue("Clients/Acme");
+  await savedAfter(
+    page.getByRole("textbox", { name: "Description de la séance" }),
+    "Informations générales : lieu, accès et horaires. Animation et prise de notes par l’équipe.",
+  );
+
+  const description = page.getByRole("textbox", {
+    name: "Description de Bienvenue",
+  });
+  await description.click();
+  await page.keyboard.type(
+    "Chacun se présente en une phrase et dit ce qu’il attend de la journée, puis on vérifie le programme ensemble.",
+  );
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Fin.");
+  await client.click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  // Clicking the text again: it does not move, the page does not scroll,
+  // the bar floats over the title and the caret lands where clicked.
+  const before = (await description.locator("p").first().boundingBox())!;
+  const scrolled = await page.evaluate(() => window.scrollY);
+  await page.mouse.click(before.x + 2, before.y + 8);
+  await expect(
+    page.getByRole("toolbar", { name: "Mise en forme" }),
+  ).toBeVisible();
+  const after = (await page
+    .locator(".rich-editor-content p")
+    .first()
+    .boundingBox())!;
+  expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+  await page.keyboard.type("» ");
+  await client.click();
+  await expect(description.locator("p").first()).toHaveText(/^» Chacun/);
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  // Opened on a link, the editor adds "Retirer le lien" to the bar: grown
+  // near the window's right edge, the bar moves back inside.
+  await description.click();
+  await page.keyboard.press("Control+End");
+  for (let step = 0; step < 4; step++)
+    await page.keyboard.press("Shift+ArrowLeft");
+  await page.getByRole("button", { name: "Insérer un lien" }).click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("https://example.org/fin");
+  await page.keyboard.press("Enter");
+  await client.click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+  await page.setViewportSize({ width: 800, height: 720 });
+  await description.getByRole("link", { name: "Fin." }).click();
+  await expect(
+    page.getByRole("button", { name: "Retirer le lien" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".rich-floating")
+        .evaluate((bar) => bar.getBoundingClientRect().right - innerWidth),
+    )
+    .toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await client.click();
+  await expect(page.getByText("Tout est enregistré")).toBeVisible();
+
+  // On the dashboard, the card's description shows two whole lines.
+  await page.goto("/");
+  const card = page
+    .locator(".session-card")
+    .filter({ hasText: "Saisie E2E" })
+    .locator("> p");
+  await expect(card).toContainText("Informations générales");
+  expect(
+    await card.evaluate(
+      (element) =>
+        element.clientHeight >=
+        2 * parseFloat(getComputedStyle(element).lineHeight) - 0.5,
+    ),
+  ).toBe(true);
+});
+
 test("Escape closes the actions menu and side panels, and returns focus", async ({
   browser,
 }) => {

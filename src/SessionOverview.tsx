@@ -20,6 +20,7 @@ import {
   mapBlocks,
 } from "../shared/domain";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import { durationLabel } from "./ui";
 import { ClockField, DurationField } from "./TimeFields";
 import { LocalClock, DisplayTimeControl } from "./DisplayTime";
@@ -131,14 +132,12 @@ export default function SessionOverview({
               <header>
                 <div className="overview-day-title">
                   <CalendarDays size={17} />
-                  <input
+                  <TextField
                     aria-label={t("Nom du jour", "Day name")}
                     value={day.title}
                     maxLength={120}
                     readOnly={!editable}
-                    onChange={(e) =>
-                      changeDay(day.id, { title: e.target.value })
-                    }
+                    change={(title) => changeDay(day.id, { title })}
                   />
                   <button
                     className="icon-button"
@@ -264,18 +263,16 @@ export default function SessionOverview({
                           <ArrowRight size={15} />
                         </button>
                       </div>
-                      <input
+                      <TextField
                         className="overview-block-title"
                         aria-label={t("Titre du bloc", "Block title")}
                         value={block.title}
                         maxLength={240}
                         readOnly={!editable}
-                        onChange={(e) =>
+                        change={(title) =>
                           changeDay(day.id, {
                             blocks: day.blocks.map((b) =>
-                              b.id === block.id
-                                ? { ...b, title: e.target.value }
-                                : b,
+                              b.id === block.id ? { ...b, title } : b,
                             ),
                           })
                         }
@@ -375,12 +372,12 @@ function OverviewChildren({
         onDragStart={(event) => event.stopPropagation()}
         draggable={false}
       >
-        <input
+        <TextField
           aria-label={t("Titre du bloc imbriqué", "Nested block title")}
           readOnly={!editable}
           value={child.title}
           maxLength={200}
-          onChange={(event) => change(child.id, { title: event.target.value })}
+          change={(title) => change(child.id, { title })}
         />
         <div className="overview-child-controls">
           <DurationField

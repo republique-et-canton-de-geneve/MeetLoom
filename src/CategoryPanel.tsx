@@ -2,6 +2,7 @@ import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { Session } from "../shared/model";
 import { allBlocks, mapBlocks } from "../shared/domain";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import { Modal } from "./ui";
 import {
   categoriesFor,
@@ -55,12 +56,12 @@ export default function CategoryPanel({
               disabled={!editable}
               onChange={(e) => change({ ...category, color: e.target.value })}
             />
-            <input
+            <TextField
               aria-label={t("Nom de catégorie", "Category name")}
               value={category.label}
               maxLength={80}
               readOnly={!editable}
-              onChange={(e) => change({ ...category, label: e.target.value })}
+              change={(label) => change({ ...category, label })}
             />
             <span>{count}</span>
             <button

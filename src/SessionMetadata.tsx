@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Folder, Tag, Building2 } from "lucide-react";
 import type { Session } from "../shared/model";
+import { normalizeFolder } from "../shared/folders";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 
 export default function SessionMetadata({
   session,
@@ -22,13 +24,13 @@ export default function SessionMetadata({
     <div className="session-metadata">
       <label>
         <Building2 size={14} />
-        <input
+        <TextField
           aria-label={t("Client ou équipe", "Client or team")}
           placeholder={t("Client ou équipe", "Client or team")}
           value={session.client ?? ""}
           maxLength={240}
           readOnly={!editable}
-          onChange={(e) => update((s) => ({ ...s, client: e.target.value }))}
+          change={(client) => update((s) => ({ ...s, client }))}
         />
       </label>
       <label>
@@ -66,13 +68,14 @@ export default function SessionMetadata({
       </label>
       <label>
         <Folder size={14} />
-        <input
+        <TextField
           aria-label={t("Dossier", "Folder")}
           placeholder={t("Dossier / sous-dossier", "Folder / subfolder")}
           value={session.folder ?? ""}
           maxLength={240}
           readOnly={!editable}
-          onChange={(e) => update((s) => ({ ...s, folder: e.target.value }))}
+          normalize={normalizeFolder}
+          change={(folder) => update((s) => ({ ...s, folder }))}
         />
       </label>
     </div>

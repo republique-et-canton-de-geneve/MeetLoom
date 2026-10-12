@@ -4,6 +4,7 @@ import type { SessionPage } from "../shared/content";
 import { RichTextEditor } from "./RichTextEditor";
 import { RichText } from "./RichText";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import "./content.css";
 
 export function PageView({ page }: { page: SessionPage }) {
@@ -51,14 +52,12 @@ export function PageEditor({
             {t("Document de séance", "Session document")}
           </p>
           {editable ? (
-            <input
+            <TextField
               className="content-title-input"
               value={page.title}
               maxLength={200}
               aria-label={t("Titre de la page", "Page title")}
-              onChange={(event) =>
-                onChange({ ...page, title: event.target.value })
-              }
+              change={(title) => onChange({ ...page, title })}
             />
           ) : (
             <h1>{page.title}</h1>

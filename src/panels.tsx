@@ -23,6 +23,7 @@ import type {
   SoundSettings,
 } from "../shared/model";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import { api, post } from "./api";
 import { Avatar, ErrorBanner, Modal } from "./ui";
 import { chime } from "./Timer";
@@ -158,12 +159,12 @@ export function ColumnsPanel({ session, editable, update, close }: Editable) {
               </button>
             </span>
             <div>
-              <input
+              <TextField
                 aria-label={t("Nom de colonne", "Column name")}
                 value={c.label}
                 readOnly={!editable}
                 maxLength={80}
-                onChange={(e) => change(c.id, { label: e.target.value })}
+                change={(label) => change(c.id, { label })}
               />
               {!["description", "facilitator"].includes(c.id) && (
                 <select

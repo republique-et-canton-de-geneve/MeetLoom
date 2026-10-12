@@ -28,6 +28,7 @@ import { RichText } from "./RichText";
 import { FormFields, questionTypeLabel } from "./FormFields";
 import { answerLabel, exportResponsesCsv } from "./form-export";
 import { useI18n } from "./i18n";
+import { TextField } from "./TextField";
 import { QRCode } from "./QRCode";
 import { NumberField } from "./NumberField";
 import { FormResponseSummary } from "./FormResponseSummary";
@@ -232,14 +233,12 @@ export default function FormEditor({
         <div>
           <p className="eyebrow">{t("Formulaire de séance", "Session form")}</p>
           {editable ? (
-            <input
+            <TextField
               className="content-title-input"
               value={form.title}
               maxLength={200}
               aria-label={t("Titre du formulaire", "Form title")}
-              onChange={(event) =>
-                change((current) => ({ ...current, title: event.target.value }))
-              }
+              change={(title) => change((current) => ({ ...current, title }))}
             />
           ) : (
             <h1>{form.title}</h1>
@@ -364,14 +363,14 @@ export default function FormEditor({
               </div>
               <label>
                 {t("Question", "Question")}
-                <input
+                <TextField
                   value={question.title}
                   maxLength={200}
                   disabled={!editable}
-                  onChange={(event) =>
+                  change={(title) =>
                     changeQuestion(question.id, (current) => ({
                       ...current,
-                      title: event.target.value,
+                      title,
                     }))
                   }
                 />
@@ -825,17 +824,15 @@ function OptionEditor({
       <strong>{title}</strong>
       {items.map((item, index) => (
         <div className="option-editor-row" key={item.id}>
-          <input
+          <TextField
             value={item.label}
             disabled={!editable}
             maxLength={300}
             aria-label={`${title} ${index + 1}`}
-            onChange={(event) =>
+            change={(label) =>
               change(
                 items.map((value) =>
-                  value.id === item.id
-                    ? { ...value, label: event.target.value }
-                    : value,
+                  value.id === item.id ? { ...value, label } : value,
                 ),
               )
             }

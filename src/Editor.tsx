@@ -121,6 +121,8 @@ import {
   type BlockDestination,
 } from "./block-tree";
 import SectionHeader from "./SectionHeader";
+import { TextField } from "./TextField";
+import { followedDay, useFollowCurrent } from "./useFollowCurrent";
 import {
   categoriesFor,
   categoryColor,
@@ -242,6 +244,9 @@ export default function Editor({
       if (target) setSelectedDay(target.id);
       setCommentTarget({ blockId, commentId });
       setPanel("comments");
+    } else if (followedDay(session.run, session.days)) {
+      // A running session opens on the day being run, to follow it there.
+      setSelectedDay(session.run.dayId!);
     } else if (session.contentOrder?.[0]) {
       const first = session.contentOrder[0];
       if (first.kind === "day") setSelectedDay(first.id);
@@ -406,6 +411,17 @@ export default function Editor({
         carrySectionKeys(current, `${day.id}:`, previous, day.blocks),
       );
   }, [day]);
+  // While the timer runs, the agenda keeps the current block in view, just
+  // under the sticky timer heading.
+  const dayHeading = useRef<HTMLDivElement>(null);
+  const run = session?.run;
+  useFollowCurrent(
+    run && (run.status === "running" || run.status === "paused")
+      ? `${run.runStartedAt}:${run.dayId}:${run.blockId}`
+      : null,
+    ".current-block",
+    () => dayHeading.current?.offsetHeight ?? 0,
+  );
   if (!session || !day)
     return data.error ? (
       <main className="fatal">
@@ -876,7 +892,7 @@ export default function Editor({
             <ChevronDown size={18} />
           )}
         </button>
-        <input
+        <TextField
           className="container-title"
           ref={(el) => {
             // Registered like block titles so the minimap can jump here.
@@ -894,7 +910,7 @@ export default function Editor({
                   "Parallel activities title",
                 )
           }
-          onChange={(e) => editBlock(block.id, { title: e.target.value })}
+          change={(title) => editBlock(block.id, { title })}
         />
       </div>
       {editable && (
@@ -989,15 +1005,15 @@ export default function Editor({
           <div className="room-panel" role="tabpanel">
             {editable && (
               <div className="room-toolbar">
-                <input
+                <TextField
                   value={room.title}
                   maxLength={120}
                   aria-label={t("Nom de la salle", "Room name")}
-                  onChange={(e) =>
+                  change={(title) =>
                     updateRooms(
                       rooms.map((candidate) =>
                         candidate.id === room.id
-                          ? { ...candidate, title: e.target.value }
+                          ? { ...candidate, title }
                           : candidate,
                       ),
                     )
@@ -1283,7 +1299,7 @@ export default function Editor({
                     <ChevronDown size={14} />
                   )}
                 </button>
-                <input
+                <TextField
                   className="block-title-input"
                   ref={(el) => {
                     if (el) titleInputs.current.set(block.id, el);
@@ -1298,11 +1314,7 @@ export default function Editor({
                     "Entrée : nouveau bloc · Alt + ↑↓ : déplacer · Ctrl/⌘ + D : dupliquer",
                     "Enter: new block · Alt + ↑↓: move · Ctrl/⌘ + D: duplicate",
                   )}
-                  onChange={(e) =>
-                    editBlock(block.id, {
-                      title: e.target.value,
-                    })
-                  }
+                  change={(title) => editBlock(block.id, { title })}
                 />
                 <button
                   className="expand-block"
@@ -1879,15 +1891,13 @@ export default function Editor({
                       )}
                     </span>
                   </div>
-                  <input
+                  <TextField
                     className="session-title-input"
                     aria-label={t("Titre de la séance", "Session title")}
                     value={session.title}
                     readOnly={!editable}
                     maxLength={240}
-                    onChange={(e) =>
-                      mutate((s) => ({ ...s, title: e.target.value }))
-                    }
+                    change={(title) => mutate((s) => ({ ...s, title }))}
                   />
                   <textarea
                     className="session-description-input"
@@ -1914,15 +1924,15 @@ export default function Editor({
                   update={mutate}
                 />
                 <DisplayTimeControl timezone={session.timezone} />
-                <div className="day-heading">
+                <div className="day-heading" ref={dayHeading}>
                   <div className="day-settings">
-                    <input
+                    <TextField
                       className="day-title"
                       aria-label={t("Nom du jour", "Day name")}
                       value={day.title}
                       readOnly={!editable}
                       maxLength={120}
-                      onChange={(e) => updateDay({ title: e.target.value })}
+                      change={(title) => updateDay({ title })}
                     />
                     <label className="inline-field">
                       <CalendarDays size={16} />
@@ -2781,13 +2791,11 @@ export default function Editor({
                   )}
                   <label>
                     {t("Titre", "Title")}
-                    <input
+                    <TextField
                       value={currentBlock.title}
                       maxLength={240}
                       readOnly={!editable}
-                      onChange={(e) =>
-                        editBlock(currentBlock.id, { title: e.target.value })
-                      }
+                      change={(title) => editBlock(currentBlock.id, { title })}
                     />
                   </label>
                   {(currentBlock.kind === "group" ||

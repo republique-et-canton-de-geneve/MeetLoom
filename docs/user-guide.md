@@ -68,7 +68,9 @@ Did the timer advance automatically while discussion was still going? Increase t
 
 Locked times help plan the agenda and identify conflicts. Automatic advancement runs activities consecutively without waiting through gaps between locked times. Add an explicit break block or pause the timer to reserve that time during delivery.
 
-Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. In a thin always-on-top window, the current block stays on the left of the countdown and the badge with the expected end on its right. Facilitators also get **previous block**, **pause/resume** and **next block** in that window, so they can move on without leaving a slideshow; visitors' windows show the progress only.
+Under the progress bar, a badge says whether the day is on schedule (neutral, with a check mark), late (amber, red from five minutes) or early (blue), followed by the **expected end** time and the **total time left** for the day. Visitors following a link see the same line. Facilitators also get **previous block**, **pause/resume** and **next block** in that window, so they can move on without leaving a slideshow; visitors' windows show the progress only.
+
+While the timer runs, the agenda follows it: when the run starts, when you open a running session, and each time it moves to another block, the page scrolls that block to the top, just under the timer, with what comes next below it. Visitors' pages do the same. It only follows someone who is following: if you scrolled elsewhere to read or edit, or you are typing in a field, the page stays where it is until you come back to the current block.
 
 The progress bar turns orange at 20% remaining and red at 5%. During a run, the current activity in the minimap shows its progress too, and finished ones are faded; a current parallel block fills from top to bottom across all its rooms, and a long minimap scrolls to keep the current step in view. Once the run ends, the minimap shows plain colors again. These visual thresholds are independent of the sound setting below.
 
@@ -82,7 +84,11 @@ Session settings apply to all its blocks. Administrators can also set defaults f
 
 The **Always-on-top window** control opens Document Picture-in-Picture when supported by desktop Chrome or Edge. It shows the current block, countdown and progress. Move it onto the presentation screen and keep the MeetLoom tab open.
 
-The strip with the site address at the top of that window belongs to the browser: Chrome and Edge always show it so that no page can imitate another, and MeetLoom cannot hide it. Make the window shorter and MeetLoom keeps only the countdown and the progress bar.
+Its text follows the window's size: larger as you enlarge it, and laid out for its shape. A thin strip puts the block, the countdown and the schedule badge with the expected end on one line, the progress underneath; a larger window shows the status, the block's position and the time left too; a narrow column stacks everything. When room runs out, the least useful details go first (time left, position), never the countdown, so what is shown stays readable.
+
+The small button after the controls docks the window along an edge of the screen. Chrome and Edge never let a page move this window, so MeetLoom gives it the shape for that edge (a strip as wide as the browser allows, or a column) and you drag it to the top, bottom or side; the browser reopens it there next time. **Original size** goes back to the size it opened at. The separate window used without Document Picture-in-Picture moves to the chosen edge by itself.
+
+The strip with the site address at the top of that window belongs to the browser: Chrome and Edge always show it so that no page can imitate another, and MeetLoom cannot hide it.
 
 When the API is unavailable, MeetLoom opens a separate window and explains that it cannot guarantee priority. On Windows, PowerToys Always On Top can pin it (`Win+Ctrl+T`). Test your PowerPoint full-screen mode and monitor setup before a real session. In a video call, sharing only the PowerPoint window can exclude the timer; share the appropriate screen if both must be visible.
 
