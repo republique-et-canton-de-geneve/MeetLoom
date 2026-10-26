@@ -5,6 +5,7 @@ import { api, ApiError, post } from "./api";
 import { useI18n } from "./i18n";
 import { ErrorBanner } from "./ui";
 import { NumberField } from "./NumberField";
+import { archiveFilename } from "./archive-filename";
 
 type Schedule = {
   mode: "off" | "daily" | "twice";
@@ -48,10 +49,7 @@ async function downloadArchive(path: string, body: unknown) {
     const data = await response.json().catch(() => null);
     throw new ApiError(response.status, data?.error ?? "", data?.code ?? "");
   }
-  const name =
-    /filename="([^"]+)"/.exec(
-      response.headers.get("content-disposition") ?? "",
-    )?.[1] ?? "meetloom.mldx";
+  const name = archiveFilename(response.headers.get("content-disposition"));
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a");
   anchor.href = url;
