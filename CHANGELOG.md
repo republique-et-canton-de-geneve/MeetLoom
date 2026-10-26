@@ -19,6 +19,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Fixed
 
+- Encrypted data exports and backup downloads retain their dated filename with either supported HTTP filename syntax.
 - Session cards on the dashboard show their description's two lines in full; the second line was cut at the bottom.
 - Clicking into a description or notes field no longer moves its text: the formatting bar floats above it (below it near the top of the window, wrapping inside narrow panels such as the block details) instead of pushing the text down, the caret lands where you clicked instead of at the end, and the page no longer scrolls.
 - A space typed in "Client ou équipe" (or a "/" in the folder, or a space at the end of a title or label) is no longer removed when the autosave runs while you pause before the next word.

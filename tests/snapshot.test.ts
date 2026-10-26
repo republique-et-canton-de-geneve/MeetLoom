@@ -125,7 +125,7 @@ test("an export imported elsewhere replaces its data, keeps passwords and signs 
   assert.equal(exported.status, 200);
   assert.match(
     exported.headers.get("content-disposition") ?? "",
-    /attachment; filename="meetloom-.*\.mldx"/,
+    /^attachment; filename=("?)meetloom-\d{4}(?:-\d{2}){4}\.mldx\1$/,
   );
   const archive = Buffer.from(await exported.arrayBuffer());
 
