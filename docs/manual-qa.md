@@ -1,5 +1,11 @@
 # Manual acceptance testing
 
+## October 26, 2026: dependency compatibility verification
+
+Agent-run automated checks, not user acceptance: on the repaired runtime dependency group (PR #55), `PW_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e` passes all 25 nominal journeys against the production build and disposable SQLite database. The existing encrypted-transfer journey (`e2e/06-data.spec.ts`) downloads a dated `meetloom-*.mldx` file, imports it, signs everyone out and signs in again. That journey failed on the original PR head because Express 5.3 returned an unquoted Content-Disposition filename; the frontend now accepts both supported forms. The full suite also covers French/English, private visitor projections, editing, timers and administration. No real deployment, provider integration or new user acceptance was performed.
+
+## Initial manual checks
+
 Executed in Chrome on September 23, 2026, using fictional data in the local test database on port 3001. The first-installation database on port 3000 is separate. These checks are not the maintained end-to-end suite, which is scheduled after user acceptance. French labels below identify the exact UI and test data used.
 
 ## Agenda editing and content
