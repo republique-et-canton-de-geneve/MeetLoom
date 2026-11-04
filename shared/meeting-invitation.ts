@@ -593,23 +593,38 @@ async function parseIcs(
   )
     fail("MEETING_RECURRENCE_UNSUPPORTED");
   const today = dayOf(wallAt(now, startZone));
-  const candidates: {
+  type Occurrence = {
     item: InstanceType<typeof ICAL.Event>;
     startDate: IcalTime;
     endDate: IcalTime;
-  }[] = [];
+  };
+  const candidateFor = (occurrence: Occurrence) => {
+    const startInstant = instantAt(
+      timeWall(occurrence.startDate),
+      zoneFor(occurrence.item.component.getFirstProperty("dtstart"), startZone),
+    );
+    // Exceptions can change timezone as well as date. Compare their instants
+    // and calendar days in the series timezone, never their raw local clocks.
+    return {
+      ...occurrence,
+      startInstant,
+      seriesDay: dayOf(wallAt(startInstant, startZone)),
+    };
+  };
+  const candidates: ReturnType<typeof candidateFor>[] = [];
   for (const component of events.filter((e) => e !== master)) {
     const item = new ICAL.Event(component);
     if (
-      String(component.getFirstPropertyValue("status")).toUpperCase() !==
-        "CANCELLED" &&
-      dayOf(timeWall(item.startDate)) >= today
+      String(component.getFirstPropertyValue("status")).toUpperCase() ===
+      "CANCELLED"
     )
-      candidates.push({
-        item,
-        startDate: item.startDate,
-        endDate: item.endDate,
-      });
+      continue;
+    const candidate = candidateFor({
+      item,
+      startDate: item.startDate,
+      endDate: item.endDate,
+    });
+    if (candidate.seriesDay >= today) candidates.push(candidate);
   }
   const iterator = event.iterator();
   for (let count = 0; ; count++) {
@@ -618,29 +633,27 @@ async function parseIcs(
     if (!occurrence) break;
     const detail = event.getOccurrenceDetails(occurrence);
     if (detail.item !== event) continue; // Explicit exceptions were considered above, including moved dates.
-    if (dayOf(timeWall(detail.startDate)) < today) continue;
+    // Unmodified occurrences already use the series clock. Skip past days and
+    // stop after the chosen day before resolving irrelevant DST transitions.
+    const seriesDay = dayOf(timeWall(detail.startDate));
+    if (seriesDay < today) continue;
     if (
       candidates.length &&
-      dayOf(timeWall(detail.startDate)) >
-        Math.min(...candidates.map((c) => dayOf(timeWall(c.startDate))))
+      seriesDay > Math.min(...candidates.map((c) => c.seriesDay))
     )
       break;
-    candidates.push(detail);
+    candidates.push(candidateFor(detail));
   }
-  candidates.sort((a, b) => timeWall(a.startDate) - timeWall(b.startDate));
+  candidates.sort((a, b) => a.startInstant - b.startInstant);
   const chosen = candidates[0];
   if (!chosen) fail("MEETING_NO_OCCURRENCE");
-  if (
-    candidates[1] &&
-    dayOf(timeWall(chosen.startDate)) ===
-      dayOf(timeWall(candidates[1].startDate))
-  )
+  if (candidates[1] && chosen.seriesDay === candidates[1].seriesDay)
     fail("MEETING_AMBIGUOUS_TIME");
   return getResult(
     chosen.item,
     chosen.startDate,
     chosen.endDate,
-    dayOf(timeWall(chosen.startDate)) === today ? "today" : "next",
+    chosen.seriesDay === today ? "today" : "next",
   );
 }
 

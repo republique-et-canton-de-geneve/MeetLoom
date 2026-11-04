@@ -469,6 +469,162 @@ test("ICS recurrence applies excluded dates and explicitly moved occurrences", a
   );
   assert.equal(excluded.start, "2026-11-11T13:00:00.000Z");
 });
+test("ICS exception selection uses the series day for equivalent instants in different timezones", async () => {
+  for (const start of [
+    "DTSTART;TZID=America/Los_Angeles:20261103T203000",
+    "DTSTART;TZID=Asia/Tokyo:20261104T133000",
+    "DTSTART:20261104T043000Z",
+  ]) {
+    const parsed = await parseMeetingInvitation(
+      "meeting.ics",
+      calendar(
+        ...event(
+          "DTSTART:20261028T020000Z",
+          "DURATION:PT45M",
+          "RRULE:FREQ=WEEKLY;COUNT=4",
+        ),
+        ...event("RECURRENCE-ID:20261104T020000Z", start, "DURATION:PT45M"),
+      ),
+      Date.parse("2026-11-04T02:00:00Z"),
+    );
+    assert.equal(parsed.start, "2026-11-04T04:30:00.000Z");
+    assert.equal(parsed.end, "2026-11-04T05:15:00.000Z");
+    assert.equal(parsed.recurrence, "today");
+  }
+  const nonUtcSeries = await parseMeetingInvitation(
+    "meeting.ics",
+    calendar(
+      ...event(
+        "DTSTART;TZID=Europe/Zurich:20261028T003000",
+        "DURATION:PT45M",
+        "RRULE:FREQ=WEEKLY;COUNT=4",
+      ),
+      ...event(
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T003000",
+        "DTSTART:20261103T233000Z",
+        "DURATION:PT45M",
+      ),
+    ),
+    Date.parse("2026-11-04T00:00:00Z"),
+  );
+  assert.equal(nonUtcSeries.start, "2026-11-03T23:30:00.000Z");
+  assert.equal(nonUtcSeries.recurrence, "today");
+});
+test("ICS exception dates moved before or after today are classified in the series timezone", async () => {
+  for (const [start, expected] of [
+    ["DTSTART;TZID=Asia/Tokyo:20261104T003000", "2026-11-11T02:00:00.000Z"],
+    [
+      "DTSTART;TZID=America/Los_Angeles:20261104T203000",
+      "2026-11-05T04:30:00.000Z",
+    ],
+  ]) {
+    const parsed = await parseMeetingInvitation(
+      "meeting.ics",
+      calendar(
+        ...event(
+          "DTSTART:20261028T020000Z",
+          "DURATION:PT45M",
+          "RRULE:FREQ=WEEKLY;COUNT=4",
+        ),
+        ...event("RECURRENCE-ID:20261104T020000Z", start, "DURATION:PT45M"),
+      ),
+      Date.parse("2026-11-04T02:00:00Z"),
+    );
+    assert.equal(parsed.start, expected);
+    assert.equal(parsed.recurrence, "next");
+  }
+});
+test("ICS orders changed occurrences by instant and detects same-series-day ambiguity across zones", async () => {
+  const base = event(
+    "DTSTART:20261028T020000Z",
+    "DURATION:PT45M",
+    "RRULE:FREQ=WEEKLY;COUNT=4",
+  );
+  const later = event(
+    "RECURRENCE-ID:20261111T020000Z",
+    "DTSTART;TZID=America/Los_Angeles:20261104T203000",
+    "DURATION:PT45M",
+  );
+  const earlier = event(
+    "RECURRENCE-ID:20261104T020000Z",
+    "DTSTART;TZID=Asia/Tokyo:20261105T003000",
+    "DURATION:PT45M",
+  );
+  const parsed = await parseMeetingInvitation(
+    "meeting.ics",
+    calendar(...base, ...later, ...earlier),
+    Date.parse("2026-11-04T02:00:00Z"),
+  );
+  assert.equal(parsed.start, "2026-11-04T15:30:00.000Z");
+  assert.equal(parsed.recurrence, "today");
+  await assert.rejects(
+    parseMeetingInvitation(
+      "meeting.ics",
+      calendar(
+        ...base,
+        ...event(
+          "RECURRENCE-ID:20261104T020000Z",
+          "DTSTART;TZID=America/Los_Angeles:20261103T203000",
+          "DURATION:PT45M",
+        ),
+        ...event(
+          "RECURRENCE-ID:20261111T020000Z",
+          "DTSTART;TZID=Asia/Tokyo:20261104T133000",
+          "DURATION:PT45M",
+        ),
+      ),
+      Date.parse("2026-11-04T02:00:00Z"),
+    ),
+    rejects("MEETING_AMBIGUOUS_TIME"),
+  );
+});
+test("ICS changed occurrences still reject nonexistent and ambiguous daylight-saving times", async () => {
+  for (const [first, changed, code] of [
+    ["20260322", "20260329", "MEETING_TIMEZONE"],
+    ["20261018", "20261025", "MEETING_AMBIGUOUS_TIME"],
+  ])
+    await assert.rejects(
+      parseMeetingInvitation(
+        "meeting.ics",
+        calendar(
+          ...event(
+            `DTSTART:${first}T020000Z`,
+            "DURATION:PT45M",
+            "RRULE:FREQ=WEEKLY;COUNT=4",
+          ),
+          ...event(
+            `RECURRENCE-ID:${changed}T020000Z`,
+            `DTSTART;TZID=Europe/Zurich:${changed}T023000`,
+            "DURATION:PT45M",
+          ),
+        ),
+        Date.parse(
+          `${changed.slice(0, 4)}-${changed.slice(4, 6)}-${changed.slice(6)}T00:00:00Z`,
+        ),
+      ),
+      rejects(code),
+    );
+});
+test("ICS keeps today's valid occurrence without resolving tomorrow's daylight-saving gap or overlap", async () => {
+  for (const [first, current, expected] of [
+    ["20260327", "2026-03-28T12:00:00Z", "2026-03-28T01:30:00.000Z"],
+    ["20261023", "2026-10-24T12:00:00Z", "2026-10-24T00:30:00.000Z"],
+  ]) {
+    const parsed = await parseMeetingInvitation(
+      "meeting.ics",
+      calendar(
+        ...event(
+          `DTSTART;TZID=Europe/Zurich:${first}T023000`,
+          "DURATION:PT45M",
+          "RRULE:FREQ=DAILY;COUNT=4",
+        ),
+      ),
+      Date.parse(current),
+    );
+    assert.equal(parsed.start, expected);
+    assert.equal(parsed.recurrence, "today");
+  }
+});
 test("MSG uses canonical appointment times and returns only the permitted local preview fields", async () => {
   assert.deepEqual(await parseMeetingInvitation("meeting.msg", msg(), now), {
     title: "Synthetic planning meeting",
