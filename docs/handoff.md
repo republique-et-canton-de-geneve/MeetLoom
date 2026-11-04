@@ -4,6 +4,15 @@ Last updated: November 4, 2026. Read this file first when continuing in Codex, C
 
 ## Current stopping point
 
+**PR #72 Codex review follow-up, November 4, 2026.** The user explicitly requested handling the review comments. All earlier Codex findings were rechecked, answered with fixing commits and test evidence, and resolved. The already-fixed CodeQL worker thread was automatically resolved by GitHub. Two later valid Codex findings required further changes:
+
+- Commit `d6616aa`: editor drop handlers now return before cancelling an event unless their own block/content drag is active. This preserves the existing document-input exclusions and lets calendar drops reach the quick-meeting controller from agenda rows, groups, the overview and navigation. The extended nominal E2E journey covers eight targets, a real document import and an internal block reorder, without creating saved quick sessions or AI requests. The row case was red before correction.
+- Commit `6b3037a`: ICS exceptions are selected using their resolved instants and calendar days in the series timezone. Five additional parser tests cover cross-zone equivalence, moved dates, ordering/ambiguity and both DST transitions. Independent review also reproduced and fixed an intermediate regression where tomorrow's invalid DST time could reject today's valid occurrence. All 22 parser tests pass after the final correction.
+- Local `npm run check` passes with 459 tests (458 passes, one PostgreSQL-only skip), both TypeScript projects and production build; all 30 Chromium E2E journeys pass. Lint, deadcode and formatting pass with the existing warning budget. Full browser results and any manual observations are recorded in [manual-qa.md](manual-qa.md). Inspect all current-head checks and unresolved threads on [PR #72](https://github.com/republique-et-canton-de-geneve/MeetLoom/pull/72) before merging; do not filter review comments only by the latest source commit, since Codex can post late against older commits.
+- Gstack `/review` included independent in-host adversarial review. A separate Claude Code CLI review was unavailable in this environment; no external review is claimed. Documentation remains English and application labels remain French/English. No release, merge or deployment is included.
+
+**Next action:** user acceptance of the quick-meeting follow-up. Preserve the native Outlook pre-drop limitation documented below; operator-led release/deployment gates are unchanged. Earlier checkpoints follow for historical context.
+
 **Quick meetings acceptance follow-up, November 4, 2026.** The user confirmed native Outlook dragging works, reported a long delay, and requested the countdown on the welcome page without sign-in.
 
 - The welcome/sign-in and first-installation screens now mount the local quick-meeting controller and expose its launcher. The countdown needs no account. Anonymous AI analysis is explicitly disabled even when a provider is configured; the existing authenticated server route is unchanged. Switching accounts/reloading still discards the temporary state. Mobile controls use normal flow below the welcome header to avoid covering the logo.
