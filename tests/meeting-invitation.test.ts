@@ -69,6 +69,7 @@ function msg(
     recurring?: boolean;
     deleted?: boolean;
     modified?: boolean;
+    modifiedAllDay?: boolean;
     allDay?: boolean;
     cancelled?: boolean;
     body?: string;
@@ -181,11 +182,20 @@ function msg(
     u16(options.modified ? 1 : 0);
     if (options.modified) {
       [
-        minutes("2026-11-04T14:30:00Z"),
-        minutes("2026-11-04T15:15:00Z"),
+        minutes(
+          options.modifiedAllDay
+            ? "2026-11-04T00:00:00Z"
+            : "2026-11-04T14:30:00Z",
+        ),
+        minutes(
+          options.modifiedAllDay
+            ? "2026-11-05T00:00:00Z"
+            : "2026-11-04T15:15:00Z",
+        ),
         minutes("2026-11-04T14:00:00Z"),
       ].forEach(u32);
-      u16(0);
+      u16(options.modifiedAllDay ? 0x80 : 0);
+      if (options.modifiedAllDay) u32(1);
     }
     u32(0);
     if (options.modified) u32(0);
@@ -798,6 +808,164 @@ test("MSG recurrence skips deleted occurrences and uses changed start/end times"
   );
   assert.equal(changed.start, "2026-11-04T13:30:00.000Z");
   assert.equal(changed.end, "2026-11-04T14:15:00.000Z");
+});
+test("MSG all-day exceptions reject only the selected occurrence", async () => {
+  const bytes = msg({ recurring: true, modified: true, modifiedAllDay: true });
+  for (const date of ["2026-10-28", "2026-11-11"]) {
+    const parsed = await parseMeetingInvitation(
+      "meeting.msg",
+      bytes,
+      Date.parse(`${date}T15:00:00Z`),
+    );
+    assert.equal(parsed.start, `${date}T13:00:00.000Z`);
+    assert.equal(parsed.recurrence, "today");
+  }
+  for (const date of ["2026-11-03", "2026-11-04"])
+    await assert.rejects(
+      parseMeetingInvitation(
+        "meeting.msg",
+        bytes,
+        Date.parse(`${date}T15:00:00Z`),
+      ),
+      rejects("MEETING_ALL_DAY"),
+    );
+});
+test("ICS all-day exceptions reject only the selected occurrence and ignore cancelled instances", async () => {
+  for (const cancelled of [false, true]) {
+    const bytes = calendar(
+      ...event(
+        "DTSTART;TZID=Europe/Zurich:20261028T140000",
+        "DURATION:PT45M",
+        "RRULE:FREQ=WEEKLY;COUNT=4",
+      ),
+      ...event(
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T140000",
+        "DTSTART;VALUE=DATE:20261104",
+        "DTEND;VALUE=DATE:20261105",
+        ...(cancelled ? ["STATUS:CANCELLED"] : []),
+      ),
+    );
+    for (const date of ["2026-10-28", "2026-11-11"]) {
+      const parsed = await parseMeetingInvitation(
+        "meeting.ics",
+        bytes,
+        Date.parse(`${date}T15:00:00Z`),
+      );
+      assert.equal(parsed.start, `${date}T13:00:00.000Z`);
+      assert.equal(parsed.recurrence, "today");
+    }
+    for (const date of ["2026-11-03", "2026-11-04"]) {
+      const parsing = parseMeetingInvitation(
+        "meeting.ics",
+        bytes,
+        Date.parse(`${date}T15:00:00Z`),
+      );
+      if (!cancelled) await assert.rejects(parsing, rejects("MEETING_ALL_DAY"));
+      else {
+        const parsed = await parsing;
+        assert.equal(parsed.start, "2026-11-11T13:00:00.000Z");
+        assert.equal(parsed.recurrence, "next");
+      }
+    }
+  }
+});
+test("ICS all-day exceptions retain strict calendar, recurrence identity and value-type checks", async () => {
+  for (const [lines, code] of [
+    [
+      [
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T140000",
+        "DTSTART;VALUE=DATE:20270230",
+        "DTEND;VALUE=DATE:20270301",
+      ],
+      "MEETING_INVALID",
+    ],
+    [
+      [
+        "RECURRENCE-ID;VALUE=DATE:20261104",
+        "DTSTART;VALUE=DATE:20261104",
+        "DTEND;VALUE=DATE:20261105",
+      ],
+      "MEETING_ALL_DAY",
+    ],
+    [
+      [
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T140000",
+        "DTSTART;TZID=Europe/Zurich:20261104T140000",
+        "DTEND;VALUE=DATE:20261105",
+      ],
+      "MEETING_ALL_DAY",
+    ],
+    [
+      [
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T140000",
+        "DTSTART;VALUE=DATE:20261104",
+        "DTEND:20261105T140000Z",
+      ],
+      "MEETING_INVALID",
+    ],
+    [
+      [
+        "RECURRENCE-ID;TZID=Europe/Zurich:20261104T140000",
+        "DTSTART;VALUE=DATE;TZID=Unknown/Zone:20261104",
+        "DTEND;VALUE=DATE:20261105",
+      ],
+      "MEETING_INVALID",
+    ],
+  ] as const) {
+    await assert.rejects(
+      parseMeetingInvitation(
+        "meeting.ics",
+        calendar(
+          ...event(
+            "DTSTART;TZID=Europe/Zurich:20261028T140000",
+            "DURATION:PT45M",
+            "RRULE:FREQ=WEEKLY;COUNT=4",
+          ),
+          ...event(...lines),
+        ),
+        Date.parse("2026-10-28T15:00:00Z"),
+      ),
+      rejects(code),
+    );
+  }
+});
+test("ICS moved all-day exceptions use their new calendar date and the series local day", async () => {
+  const bytes = calendar(
+    ...event(
+      "DTSTART;TZID=Asia/Tokyo:20261103T140000",
+      "DURATION:PT45M",
+      "RRULE:FREQ=DAILY;COUNT=7",
+    ),
+    ...event(
+      "RECURRENCE-ID;TZID=Asia/Tokyo:20261105T140000",
+      "DTSTART;VALUE=DATE:20261107",
+      "DTEND;VALUE=DATE:20261108",
+    ),
+  );
+  // UTC is still November 4, but the series is already on November 5. Its
+  // occurrence moved to November 7, so the next timed date is November 6.
+  const parsed = await parseMeetingInvitation(
+    "meeting.ics",
+    bytes,
+    Date.parse("2026-11-04T16:00:00Z"),
+  );
+  assert.equal(parsed.start, "2026-11-06T05:00:00.000Z");
+  assert.equal(parsed.recurrence, "next");
+  await assert.rejects(
+    parseMeetingInvitation(
+      "meeting.ics",
+      bytes,
+      Date.parse("2026-11-06T16:00:00Z"),
+    ),
+    rejects("MEETING_ALL_DAY"),
+  );
+  const after = await parseMeetingInvitation(
+    "meeting.ics",
+    bytes,
+    Date.parse("2026-11-07T16:00:00Z"),
+  );
+  assert.equal(after.start, "2026-11-08T05:00:00.000Z");
+  assert.equal(after.recurrence, "today");
 });
 test("file/structure limits and malformed inputs fail with content-free machine errors", async () => {
   await assert.rejects(

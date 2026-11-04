@@ -4,6 +4,8 @@ Drop one Outlook `.msg` or calendar `.ics` invitation on the welcome page or in 
 
 An ongoing meeting starts with its actual remaining time. A future meeting counts down to its start; an expired meeting appears complete. Calendar timestamps retain their timezone offsets and daylight-saving rules; the schedule and both timer views display those instants in the browser's timezone. Recurring invitations require a resolvable occurrence: the reader selects today's occurrence when present, otherwise the next occurrence, and displays the resolved date. "Today" is evaluated in the series timezone, even when an exception moves an occurrence into another timezone. Unsupported or ambiguous invitations are rejected instead of guessing a time. Export a single occurrence as `.ics` if needed.
 
+All-day series are unsupported. Within a timed series, an unrelated all-day or invalid daylight-saving exception does not block a valid selected meeting; the selected occurrence must still have unambiguous timed start/end values. Unknown or floating timezones remain unsupported.
+
 The countdown exists only in this browser tab. It does not create a saved session, appear in session lists, or offer a visitor link. Closing the quick meeting, reloading, signing out, or closing the tab discards it. A new successful drop replaces the previous quick meeting. Existing saved agendas remain separate.
 
 ## Floating window

@@ -274,18 +274,23 @@ function recurringMsg(data: FieldsData, now: number): MeetingInvitation {
     : fromMinutes(p.endDate);
   if (!Number.isFinite(first) || first % DAY || today - first > 100 * 366 * DAY)
     fail("MEETING_RECURRENCE_UNSUPPORTED");
-  const candidates: { wall: number; endWall: number; title?: string }[] = [];
+  const candidates: {
+    wall: number;
+    endWall: number;
+    title?: string;
+    allDay?: boolean;
+  }[] = [];
   const removed = new Set(p.deletedInstanceDates.map(fromMinutes));
   for (const exception of recur.exceptionInfo) {
     removed.add(dayOf(fromMinutes(exception.originalStartTime)));
     if ((exception.meetingType ?? 0) & 4) continue;
     const wall = fromMinutes(exception.startDateTime);
     if (dayOf(wall) >= today) {
-      if (exception.subType) fail("MEETING_ALL_DAY");
       candidates.push({
         wall,
         endWall: fromMinutes(exception.endDateTime),
         title: exception.subject,
+        allDay: !!exception.subType,
       });
     }
   }
@@ -310,6 +315,7 @@ function recurringMsg(data: FieldsData, now: number): MeetingInvitation {
   if (!chosen) fail("MEETING_NO_OCCURRENCE");
   if (candidates[1] && dayOf(chosen.wall) === dayOf(candidates[1].wall))
     fail("MEETING_AMBIGUOUS_TIME");
+  if (chosen.allDay) fail("MEETING_ALL_DAY");
   const start = instantAt(chosen.wall, zone),
     end = instantAt(chosen.endWall, zone);
   const embedded = data.attachments
@@ -514,18 +520,30 @@ async function parseIcs(
       fail("MEETING_INVALID");
     if (event.getFirstProperty("recurrence-id")?.getParameter("range"))
       fail("MEETING_RECURRENCE_UNSUPPORTED");
+    const allDayException =
+      event !== master && event.getFirstProperty("dtstart")?.type === "date";
+    if (
+      allDayException &&
+      event.hasProperty("dtend") &&
+      event.getFirstProperty("dtend")?.type !== "date"
+    )
+      fail("MEETING_INVALID");
     for (const name of ["dtstart", "dtend", "recurrence-id"]) {
       const property = event.getFirstProperty(name);
       if (!property) continue;
+      const isDate = property.type === "date";
+      if (isDate && (!allDayException || name === "recurrence-id"))
+        fail("MEETING_ALL_DAY");
+      if (isDate && property.getParameter("tzid")) fail("MEETING_INVALID");
       const raw = String(property.toJSON()[3]);
-      const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z?$/.exec(
-        raw,
-      );
-      if (!match) {
-        if (property.type === "date") fail("MEETING_ALL_DAY");
-        fail("MEETING_INVALID");
-      }
-      const nums = match.slice(1).map(Number),
+      const match = isDate
+        ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+        : /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z?$/.exec(raw);
+      if (!match) fail("MEETING_INVALID");
+      const nums = [
+          ...match.slice(1).map(Number),
+          ...(isDate ? [0, 0, 0] : []),
+        ],
         date = new Date(
           Date.UTC(nums[0], nums[1] - 1, nums[2], nums[3], nums[4], nums[5]),
         );
@@ -630,6 +648,21 @@ async function parseIcs(
       "CANCELLED"
     )
       continue;
+    if (item.startDate.isDate) {
+      // Outlook can turn one timed occurrence into an all-day DATE. DATE has
+      // no timezone: its calendar day is interpreted in the series timezone.
+      const seriesDay = Date.UTC(
+        item.startDate.year,
+        item.startDate.month - 1,
+        item.startDate.day,
+      );
+      if (seriesDay >= today)
+        deferredErrors.push({
+          firstPossibleDay: seriesDay,
+          code: "MEETING_ALL_DAY",
+        });
+      continue;
+    }
     const { matches, hypothetical } = wallInstants(
       timeWall(item.startDate),
       zoneFor(component.getFirstProperty("dtstart"), startZone),
