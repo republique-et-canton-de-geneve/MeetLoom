@@ -12,6 +12,28 @@ const invitation = {
   end: "2026-11-04T13:45:00Z",
   body: "Welcome 5 min, discussion 30 min, closing 10 min.",
 };
+test("a quick meeting uses the browser timezone consistently for its displayed schedule", () => {
+  const original = process.env.TZ;
+  try {
+    for (const timezone of ["UTC", "Asia/Tokyo"]) {
+      process.env.TZ = timezone;
+      const session = quickMeetingSession(
+        invitation,
+        "en",
+        Date.parse(invitation.start),
+      );
+      assert.equal(session.timezone, timezone);
+      assert.equal(
+        session.days[0].startTime,
+        timezone === "UTC" ? "13:00" : "22:00",
+      );
+      assert.equal(session.run.runStartedAt, Date.parse(invitation.start));
+    }
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
+});
 test("a quick meeting starts at its scheduled instant and catches up without saving", () => {
   const now = Date.parse("2026-11-04T13:10:00Z");
   const session = quickMeetingSession(invitation, "en", now);

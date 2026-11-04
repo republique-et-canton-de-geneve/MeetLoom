@@ -15,6 +15,7 @@ export function quickMeetingSession(
   if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0)
     throw new Error("Invalid meeting time");
   const session = createSession("temporary", invitation.title, locale);
+  session.timezone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
   const day = session.days[0];
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: session.timezone,

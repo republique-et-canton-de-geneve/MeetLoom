@@ -328,6 +328,7 @@ test("a guest starts a temporary countdown without an account, including before 
 }) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
+    timezoneId: "UTC",
   });
   const page = await context.newPage();
   const requests: string[] = [];
@@ -394,6 +395,9 @@ test("a guest starts a temporary countdown without an account, including before 
         page.getByRole("button", { name: "Quick meeting", exact: true }),
       );
       await page.getByRole("button", { name: "Passer en français" }).click();
+      const calendar = invitation();
+      const end = calendar.match(/DTEND:\d{8}T(\d{2})(\d{2})\d{2}Z/)!;
+      const expectedEnd = `${end[1]}:${end[2]}`;
       await page.evaluate((calendar) => {
         const transfer = new DataTransfer();
         transfer.items.add(
@@ -406,7 +410,7 @@ test("a guest starts a temporary countdown without an account, including before 
             dataTransfer: transfer,
           }),
         );
-      }, invitation());
+      }, calendar);
       const quick = page.locator(".quick-meeting");
       await expect(
         quick.getByRole("heading", { name: meetingTitle }),
@@ -415,6 +419,9 @@ test("a guest starts a temporary countdown without an account, including before 
         "EN CE MOMENT",
       );
       await expect(quick.locator(".timer-position")).toContainText("1 / 1");
+      await expect(quick.locator(".timer-end")).toHaveText(
+        `Fin prévue ${expectedEnd}`,
+      );
       await expect(
         quick.getByRole("button", {
           name: "Analyser le déroulé de l’invitation",
