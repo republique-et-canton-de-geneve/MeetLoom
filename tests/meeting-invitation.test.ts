@@ -5,9 +5,40 @@ import {
   parseMeetingInvitation,
   MeetingInvitationError,
   MAX_MEETING_BYTES,
+  meetingInvitationMessage,
 } from "../shared/meeting-invitation.js";
 
 const now = Date.parse("2026-11-04T15:00:00Z");
+test("the parsing worker accepts only bounded binary messages with a finite clock", () => {
+  const message = { name: "meeting.ics", bytes: new ArrayBuffer(8), now };
+  assert.deepEqual(meetingInvitationMessage(message), message);
+  for (const invalid of [
+    null,
+    "text",
+    {},
+    { ...message, name: 2 },
+    { ...message, name: "x".repeat(1025) },
+    { ...message, bytes: new Uint8Array(8) },
+    { ...message, bytes: new ArrayBuffer(0) },
+    { ...message, now: NaN },
+  ])
+    assert.throws(
+      () => meetingInvitationMessage(invalid),
+      (error: unknown) =>
+        error instanceof MeetingInvitationError &&
+        error.code === "MEETING_INVALID",
+    );
+  assert.throws(
+    () =>
+      meetingInvitationMessage({
+        ...message,
+        bytes: new ArrayBuffer(MAX_MEETING_BYTES + 1),
+      }),
+    (error: unknown) =>
+      error instanceof MeetingInvitationError &&
+      error.code === "MEETING_FILE_LIMIT",
+  );
+});
 const encode = (text: string) => new TextEncoder().encode(text);
 const calendar = (...lines: string[]) =>
   encode(

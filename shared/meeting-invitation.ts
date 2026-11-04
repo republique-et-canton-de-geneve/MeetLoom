@@ -8,6 +8,29 @@ import type ICAL from "ical.js";
 type IcalTime = InstanceType<typeof ICAL.Time>;
 
 export const MAX_MEETING_BYTES = 10 * 1024 * 1024;
+/** Validate the private worker's message boundary before decoding any bytes. */
+export function meetingInvitationMessage(value: unknown): {
+  name: string;
+  bytes: ArrayBuffer;
+  now: number;
+} {
+  const data = value as Record<string, unknown> | null;
+  if (
+    !data ||
+    typeof data !== "object" ||
+    typeof data.name !== "string" ||
+    !data.name.length ||
+    data.name.length > 1024 ||
+    !(data.bytes instanceof ArrayBuffer) ||
+    !data.bytes.byteLength ||
+    typeof data.now !== "number" ||
+    !Number.isFinite(data.now)
+  )
+    throw new MeetingInvitationError("MEETING_INVALID");
+  if (data.bytes.byteLength > MAX_MEETING_BYTES)
+    throw new MeetingInvitationError("MEETING_FILE_LIMIT");
+  return { name: data.name, bytes: data.bytes, now: data.now };
+}
 export interface MeetingInvitation {
   title: string;
   start: string;
