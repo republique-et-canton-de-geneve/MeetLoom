@@ -6,6 +6,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Added
 
+- Quick meetings: drop an Outlook or calendar invitation to start a temporary scheduled countdown and request the floating window, with optional invitation-to-agenda AI analysis and no saved session.
 - Sections can be inserted from the agenda like blocks, groups and notes: they gather the blocks that follow, show their times and duration, and can be renamed, collapsed or removed in place. Adding or moving blocks (including with the arrows) keeps sections whole, and a section containing a group is no longer announced twice in the visitor agenda, print and CSV.
 - While the timer runs, the agenda follows it: on start, on opening a running session (which now opens on the day being run) and at each new block, the page scrolls the current block to the top (under the timer) so what comes next shows below it. Visitor links do the same. Someone who scrolled elsewhere or is typing is left where they are.
 - The always-on-top window can be docked along an edge of the screen from a small button after its controls: a strip for the top or bottom, a column for a side, or back to its original size. Chrome and Edge never let a page move that window, so it takes the shape and you drag it to the edge (the browser reopens it there); the separate fallback window moves there by itself.

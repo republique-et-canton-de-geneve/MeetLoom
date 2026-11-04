@@ -1,5 +1,16 @@
 # Manual acceptance testing
 
+## Quick meetings — November 4, 2026
+
+Agent verification on a disposable local SQLite instance, using Gstack Browse and the production build. This is not user acceptance.
+
+- Read the supplied Outlook `.msg` through the picker in the actual browser worker. The recurring series resolved to November 4, 14:00–14:45 Europe/Zurich, a 45-minute block and a countdown to the planned start. Subject/body/recipients were not committed as fixtures; the ignored upload copy was removed afterward.
+- A real Document Picture-in-Picture window opened and rendered the same changing countdown and scheduled end. Checked English translation in both windows and a 390 × 844 viewport: the quick panel stayed inside the viewport without horizontal overflow. Inspected both screenshots and found no browser-console errors. Screenshots contain private invitation context and remain ignored locally.
+- Confirmed zero saved sessions before/after, no invitation text in browser storage, and no quick panel or PiP after reload. The normal dashboard remained available. The local AI provider was disabled; no real invitation text was sent to a model.
+- Automated checks: 448 tests (447 pass, one PostgreSQL-only skip), both TypeScript projects and build; lint 0 errors with the unchanged 76-warning budget; deadcode and formatting pass. Thirteen new parser tests cover synthetic MSG/ICS, timezone/DST, recurrence exceptions, cancellations and limits; five domain tests cover scheduled countdown/catch-up and explicit AI prompting.
+- All 27 maintained E2E journeys pass with local Chromium through `PW_CHROMIUM_PATH`. Two new journeys cover drop/picker, elapsed timing, PiP rendering/refusal, French/English, explicit AI request/preview/application and no persistence across reload. Their AI response and PiP capability are simulated; parsing, timer transitions and network assertions are real.
+- Native Outlook-to-Chrome drag transfer and PowerPoint slideshow behavior still require the user's workstation check. Browser refusal of automatic opening has an explicit one-click fallback. Local audit endpoints were unavailable; hosted dependency/security results must be checked separately.
+
 ## October 26, 2026: dependency compatibility verification
 
 Agent-run automated checks, not user acceptance: on the repaired runtime dependency group (PR #55), `PW_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e` passes all 25 nominal journeys against the production build and disposable SQLite database. The existing encrypted-transfer journey (`e2e/06-data.spec.ts`) downloads a dated `meetloom-*.mldx` file, imports it, signs everyone out and signs in again. That journey failed on the original PR head because Express 5.3 returned an unquoted Content-Disposition filename; the frontend now accepts both supported forms. The full suite also covers French/English, private visitor projections, editing, timers and administration. The subsequent Vite 8.3.5 integration also passes a frozen install, local types/tests/build/format checks and all 25 hosted Chromium journeys (CI `40381858747`). No real deployment, provider integration or new user acceptance was performed.

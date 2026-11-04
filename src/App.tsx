@@ -76,6 +76,7 @@ import "./dashboard.css";
 import "./workspaces.css";
 import "./lifecycle.css";
 import "./timer-recovery.css";
+import QuickMeeting, { QuickMeetingLauncher } from "./QuickMeeting";
 
 const Editor = lazy(() => import("./Editor"));
 const PublicAgenda = lazy(() => import("./PublicAgenda"));
@@ -253,23 +254,25 @@ function AppRoutes() {
       />,
     );
   const id = path.match(/^\/session\/([^/]+)$/)?.[1];
-  if (id)
-    return withAnnouncement(
-      <Editor
-        key={id}
-        id={id}
-        user={auth.user}
-        aiEnabled={auth.aiEnabled}
-        navigate={navigate}
-      />,
-    );
   return withAnnouncement(
-    <Dashboard
-      user={auth.user}
-      navigate={navigate}
-      replaceUrl={replaceUrl}
-      logout={logout}
-    />,
+    <QuickMeeting key={auth.user.id} aiEnabled={auth.aiEnabled}>
+      {id ? (
+        <Editor
+          key={id}
+          id={id}
+          user={auth.user}
+          aiEnabled={auth.aiEnabled}
+          navigate={navigate}
+        />
+      ) : (
+        <Dashboard
+          user={auth.user}
+          navigate={navigate}
+          replaceUrl={replaceUrl}
+          logout={logout}
+        />
+      )}
+    </QuickMeeting>,
   );
 }
 
@@ -1203,6 +1206,7 @@ function Dashboard({
             </strong>
           </div>
           <div className="topbar-actions">
+            <QuickMeetingLauncher />
             <NotificationBell
               navigate={navigate}
               onNavigate={(sid, bid, cid) => {
