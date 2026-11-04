@@ -1,5 +1,7 @@
 # Use MeetLoom
 
+For a countdown without creating a saved agenda, see [quick meeting countdowns](quick-meetings.md): drop an Outlook or calendar invitation and keep its progress above your presentation.
+
 ## Prepare a session
 
 1. Create a session or open the example from the dashboard. The example is an original, editable agenda.

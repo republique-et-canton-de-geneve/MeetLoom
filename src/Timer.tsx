@@ -372,25 +372,30 @@ function ScheduleBadge({ delta }: { delta: number }) {
 }
 
 /** The always-on-top progress window (Document Picture-in-Picture, or a
- * popup where unavailable), shared by facilitators and visitors. */
-export function useFloatingWindow() {
+ * popup where unavailable), shared by facilitators and visitors. Concurrent
+ * controllers use distinct popup names so they own separate fallback windows. */
+export function useFloatingWindow(popupName = "meetloom-progress") {
   const { t } = useI18n();
   const [floating, setFloating] = useState<Window | null>(null);
   // A popup can be moved by the page; the always-on-top window cannot.
   const [movable, setMovable] = useState(false);
   const [floatingNotice, setNotice] = useState("");
+  const floatingRef = useRef<Window | null>(null);
+  const opening = useRef(0);
   useEffect(
     () => () => {
-      floating?.close();
+      opening.current++;
+      floatingRef.current?.close();
     },
-    [floating],
+    [],
   );
   const openFloating = async () => {
     setNotice("");
-    if (floating && !floating.closed) {
-      floating.focus();
+    if (floatingRef.current && !floatingRef.current.closed) {
+      floatingRef.current.focus();
       return;
     }
+    const attempt = ++opening.current;
     try {
       const pip = (
         window as unknown as {
@@ -406,7 +411,7 @@ export function useFloatingWindow() {
         ? await pip.requestWindow(FLOATING_SIZE)
         : window.open(
             "",
-            "meetloom-progress",
+            popupName,
             `popup,width=${FLOATING_SIZE.width},height=${FLOATING_SIZE.height + 42}`,
           );
       if (!win) {
@@ -418,12 +423,26 @@ export function useFloatingWindow() {
         );
         return;
       }
+      if (attempt !== opening.current) {
+        win.close();
+        return;
+      }
       win.document.title = "MeetLoom · " + t("Progression", "Progress");
       document
         .querySelectorAll('style, link[rel="stylesheet"]')
         .forEach((node) => win.document.head.appendChild(node.cloneNode(true)));
       win.document.body.className = "floating-window";
-      win.addEventListener("pagehide", () => setFloating(null), { once: true });
+      floatingRef.current = win;
+      win.addEventListener(
+        "pagehide",
+        () => {
+          if (floatingRef.current === win) {
+            floatingRef.current = null;
+            setFloating(null);
+          }
+        },
+        { once: true },
+      );
       setMovable(!pip);
       setFloating(win);
       if (!pip)
@@ -433,16 +452,27 @@ export function useFloatingWindow() {
             "Separate window opened. This browser cannot keep it always on top.",
           ),
         );
-    } catch {
+    } catch (error) {
       setNotice(
-        t(
-          "La fenêtre flottante n’est pas disponible. Réessayez dans Chrome ou Edge sur un ordinateur.",
-          "The floating window is unavailable. Try Chrome or Edge on a desktop.",
-        ),
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? t(
+              "Le navigateur demande un clic pour ouvrir la fenêtre. Utilisez le bouton « Afficher au premier plan ».",
+              "The browser requires a click to open the window. Use the ‘Show always on top’ button.",
+            )
+          : t(
+              "La fenêtre flottante n’est pas disponible. Réessayez dans Chrome ou Edge sur un ordinateur.",
+              "The floating window is unavailable. Try Chrome or Edge on a desktop.",
+            ),
       );
     }
   };
-  return { floating, movable, openFloating, floatingNotice };
+  const closeFloating = () => {
+    opening.current++;
+    floatingRef.current?.close();
+    floatingRef.current = null;
+    setFloating(null);
+  };
+  return { floating, movable, openFloating, closeFloating, floatingNotice };
 }
 
 /** The content of the always-on-top window. Its text follows the window's

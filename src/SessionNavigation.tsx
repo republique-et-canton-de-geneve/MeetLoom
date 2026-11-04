@@ -167,7 +167,6 @@ export default function SessionNavigation({
                   }
                 }}
                 onDrop={(event) => {
-                  event.preventDefault();
                   const from = items.findIndex(
                     (value) =>
                       value.id ===
@@ -175,6 +174,8 @@ export default function SessionNavigation({
                         "application/x-meetloom-content",
                       ),
                   );
+                  if (!editable || from < 0) return;
+                  event.preventDefault();
                   // The slot before or after this row, once the dragged item
                   // has left its own place.
                   let to = side(event) === "after" ? index + 1 : index;

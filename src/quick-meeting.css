@@ -1,0 +1,125 @@
+.quick-meeting {
+  position: fixed;
+  z-index: 120;
+  right: 24px;
+  bottom: 24px;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  background: var(--paper, #fff);
+  border: 1px solid #b4cbbd;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 18px 72px #123c3033;
+}
+.quick-meeting header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.quick-meeting h2 {
+  margin: 6px 0;
+  font-size: 1.3rem;
+  overflow-wrap: anywhere;
+}
+.quick-meeting p,
+.quick-meeting small {
+  color: #53675e;
+}
+.quick-meeting .timer-bar {
+  padding: 16px;
+  margin: 16px 0;
+}
+.quick-meeting .timer-content {
+  width: 100%;
+}
+.quick-meeting-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.quick-meeting-file {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border: 2px dashed #8cae9a;
+  background: #f4f8f4;
+  padding: 32px 16px;
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+}
+.quick-meeting-file input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.quick-meeting-file:focus-within {
+  outline: 2px solid #235f49;
+  outline-offset: 4px;
+}
+.quick-meeting-drag {
+  position: fixed;
+  inset: 12px;
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  gap: 16px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #eaf5eff5;
+  border: 3px dashed #357457;
+  border-radius: 20px;
+  color: #194e38;
+}
+.quick-meeting-drag strong {
+  font-size: 1.6rem;
+  text-align: center;
+}
+.quick-meeting-floating {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+}
+.quick-meeting-floating .timer-content {
+  width: 100%;
+}
+.quick-meeting-proposal {
+  border-top: 1px solid #d3ded6;
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.quick-meeting-proposal li {
+  margin: 8px 0;
+}
+.quick-meeting-proposal li strong {
+  margin-left: 12px;
+}
+@media (max-width: 600px) {
+  .quick-meeting {
+    right: 16px;
+    bottom: 16px;
+    padding: 16px;
+  }
+}
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 650px) {
+  .auth-form-side .auth-top {
+    position: static;
+    margin-bottom: 24px;
+  }
+}

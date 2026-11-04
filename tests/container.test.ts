@@ -2,6 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+test("the lockfile can be installed without a private package registry", () => {
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
+    packages: Record<string, { resolved?: string }>;
+  };
+  for (const [name, dependency] of Object.entries(lock.packages)) {
+    if (!dependency.resolved) continue;
+    const url = new URL(dependency.resolved);
+    assert.ok(
+      url.origin === "https://registry.npmjs.org" &&
+        !url.username &&
+        !url.password,
+      `${name} must resolve from the public registry without credentials`,
+    );
+  }
+  assert.match(
+    readFileSync(".npmrc", "utf8"),
+    /^registry=https:\/\/registry\.npmjs\.org\/$/m,
+  );
+});
+
 // Instructions of one Dockerfile stage, continuation lines joined.
 function stage(name: string) {
   const instructions = readFileSync("Dockerfile", "utf8")
