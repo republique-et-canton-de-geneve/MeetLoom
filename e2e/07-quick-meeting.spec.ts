@@ -322,3 +322,128 @@ test("the file picker rejects an invalid calendar and works in English when floa
     await page.context().close();
   }
 });
+
+test("a guest starts a temporary countdown without an account, including before installation setup", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  const requests: string[] = [];
+  let needsSetup = false;
+  try {
+    // Exercise both installation states without creating an account or
+    // changing server data; a configured AI provider grants no guest access.
+    await page.route("**/api/auth/status", async (route) => {
+      const response = await route.fetch();
+      const status = await response.json();
+      expect(status.user).toBeNull();
+      await route.fulfill({
+        response,
+        json: { ...status, needsSetup, aiEnabled: true },
+      });
+    });
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "documentPictureInPicture", {
+        configurable: true,
+        value: {
+          requestWindow: async () => {
+            throw new DOMException(
+              "Simulated browser refusal",
+              "NotAllowedError",
+            );
+          },
+        },
+      });
+    });
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith("/api/"))
+        requests.push(`${request.method()} ${path}`);
+    });
+    for (const setup of [false, true]) {
+      needsSetup = setup;
+      await page.goto("/");
+      await expect(page.locator("input[name=email]")).toBeVisible();
+      await expect(page.locator("input[name=name]")).toHaveCount(setup ? 1 : 0);
+      await expect(
+        page.getByRole("button", { name: "Séance rapide", exact: true }),
+      ).toBeVisible();
+      const assertNoBrandOverlap = async (launcher: Locator) => {
+        await expect(launcher).toBeVisible();
+        const brand = await page.locator(".auth-story .brand").boundingBox();
+        const button = await launcher.boundingBox();
+        expect(brand).not.toBeNull();
+        expect(button).not.toBeNull();
+        const overlapping =
+          Math.min(brand!.x + brand!.width, button!.x + button!.width) >
+            Math.max(brand!.x, button!.x) &&
+          Math.min(brand!.y + brand!.height, button!.y + button!.height) >
+            Math.max(brand!.y, button!.y);
+        expect(
+          overlapping,
+          "The quick meeting launcher must not overlap the logo at 390px",
+        ).toBe(false);
+      };
+      await assertNoBrandOverlap(
+        page.getByRole("button", { name: "Séance rapide", exact: true }),
+      );
+      await page.getByRole("button", { name: "Switch to English" }).click();
+      await assertNoBrandOverlap(
+        page.getByRole("button", { name: "Quick meeting", exact: true }),
+      );
+      await page.getByRole("button", { name: "Passer en français" }).click();
+      await page.evaluate((calendar) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(
+          new File([calendar], "invitation.ics", { type: "text/calendar" }),
+        );
+        document.body.dispatchEvent(
+          new DragEvent("drop", {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: transfer,
+          }),
+        );
+      }, invitation());
+      const quick = page.locator(".quick-meeting");
+      await expect(
+        quick.getByRole("heading", { name: meetingTitle }),
+      ).toBeVisible();
+      await expect(quick.locator(".timer-content")).toContainText(
+        "EN CE MOMENT",
+      );
+      await expect(quick.locator(".timer-position")).toContainText("1 / 1");
+      await expect(
+        quick.getByRole("button", {
+          name: "Analyser le déroulé de l’invitation",
+        }),
+      ).toBeDisabled();
+      await expect(quick).toContainText(
+        "Connectez-vous pour analyser le déroulé avec l’IA.",
+      );
+      const clock = quick.locator(".timer-clock strong");
+      expect(await remaining(clock)).toBeGreaterThan(34 * 60);
+      expect(await remaining(clock)).toBeLessThanOrEqual(35 * 60);
+      await expect(quick.getByRole("status")).toContainText(
+        "Le navigateur demande un clic",
+      );
+      await page.reload();
+      await expect(page.locator("input[name=email]")).toBeVisible();
+      await expect(page.locator(".quick-meeting")).toHaveCount(0);
+    }
+    expect(await context.cookies()).toEqual([]);
+    // Existing public homepage status and announcements are the only API
+    // requests: the invitation, parsing and countdown stay in this browser.
+    expect(requests.length).toBeGreaterThan(0);
+    expect(
+      requests.filter(
+        (request) =>
+          !["GET /api/auth/status", "GET /api/announcement"].includes(request),
+      ),
+    ).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});

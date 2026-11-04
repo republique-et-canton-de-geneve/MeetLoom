@@ -1,5 +1,12 @@
 # Manual acceptance testing
 
+## Anonymous quick meetings and native-drop delay — November 4, 2026
+
+- User feedback confirmed that native Outlook dragging works. Recording analysis found the drag overlay visible at 2.2 s, likely release at 2.85 s, loading at 26.75 s, countdown at 26.90 s and PiP at 27.00 s. Mouse release is inferred from the cursor, not instrumented. The long wait is before the web drop handler can run, not evidence of slow AI or agenda generation.
+- Primary Chromium source confirms temporary-file preparation and optional delegate checks before delivery of native virtual files. Independent Chromium measurements with the supplied local file: picker-to-countdown 395/265/276 ms, byte reading 15.3/11.7/11.4 ms, worker 198.9/180/174.4 ms. These are workstation measurements, not a universal latency guarantee. Private recordings, extracted frames and profiling scripts remain ignored.
+- In a fresh unsigned browser on the local production build, opened **Séance rapide**, selected the supplied `.msg`, observed the correct scheduled countdown and a real PiP. Verified `auth/status.user === null`, no cookie, French/English labels, the sign-in requirement for AI, and the mobile panel without horizontal overflow. No real provider was called. The ignored upload copy was deleted.
+- New E2E was red before the anonymous welcome-page integration. After integration all 28 journeys passed. The guest case also checks initial installation, no cookies, only existing public read endpoints, no session/import/AI writes, reload disposal, and disabled analysis even when the status advertises a configured provider. Subsequent focused checks cover the mobile welcome controls. Unit/API suite: 450 tests, 449 pass and one PostgreSQL-only skip.
+
 ## Quick meetings — November 4, 2026
 
 Agent verification on a disposable local SQLite instance, using Gstack Browse and the production build. This is not user acceptance.

@@ -111,3 +111,15 @@
     padding: 16px;
   }
 }
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 650px) {
+  .auth-form-side .auth-top {
+    position: static;
+    margin-bottom: 24px;
+  }
+}

@@ -44,9 +44,11 @@ export function QuickMeetingLauncher() {
 export default function QuickMeeting({
   children,
   aiEnabled,
+  authenticated = true,
 }: {
   children: ReactNode;
   aiEnabled: boolean;
+  authenticated?: boolean;
 }) {
   const { t, locale } = useI18n();
   const translate = useRef(t);
@@ -65,22 +67,27 @@ export default function QuickMeeting({
   const duration = invitation
     ? (Date.parse(invitation.end) - Date.parse(invitation.start)) / 60000
     : 0;
-  const analysisUnavailable = !aiEnabled
+  const analysisUnavailable = !authenticated
     ? t(
-        "L’analyse est disponible lorsque l’IA interne est configurée.",
-        "Analysis is available when the internal AI is configured.",
+        "Connectez-vous pour analyser le déroulé avec l’IA.",
+        "Sign in to analyze the agenda with AI.",
       )
-    : !invitation?.body.trim()
+    : !aiEnabled
       ? t(
-          "L’invitation ne contient pas de texte à analyser.",
-          "The invitation has no text to analyze.",
+          "L’analyse est disponible lorsque l’IA interne est configurée.",
+          "Analysis is available when the internal AI is configured.",
         )
-      : !Number.isInteger(duration) || duration < 5 || duration > 1440
+      : !invitation?.body.trim()
         ? t(
-            "L’analyse nécessite une durée entière de 5 à 1 440 minutes.",
-            "Analysis requires a whole duration from 5 to 1,440 minutes.",
+            "L’invitation ne contient pas de texte à analyser.",
+            "The invitation has no text to analyze.",
           )
-        : "";
+        : !Number.isInteger(duration) || duration < 5 || duration > 1440
+          ? t(
+              "L’analyse nécessite une durée entière de 5 à 1 440 minutes.",
+              "Analysis requires a whole duration from 5 to 1,440 minutes.",
+            )
+          : "";
   const { floating, movable, openFloating, closeFloating, floatingNotice } =
     useFloatingWindow();
 
@@ -224,7 +231,7 @@ export default function QuickMeeting({
     return () => owner.clearInterval(tick);
   }, [hasSession, floating]);
   const analyze = async () => {
-    if (!invitation || analyzing) return;
+    if (!authenticated || !aiEnabled || !invitation || analyzing) return;
     const current = generation.current;
     setAnalyzing(true);
     setError("");

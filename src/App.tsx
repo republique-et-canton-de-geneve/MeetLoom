@@ -227,14 +227,16 @@ function AppRoutes() {
     );
   if (!auth.user || inviteToken)
     return withAnnouncement(
-      <AuthScreen
-        auth={auth}
-        inviteToken={inviteToken}
-        onSuccess={() => {
-          navigate(signInTarget(location.href, !!inviteToken));
-          refresh();
-        }}
-      />,
+      <QuickMeeting key="guest" aiEnabled={false} authenticated={false}>
+        <AuthScreen
+          auth={auth}
+          inviteToken={inviteToken}
+          onSuccess={() => {
+            navigate(signInTarget(location.href, !!inviteToken));
+            refresh();
+          }}
+        />
+      </QuickMeeting>,
     );
   const logout = async () => {
     await post("/auth/logout");
@@ -366,6 +368,7 @@ function AuthScreen({
       </section>
       <section className="auth-form-side">
         <div className="auth-top">
+          <QuickMeetingLauncher />
           <LanguageSwitch />
         </div>
         <form onSubmit={submit}>
