@@ -625,6 +625,126 @@ test("ICS keeps today's valid occurrence without resolving tomorrow's daylight-s
     assert.equal(parsed.recurrence, "today");
   }
 });
+test("ICS ignores invalid DST exceptions strictly before or after the selected occurrence day", async () => {
+  for (const [first, changed, checks] of [
+    [
+      "20260327",
+      "20260329",
+      [
+        ["2026-03-26T12:00:00Z", "2026-03-27T08:00:00.000Z", "next"],
+        ["2026-03-28T12:00:00Z", "2026-03-28T08:00:00.000Z", "today"],
+        ["2026-03-30T12:00:00Z", "2026-03-30T07:00:00.000Z", "today"],
+      ],
+    ],
+    [
+      "20261023",
+      "20261025",
+      [
+        ["2026-10-22T12:00:00Z", "2026-10-23T07:00:00.000Z", "next"],
+        ["2026-10-24T12:00:00Z", "2026-10-24T07:00:00.000Z", "today"],
+        ["2026-10-26T12:00:00Z", "2026-10-26T08:00:00.000Z", "today"],
+      ],
+    ],
+  ] as const) {
+    const bytes = calendar(
+      ...event(
+        `DTSTART;TZID=Europe/Zurich:${first}T090000`,
+        "DURATION:PT45M",
+        "RRULE:FREQ=DAILY;COUNT=6",
+      ),
+      ...event(
+        `RECURRENCE-ID;TZID=Europe/Zurich:${changed}T090000`,
+        `DTSTART;TZID=Europe/Zurich:${changed}T023000`,
+        "DURATION:PT45M",
+      ),
+    );
+    for (const [current, expected, recurrence] of checks) {
+      const parsed = await parseMeetingInvitation(
+        "meeting.ics",
+        bytes,
+        Date.parse(current),
+      );
+      assert.equal(parsed.start, expected);
+      assert.equal(parsed.recurrence, recurrence);
+    }
+  }
+});
+test("ICS defers invalid exceptions using all possible days across the series timezone midnight", async () => {
+  for (const [first, changed, before, firstDay, lastDay, after, code] of [
+    [
+      "20260327",
+      "20260329",
+      "2026-03-27",
+      "2026-03-28",
+      "2026-03-29",
+      "2026-03-30",
+      "MEETING_TIMEZONE",
+    ],
+    [
+      "20261023",
+      "20261025",
+      "2026-10-23",
+      "2026-10-24",
+      "2026-10-25",
+      "2026-10-26",
+      "MEETING_AMBIGUOUS_TIME",
+    ],
+  ]) {
+    const bytes = calendar(
+      ...event(
+        `DTSTART;TZID=Atlantic/Cape_Verde:${first}T090000`,
+        "DURATION:PT45M",
+        "RRULE:FREQ=DAILY;COUNT=6",
+      ),
+      ...event(
+        `RECURRENCE-ID;TZID=Atlantic/Cape_Verde:${changed}T090000`,
+        `DTSTART;TZID=Europe/Zurich:${changed}T023000`,
+        "DURATION:PT45M",
+      ),
+    );
+    // The Zurich transition's two candidate instants fall either side of
+    // midnight in the series timezone. Neither possible day may be ignored.
+    for (const current of [firstDay, lastDay])
+      await assert.rejects(
+        parseMeetingInvitation(
+          "meeting.ics",
+          bytes,
+          Date.parse(`${current}T12:00:00Z`),
+        ),
+        rejects(code),
+      );
+    for (const current of [before, after]) {
+      const parsed = await parseMeetingInvitation(
+        "meeting.ics",
+        bytes,
+        Date.parse(`${current}T12:00:00Z`),
+      );
+      assert.equal(parsed.start, `${current}T10:00:00.000Z`);
+      assert.equal(parsed.recurrence, "today");
+    }
+  }
+});
+test("ICS rejects an invalid next exception before a later valid occurrence even when today has no meeting", async () => {
+  await assert.rejects(
+    parseMeetingInvitation(
+      "meeting.ics",
+      calendar(
+        ...event(
+          "DTSTART;TZID=Europe/Zurich:20261018T090000",
+          "DURATION:PT45M",
+          "RRULE:FREQ=WEEKLY;COUNT=4",
+        ),
+        ...event(
+          "RECURRENCE-ID;TZID=Europe/Zurich:20261025T090000",
+          "DTSTART;TZID=Europe/Zurich:20261025T023000",
+          "DURATION:PT45M",
+        ),
+      ),
+      Date.parse("2026-10-24T12:00:00Z"),
+    ),
+    rejects("MEETING_AMBIGUOUS_TIME"),
+  );
+});
 test("MSG uses canonical appointment times and returns only the permitted local preview fields", async () => {
   assert.deepEqual(await parseMeetingInvitation("meeting.msg", msg(), now), {
     title: "Synthetic planning meeting",

@@ -75,14 +75,19 @@ const fromMinutes = (minutes: number) => FILETIME_EPOCH + minutes * MINUTE;
 const wallAt = (instant: number, zone: Zone) =>
   instant + zone.offsetAt(instant) * MINUTE;
 
-/** Resolve a wall clock without guessing either side of a daylight-saving overlap. */
-function instantAt(wall: number, zone: Zone): number {
+function wallInstants(wall: number, zone: Zone) {
   const offsets = new Set(
     [-2, -1, 0, 1, 2].map((days) => zone.offsetAt(wall + days * DAY)),
   );
-  const matches = [...offsets]
-    .map((offset) => wall - offset * MINUTE)
-    .filter((instant) => wallAt(instant, zone) === wall);
+  const hypothetical = [...offsets].map((offset) => wall - offset * MINUTE);
+  const matches = hypothetical.filter(
+    (instant) => wallAt(instant, zone) === wall,
+  );
+  return { hypothetical, matches };
+}
+/** Resolve a wall clock without guessing either side of a daylight-saving overlap. */
+function instantAt(wall: number, zone: Zone): number {
+  const { matches } = wallInstants(wall, zone);
   if (matches.length > 1) fail("MEETING_AMBIGUOUS_TIME");
   if (matches.length !== 1) fail("MEETING_TIMEZONE");
   return matches[0];
@@ -598,11 +603,13 @@ async function parseIcs(
     startDate: IcalTime;
     endDate: IcalTime;
   };
-  const candidateFor = (occurrence: Occurrence) => {
-    const startInstant = instantAt(
+  const candidateFor = (
+    occurrence: Occurrence,
+    startInstant = instantAt(
       timeWall(occurrence.startDate),
       zoneFor(occurrence.item.component.getFirstProperty("dtstart"), startZone),
-    );
+    ),
+  ) => {
     // Exceptions can change timezone as well as date. Compare their instants
     // and calendar days in the series timezone, never their raw local clocks.
     return {
@@ -612,6 +619,10 @@ async function parseIcs(
     };
   };
   const candidates: ReturnType<typeof candidateFor>[] = [];
+  const deferredErrors: {
+    firstPossibleDay: number;
+    code: MeetingInvitationErrorCode;
+  }[] = [];
   for (const component of events.filter((e) => e !== master)) {
     const item = new ICAL.Event(component);
     if (
@@ -619,13 +630,37 @@ async function parseIcs(
       "CANCELLED"
     )
       continue;
-    const candidate = candidateFor({
-      item,
-      startDate: item.startDate,
-      endDate: item.endDate,
-    });
+    const { matches, hypothetical } = wallInstants(
+      timeWall(item.startDate),
+      zoneFor(component.getFirstProperty("dtstart"), startZone),
+    );
+    if (matches.length !== 1) {
+      // An unrelated historical/future DST error must not invalidate today's
+      // meeting. Keep every possible series day without choosing an instant.
+      // For a gap, offsets on either side bracket the nonexistent local time.
+      const possibleDays = (matches.length ? matches : hypothetical).map(
+        (instant) => dayOf(wallAt(instant, startZone)),
+      );
+      if (Math.max(...possibleDays) >= today)
+        deferredErrors.push({
+          firstPossibleDay: Math.max(today, Math.min(...possibleDays)),
+          code: matches.length ? "MEETING_AMBIGUOUS_TIME" : "MEETING_TIMEZONE",
+        });
+      continue;
+    }
+    const candidate = candidateFor(
+      { item, startDate: item.startDate, endDate: item.endDate },
+      matches[0],
+    );
     if (candidate.seriesDay >= today) candidates.push(candidate);
   }
+  const earliestError = deferredErrors.sort(
+    (a, b) => a.firstPossibleDay - b.firstPossibleDay,
+  )[0];
+  let earliestDay = Math.min(
+    earliestError?.firstPossibleDay ?? Infinity,
+    ...candidates.map((candidate) => candidate.seriesDay),
+  );
   const iterator = event.iterator();
   for (let count = 0; ; count++) {
     if (count >= 10_000) fail("MEETING_COMPLEXITY");
@@ -637,15 +672,18 @@ async function parseIcs(
     // stop after the chosen day before resolving irrelevant DST transitions.
     const seriesDay = dayOf(timeWall(detail.startDate));
     if (seriesDay < today) continue;
-    if (
-      candidates.length &&
-      seriesDay > Math.min(...candidates.map((c) => c.seriesDay))
-    )
-      break;
-    candidates.push(candidateFor(detail));
+    if (seriesDay > earliestDay) break;
+    const candidate = candidateFor(detail);
+    candidates.push(candidate);
+    earliestDay = Math.min(earliestDay, candidate.seriesDay);
   }
   candidates.sort((a, b) => a.startInstant - b.startInstant);
   const chosen = candidates[0];
+  if (
+    earliestError &&
+    earliestError.firstPossibleDay <= (chosen?.seriesDay ?? Infinity)
+  )
+    fail(earliestError.code);
   if (!chosen) fail("MEETING_NO_OCCURRENCE");
   if (candidates[1] && chosen.seriesDay === candidates[1].seriesDay)
     fail("MEETING_AMBIGUOUS_TIME");
