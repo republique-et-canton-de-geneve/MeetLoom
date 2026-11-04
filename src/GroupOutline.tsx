@@ -73,6 +73,7 @@ export default function GroupOutline({
               setDropTarget((current) => (current === key ? null : current));
           },
           onDrop: (event: DragEvent) => {
+            if (!dragId.current) return;
             event.preventDefault();
             event.stopPropagation();
             setDropTarget(null);

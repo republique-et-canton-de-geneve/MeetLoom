@@ -122,9 +122,10 @@ export default function SessionOverview({
               key={day.id}
               className="overview-day"
               onDragOver={(e) => {
-                if (editable) e.preventDefault();
+                if (editable && dragged) e.preventDefault();
               }}
               onDrop={(e) => {
+                if (!editable || !dragged) return;
                 e.preventDefault();
                 move(day.id, undefined, e.altKey || e.ctrlKey);
               }}
@@ -240,6 +241,7 @@ export default function SessionOverview({
                       }}
                       onDragEnd={() => setDragged(null)}
                       onDrop={(e) => {
+                        if (!editable || !dragged) return;
                         e.preventDefault();
                         e.stopPropagation();
                         move(day.id, block.id, e.altKey || e.ctrlKey);

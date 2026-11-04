@@ -455,11 +455,12 @@ test("a guest starts a temporary countdown without an account, including before 
   }
 });
 
-test("calendar drop handling preserves the agenda import file input and picker", async ({
+test("calendar drop handling preserves import controls and works on agenda rows", async ({
   browser,
 }) => {
   const page = await signIn(browser, admin);
   try {
+    const importedText = "Sujet importé E2E\nSecond sujet E2E";
     await createSession(page, "Import sans interception E2E");
     await page.getByRole("button", { name: "Autres actions" }).click();
     await page
@@ -521,11 +522,11 @@ test("calendar drop handling preserves the agenda import file input and picker",
     ).setFiles({
       name: "agenda.txt",
       mimeType: "text/plain",
-      buffer: Buffer.from("Sujet importé E2E"),
+      buffer: Buffer.from(importedText),
     });
     await expect(
       panel.getByLabel("Texte à convertir (modifiable)"),
-    ).toHaveValue("Sujet importé E2E");
+    ).toHaveValue(importedText);
     await panel.getByRole("button", { name: "Un bloc par ligne" }).click();
     await expect(panel.locator(".import-block input").first()).toHaveValue(
       "Sujet importé E2E",
@@ -539,6 +540,83 @@ test("calendar drop handling preserves the agenda import file input and picker",
       }),
     ).toBeVisible();
     await expect(page.locator(".quick-meeting")).toHaveCount(0);
+    const rows = page.locator(".agenda-row");
+    await rows
+      .nth(1)
+      .locator(".drag-handle")
+      .dragTo(rows.nth(0), { targetPosition: { x: 5, y: 5 } });
+    await expect(
+      rows.nth(0).getByRole("textbox", {
+        name: "Durée de Second sujet E2E",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.locator(".quick-meeting")).toHaveCount(0);
+    await expect(page.locator(".quick-meeting-drag")).toHaveCount(0);
+    await page
+      .locator(".add-special-blocks")
+      .getByRole("button", { name: "Groupe", exact: true })
+      .click();
+    await page
+      .locator(".add-special-blocks")
+      .getByRole("button", { name: "Salles parallèles", exact: true })
+      .click();
+    await page
+      .locator(".room-tabs")
+      .getByRole("tab", { name: "Vue d’ensemble", exact: true })
+      .click();
+    await expect(page.getByText("Tout est enregistré")).toBeVisible();
+    const before = await sessions(page);
+    const requests = networkRequests(page);
+    const row = page.locator(".agenda-row").filter({
+      has: page.getByRole("textbox", {
+        name: "Durée de Sujet importé E2E",
+        exact: true,
+      }),
+    });
+    const transfer = await page.evaluateHandle((calendar) => {
+      const data = new DataTransfer();
+      data.items.add(
+        new File([calendar], "invitation.ics", { type: "text/calendar" }),
+      );
+      return data;
+    }, invitation());
+    const dropCalendar = async (target: Locator) => {
+      await target.dispatchEvent("dragenter", { dataTransfer: transfer });
+      await target.dispatchEvent("dragover", { dataTransfer: transfer });
+      await expect(page.locator(".quick-meeting-drag")).toBeVisible();
+      await target.dispatchEvent("drop", { dataTransfer: transfer });
+      await expect(page.locator(".quick-meeting .timer-content")).toContainText(
+        meetingTitle,
+      );
+      await expect(page.locator(".quick-meeting-drag")).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "Fermer la séance rapide", exact: true })
+        .click();
+    };
+    for (const target of [
+      row.getByRole("textbox", {
+        name: "Durée de Sujet importé E2E",
+        exact: true,
+      }),
+      page.locator(".container-header").first(),
+      page.locator(".group-drop").first(),
+      page.locator(".add-block-button").first(),
+      page.locator(".parallel-outline .outline-list").first(),
+      page.locator(".session-navigation .nav-item").first(),
+    ])
+      await dropCalendar(target);
+    await page
+      .getByRole("button", { name: "Vue d’ensemble", exact: true })
+      .first()
+      .click();
+    await dropCalendar(page.locator(".overview-day").first());
+    await dropCalendar(
+      page.locator(".overview-block .overview-block-meta").first(),
+    );
+    expect(await sessions(page)).toEqual(before);
+    expect(requests).toEqual({ unexpected: [], ai: [] });
+    await transfer.dispose();
   } finally {
     await page.context().close();
   }

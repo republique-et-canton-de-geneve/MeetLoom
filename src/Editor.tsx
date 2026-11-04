@@ -757,6 +757,7 @@ export default function Editor({
     viewer: t("Lecteur", "Viewer"),
   }[role];
   const drop = (e: DragEvent, blockId: string, listId: string | null) => {
+    if (!dragId.current) return;
     e.preventDefault();
     e.stopPropagation();
     if (dragId.current)
@@ -776,6 +777,7 @@ export default function Editor({
         e.currentTarget.classList.remove("drop-here");
     },
     onDrop: (e: DragEvent<HTMLElement>) => {
+      if (!dragId.current) return;
       e.preventDefault();
       e.stopPropagation();
       e.currentTarget.classList.remove("drop-here");
@@ -2567,6 +2569,7 @@ export default function Editor({
                           if (dragId.current) e.preventDefault();
                         }}
                         onDrop={(e) => {
+                          if (!dragId.current) return;
                           e.preventDefault();
                           if (dragId.current)
                             outlineActions.relocate(dragId.current, {
