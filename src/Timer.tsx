@@ -372,8 +372,9 @@ function ScheduleBadge({ delta }: { delta: number }) {
 }
 
 /** The always-on-top progress window (Document Picture-in-Picture, or a
- * popup where unavailable), shared by facilitators and visitors. */
-export function useFloatingWindow() {
+ * popup where unavailable), shared by facilitators and visitors. Concurrent
+ * controllers use distinct popup names so they own separate fallback windows. */
+export function useFloatingWindow(popupName = "meetloom-progress") {
   const { t } = useI18n();
   const [floating, setFloating] = useState<Window | null>(null);
   // A popup can be moved by the page; the always-on-top window cannot.
@@ -410,7 +411,7 @@ export function useFloatingWindow() {
         ? await pip.requestWindow(FLOATING_SIZE)
         : window.open(
             "",
-            "meetloom-progress",
+            popupName,
             `popup,width=${FLOATING_SIZE.width},height=${FLOATING_SIZE.height + 42}`,
           );
       if (!win) {

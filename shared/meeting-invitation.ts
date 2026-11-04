@@ -444,8 +444,11 @@ async function parseIcs(
   const events = calendar.getAllSubcomponents("vevent");
   if (!events.length) fail("MEETING_NO_EVENT");
   const masters = events.filter((event) => !event.hasProperty("recurrence-id"));
-  if (masters.length !== 1) fail("MEETING_MULTIPLE_EVENTS");
-  const master = masters[0],
+  // A separately exported occurrence retains RECURRENCE-ID but supplies its
+  // own schedule. Multiple detached occurrences still require a series master.
+  const detached = masters.length === 0 && events.length === 1;
+  if (masters.length !== 1 && !detached) fail("MEETING_MULTIPLE_EVENTS");
+  const master = masters[0] ?? events[0],
     uid = master.getFirstPropertyValue("uid");
   if (
     events.some(
@@ -542,6 +545,7 @@ async function parseIcs(
     strictExceptions: true,
     exceptions: events.filter((e) => e !== master),
   });
+  if (detached && event.isRecurring()) fail("MEETING_RECURRENCE_UNSUPPORTED");
   const startZone = zoneFor(master.getFirstProperty("dtstart"));
   const getResult = (
     item: InstanceType<typeof ICAL.Event>,

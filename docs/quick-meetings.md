@@ -1,6 +1,6 @@
 # Quick meeting countdowns
 
-Drop one Outlook `.msg` or calendar `.ics` invitation on the welcome page or anywhere in the signed-in planner. No account or sign-in is needed for the countdown, including before the first installation account exists. MeetLoom reads its title and start/end times, starts a temporary countdown from the scheduled start, and immediately requests the floating progress window. You can also choose **Quick meeting** on the welcome page or dashboard and select a file. The file limit is 10 MB.
+Drop one Outlook `.msg` or calendar `.ics` invitation on the welcome page or in the signed-in planner. No account or sign-in is needed for the countdown, including before the first installation account exists. MeetLoom reads its title and start/end times, starts a temporary countdown from the scheduled start, and immediately requests the floating progress window. You can also choose **Quick meeting** on the welcome page or dashboard and select a file. The file limit is 10 MB. Existing file inputs and document-import areas keep their normal behavior; drop onto the surrounding page to start a quick meeting.
 
 An ongoing meeting starts with its actual remaining time. A future meeting counts down to its start; an expired meeting appears complete. Calendar timestamps retain their timezone offsets and daylight-saving rules. Recurring invitations require a resolvable occurrence: the reader selects today's occurrence when present, otherwise the next occurrence, and displays the resolved date. Unsupported or ambiguous invitations are rejected instead of guessing a time. Export a single occurrence as `.ics` if needed.
 
@@ -9,6 +9,8 @@ The countdown exists only in this browser tab. It does not create a saved sessio
 ## Floating window
 
 MeetLoom requests Document Picture-in-Picture synchronously from the drop or file-selection handler, before reading the file. Browser security rules can still require an explicit click. If automatic opening is refused, the countdown stays available and **Show always on top** retries with a direct click. Chrome and Edge on desktop support this API; the separate-window fallback in other browsers cannot guarantee always-on-top behavior. Native slideshow/full-screen behavior depends on the operating system and presentation mode.
+
+Fallback windows for quick meetings are independent of a saved session's timer: closing the quick meeting leaves that session's separate window open.
 
 ## Optional invitation analysis
 

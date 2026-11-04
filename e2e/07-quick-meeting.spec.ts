@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { admin, password, signIn } from "./helpers";
+import { admin, createSession, password, signIn } from "./helpers";
 
 const invitationLabel = "Invitation Outlook ou calendrier";
 const meetingTitle = "Point de coordination E2E";
@@ -445,5 +445,94 @@ test("a guest starts a temporary countdown without an account, including before 
     ).toEqual([]);
   } finally {
     await context.close();
+  }
+});
+
+test("calendar drop handling preserves the agenda import file input and picker", async ({
+  browser,
+}) => {
+  const page = await signIn(browser, admin);
+  try {
+    await createSession(page, "Import sans interception E2E");
+    await page.getByRole("button", { name: "Autres actions" }).click();
+    await page
+      .getByRole("button", { name: "Importer un agenda", exact: true })
+      .click();
+    const panel = page.locator(".document-import");
+    const input = panel.locator('input[type="file"]');
+    await expect(input).toBeVisible();
+    const events = await input.evaluate((input) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File(["Sujet importé E2E"], "agenda.txt", { type: "text/plain" }),
+      );
+      return [
+        input,
+        input.closest(".file-drop")!.querySelector("span")!,
+      ].flatMap((target) =>
+        ["dragenter", "dragover", "drop"].map((type) => {
+          const event = new DragEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: transfer,
+          });
+          target.dispatchEvent(event);
+          return { type, canceled: event.defaultPrevented };
+        }),
+      );
+    });
+    expect(events).toEqual([
+      { type: "dragenter", canceled: false },
+      { type: "dragover", canceled: false },
+      { type: "drop", canceled: false },
+      { type: "dragenter", canceled: false },
+      { type: "dragover", canceled: false },
+      { type: "drop", canceled: false },
+    ]);
+    await page.evaluate((calendar) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([calendar], "handled.ics", { type: "text/calendar" }),
+      );
+      const event = new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      });
+      // A local drop handler has already claimed the event before bubbling.
+      event.preventDefault();
+      document.body.dispatchEvent(event);
+    }, invitation());
+    await expect(page.locator(".quick-meeting")).toHaveCount(0);
+    await expect(page.locator(".quick-meeting-drag")).toHaveCount(0);
+    // Synthetic events cannot prove the browser's native file-drop behavior.
+    // Exercise the real picker and import path separately with the same file.
+    const chooser = page.waitForEvent("filechooser");
+    await input.click();
+    await (
+      await chooser
+    ).setFiles({
+      name: "agenda.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Sujet importé E2E"),
+    });
+    await expect(
+      panel.getByLabel("Texte à convertir (modifiable)"),
+    ).toHaveValue("Sujet importé E2E");
+    await panel.getByRole("button", { name: "Un bloc par ligne" }).click();
+    await expect(panel.locator(".import-block input").first()).toHaveValue(
+      "Sujet importé E2E",
+    );
+    await panel.getByRole("button", { name: "Ajouter à la séance" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", {
+        name: "Durée de Sujet importé E2E",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.locator(".quick-meeting")).toHaveCount(0);
+  } finally {
+    await page.context().close();
   }
 });

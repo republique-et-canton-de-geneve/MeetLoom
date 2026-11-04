@@ -89,7 +89,7 @@ export default function QuickMeeting({
             )
           : "";
   const { floating, movable, openFloating, closeFloating, floatingNotice } =
-    useFloatingWindow();
+    useFloatingWindow("meetloom-quick-progress");
 
   const close = () => {
     generation.current += 1;
@@ -162,9 +162,28 @@ export default function QuickMeeting({
   });
   useEffect(() => {
     let depth = 0;
+    const handledLocally = (event: DragEvent) =>
+      event.defaultPrevented ||
+      event
+        .composedPath()
+        .some(
+          (target) =>
+            target instanceof Element &&
+            (target.matches('input[type="file"], .file-drop') ||
+              (target.matches("label") &&
+                !!target.querySelector('input[type="file"]'))),
+        );
+    const clearDrag = () => {
+      depth = 0;
+      setDragging(false);
+    };
     const files = (event: DragEvent) =>
       event.dataTransfer?.types.includes("Files");
     const enter = (event: DragEvent) => {
+      if (handledLocally(event)) {
+        clearDrag();
+        return;
+      }
       if (files(event)) {
         event.preventDefault();
         depth++;
@@ -172,22 +191,24 @@ export default function QuickMeeting({
       }
     };
     const over = (event: DragEvent) => {
+      if (handledLocally(event)) {
+        clearDrag();
+        return;
+      }
       if (files(event)) {
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
       }
     };
     const leave = (event: DragEvent) => {
-      if (files(event) && --depth <= 0) {
-        depth = 0;
-        setDragging(false);
-      }
+      if (handledLocally(event) || (files(event) && --depth <= 0)) clearDrag();
     };
     const drop = (event: DragEvent) => {
-      if (!files(event)) return;
+      // Keep native file inputs and dedicated drop zones in control of their
+      // files, including this panel's own picker. Never cancel their default.
+      clearDrag();
+      if (handledLocally(event) || !files(event)) return;
       event.preventDefault();
-      depth = 0;
-      setDragging(false);
       const list = event.dataTransfer?.files;
       if (
         !list?.length ||

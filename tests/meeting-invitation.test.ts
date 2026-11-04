@@ -283,6 +283,107 @@ test("ICS rejects unrelated multiple events instead of silently selecting one", 
     rejects("MEETING_MULTIPLE_EVENTS"),
   );
 });
+test("ICS accepts one detached occurrence using its explicit changed schedule", async () => {
+  for (const schedule of [
+    ["DTSTART:20261104T143000Z", "DTEND:20261104T151500Z"],
+    [
+      "DTSTART;TZID=Europe/Zurich:20261104T153000",
+      "DTEND;TZID=Europe/Zurich:20261104T161500",
+    ],
+  ]) {
+    const parsed = await parseMeetingInvitation(
+      "occurrence.ics",
+      calendar(
+        ...event(
+          "RECURRENCE-ID:20261028T130000Z",
+          ...schedule,
+          "DESCRIPTION:Only this occurrence.",
+        ),
+      ),
+      now,
+    );
+    assert.deepEqual(parsed, {
+      title: "Synthetic planning meeting",
+      start: "2026-11-04T14:30:00.000Z",
+      end: "2026-11-04T15:15:00.000Z",
+      body: "Only this occurrence.",
+    });
+  }
+});
+test("ICS detached occurrences keep cancellation, schedule and range safeguards", async () => {
+  for (const [lines, code] of [
+    [
+      [
+        "DTSTART:20261104T130000Z",
+        "DTEND:20261104T134500Z",
+        "STATUS:CANCELLED",
+      ],
+      "MEETING_CANCELLED",
+    ],
+    [
+      ["DTSTART;VALUE=DATE:20261104", "DTEND;VALUE=DATE:20261105"],
+      "MEETING_ALL_DAY",
+    ],
+    [["DTSTART:20261104T140000", "DTEND:20261104T144500"], "MEETING_TIMEZONE"],
+    [
+      ["DTSTART;TZID=Europe/Zurich:20261025T023000", "DURATION:PT45M"],
+      "MEETING_AMBIGUOUS_TIME",
+    ],
+    [["DTSTART:20261104T130000Z"], "MEETING_NO_TIME"],
+    [["DTEND:20261104T134500Z"], "MEETING_NO_TIME"],
+    [
+      [
+        "DTSTART:20261104T130000Z",
+        "DTEND:20261104T134500Z",
+        "RRULE:FREQ=WEEKLY",
+      ],
+      "MEETING_RECURRENCE_UNSUPPORTED",
+    ],
+  ] as const)
+    await assert.rejects(
+      parseMeetingInvitation(
+        "occurrence.ics",
+        calendar(...event("RECURRENCE-ID:20261104T130000Z", ...lines)),
+        now,
+      ),
+      rejects(code),
+    );
+  await assert.rejects(
+    parseMeetingInvitation(
+      "occurrence.ics",
+      calendar(
+        ...event(
+          "RECURRENCE-ID;RANGE=THISANDFUTURE:20261104T130000Z",
+          "DTSTART:20261104T130000Z",
+          "DTEND:20261104T134500Z",
+        ),
+      ),
+      now,
+    ),
+    rejects("MEETING_RECURRENCE_UNSUPPORTED"),
+  );
+});
+test("ICS does not choose between multiple detached occurrences without a series master", async () => {
+  await assert.rejects(
+    parseMeetingInvitation(
+      "occurrences.ics",
+      calendar(
+        ...event(
+          "RECURRENCE-ID:20261104T130000Z",
+          "DTSTART:20261104T130000Z",
+          "DTEND:20261104T134500Z",
+        ),
+        ...event(
+          "RECURRENCE-ID:20261111T130000Z",
+          "DTSTART:20261111T130000Z",
+          "DTEND:20261111T134500Z",
+        ),
+      ),
+      now,
+    ),
+    rejects("MEETING_MULTIPLE_EVENTS"),
+  );
+});
 test("ICS duration preserves elapsed hours across both daylight-saving changes", async () => {
   for (const [start, duration, expected] of [
     ["20260329T013000", "PT2H", 120],
