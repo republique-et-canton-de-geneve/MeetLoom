@@ -213,6 +213,9 @@ test(
         });
         socket.once("error", (error: NodeJS.ErrnoException) => {
           if (error.code === "ECONNREFUSED") resolve(true);
+          // A connection racing the listener's close can be reset first.
+          // Keep polling until refusal proves the listener has stopped.
+          else if (error.code === "ECONNRESET") resolve(false);
           else reject(error);
         });
         socket.setTimeout(250, () => {
