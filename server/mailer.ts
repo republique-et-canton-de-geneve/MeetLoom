@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { accountProfile } from "./accounts.js";
 import { hashToken, rateLimit, token } from "./security.js";
 import { getSessionLifecycle } from "./lifecycle.js";
 import { log } from "./log.js";
+import { publicAccess } from "./public-url.js";
 
 /** The SMTP error codes (connection, authentication, rejection), never the
  * message or its recipients. */
@@ -22,25 +23,28 @@ const smtpFailure = (error: unknown) => {
   };
 };
 
-export type InvitationMail = (invite: {
-  email: string;
-  /** The inviter's language, for someone without an account yet. */
-  locale: "fr" | "en";
-  inviter: string;
-  inviterId: string;
-  /** What the invitation is for (a session or workspace id, or "account"):
-   * the same person is emailed about it at most every 15 minutes. */
-  target: string;
-  kind: "session" | "workspace" | "account";
-  /** The session or workspace name. */
-  title?: string;
-  /** In a session, what the person may do there. */
-  role?: "editor" | "facilitator" | "viewer";
-  /** Absolute path in the application, such as /join/<token>. */
-  path: string;
-  /** Already has an account: no link to accept. */
-  existing?: boolean;
-}) => Promise<boolean>;
+export type InvitationMail = (
+  invite: {
+    email: string;
+    /** The inviter's language, for someone without an account yet. */
+    locale: "fr" | "en";
+    inviter: string;
+    inviterId: string;
+    /** What the invitation is for (a session or workspace id, or "account"):
+     * the same person is emailed about it at most every 15 minutes. */
+    target: string;
+    kind: "session" | "workspace" | "account";
+    /** The session or workspace name. */
+    title?: string;
+    /** In a session, what the person may do there. */
+    role?: "editor" | "facilitator" | "viewer";
+    /** Absolute path in the application, such as /join/<token>. */
+    path: string;
+    /** Already has an account: no link to accept. */
+    existing?: boolean;
+  },
+  request?: Request,
+) => Promise<boolean>;
 export interface MailConfig {
   host: string;
   port: number;
@@ -96,6 +100,7 @@ type Dependencies = {
   db: Database;
   config?: MailConfig;
   origin?: string;
+  publicUrl?: string;
   transport?: MailTransport;
   rateLimits?: boolean;
 };
@@ -111,7 +116,14 @@ const currentRecipient = (sql: Sql, userId: string) =>
 
 export async function installMailApi(
   app: Express,
-  { db, config, origin, transport: provided, rateLimits }: Dependencies,
+  {
+    db,
+    config,
+    origin,
+    publicUrl,
+    transport: provided,
+    rateLimits,
+  }: Dependencies,
 ) {
   await db.run(
     "CREATE TABLE IF NOT EXISTS mail_deliveries (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,status TEXT NOT NULL,lease_until BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,created_at BIGINT NOT NULL)",
@@ -149,6 +161,13 @@ export async function installMailApi(
   );
   if (config && !origin)
     throw new Error("APP_ORIGIN is required when SMTP is enabled.");
+  // Only operator-configured URLs may appear in mail. Interactive messages
+  // retain the trusted entry point; scheduled messages use the native origin.
+  const mailBase = (request?: Request) => {
+    if (!request || !origin) return origin;
+    const access = publicAccess(request, { origin, publicUrl });
+    return `${access.origin}${access.basePath}`;
+  };
   const transport = config
       ? (provided ?? createMailTransport(config))
       : undefined,
@@ -213,7 +232,8 @@ export async function installMailApi(
           return user;
         });
         if (recipient) {
-          const raw = token(),
+          const base = mailBase(request),
+            raw = token(),
             hash = hashToken(raw);
           await db.run("DELETE FROM account_resets WHERE expires_at<=$1", [
             Date.now(),
@@ -233,7 +253,7 @@ export async function installMailApi(
                 french
                   ? "MeetLoom — réinitialiser votre mot de passe"
                   : "MeetLoom — reset your password",
-                `${french ? "Utilisez ce lien dans l’heure pour choisir un nouveau mot de passe :" : "Use this link within one hour to choose a new password:"}\n\n${origin}/recover/${raw}\n\n${french ? "Si vous n’avez pas demandé ce message, ignorez-le." : "If you did not request this message, you can ignore it."}`,
+                `${french ? "Utilisez ce lien dans l’heure pour choisir un nouveau mot de passe :" : "Use this link within one hour to choose a new password:"}\n\n${base}/recover/${raw}\n\n${french ? "Si vous n’avez pas demandé ce message, ignorez-le." : "If you did not request this message, you can ignore it."}`,
               );
             } catch (error) {
               await db.run("DELETE FROM account_resets WHERE token_hash=$1", [
@@ -484,8 +504,9 @@ export async function installMailApi(
    * link always goes out, since it replaces the previous one. One person
    * sends at most 50 invitation emails an hour.
    */
-  const invitation: InvitationMail = async (invite) => {
+  const invitation: InvitationMail = async (invite, request) => {
     if (!config || !transport || closing) return false;
+    const base = mailBase(request);
     // Being added again shares one row per person and target, for the
     // cooldown; each new link is a row of its own, so the hourly cap counts
     // every email sent.
@@ -581,8 +602,8 @@ export async function installMailApi(
             ? `MeetLoom — ${inviter} vous invite${title ? ` : ${title}` : ""}`
             : `MeetLoom — ${inviter} invites you${title ? `: ${title}` : ""}`,
         invite.existing
-          ? `${inviter} ${french ? "vous a ajouté" : "added you"} ${what}.\n\n${origin}${invite.path}`
-          : `${inviter} ${french ? "vous invite" : "invites you"} ${what}.\n\n${french ? "Ce lien personnel est valable 72 heures ; il vous permet de créer votre compte :" : "This personal link is valid for 72 hours and lets you create your account:"}\n${origin}${invite.path}\n\n${french ? "Ne le transférez pas. Si vous n’attendiez pas cette invitation, ignorez ce message." : "Do not forward it. If you did not expect this invitation, you can ignore this message."}`,
+          ? `${inviter} ${french ? "vous a ajouté" : "added you"} ${what}.\n\n${base}${invite.path}`
+          : `${inviter} ${french ? "vous invite" : "invites you"} ${what}.\n\n${french ? "Ce lien personnel est valable 72 heures ; il vous permet de créer votre compte :" : "This personal link is valid for 72 hours and lets you create your account:"}\n${base}${invite.path}\n\n${french ? "Ne le transférez pas. Si vous n’attendiez pas cette invitation, ignorez ce message." : "Do not forward it. If you did not expect this invitation, you can ignore this message."}`,
       );
       return await current();
     } catch (error) {
@@ -704,8 +725,10 @@ export async function installMailApi(
       message: string;
       page: string | null;
     },
+    request?: Request,
   ) => {
     if (!config) return;
+    const base = mailBase(request);
     const admins = await sql.all<Recipient>(
       "SELECT id,email,name,locale FROM users WHERE is_admin=1 AND id<>$1 AND NOT EXISTS(SELECT 1 FROM account_disabled d WHERE d.user_id=users.id) ORDER BY id",
       [report.authorId],
@@ -726,7 +749,7 @@ export async function installMailApi(
         sql,
         admin,
         `MeetLoom — ${kind} : ${short(report.message, 80)}`,
-        `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${origin}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+        `${kind} — ${short(report.authorName, 120)} <${report.authorEmail}>${report.page ? `\n${french ? "Page" : "Page"} : ${short(report.page, 300)}` : ""}\n\n${report.message.slice(0, 4000)}\n\n${french ? "Traiter les retours :" : "Triage reports:"} ${base}/account/feedback-inbox\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
         { purpose: "administrator" },
       );
     }
@@ -741,8 +764,10 @@ export async function installMailApi(
       message: string;
       status: "new" | "in-progress" | "done" | "dismissed";
     },
+    request?: Request,
   ) => {
     if (!config) return;
+    const base = mailBase(request);
     const [author] = await currentRecipient(sql, change.authorId);
     if (
       !author ||
@@ -765,7 +790,7 @@ export async function installMailApi(
       sql,
       author,
       `MeetLoom — ${what} : ${status}`,
-      `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${origin}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
+      `${what} ${french ? "est maintenant" : "is now"} : ${status}.\n\n« ${short(change.message, 300)} »\n\n${french ? "Suivre vos retours :" : "Follow your reports:"} ${base}/account/feedback\n\n${french ? "Désactivez ces e-mails dans votre profil." : "Turn these emails off in your profile."}`,
       { purpose: "author" },
     );
   };

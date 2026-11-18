@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { request as httpRequest } from "node:http";
 import { harness, origin, password } from "./support.js";
 import { readConfig } from "../server/config.js";
+import type { MailMessage } from "../server/mailer.js";
 
 const publicUrl = "https://tools.example.test/meetloom";
 const publicHost = "tools.example.test";
@@ -135,7 +136,7 @@ test("a trusted proxy URL selects public assets, CSRF origin and scoped cookies 
   );
 });
 
-test("alternate OIDC callbacks stay bound to the selected URL and SMTP links include its prefix", async (t) => {
+test("alternate OIDC callbacks stay bound to the selected URL and native SMTP links keep their origin", async (t) => {
   let authorize: { state: string; redirectUri: string } | undefined;
   const messages: string[] = [];
   const h = await harness(t, {
@@ -219,7 +220,7 @@ test("alternate OIDC callbacks stay bound to the selected URL and SMTP links inc
   assert.equal(invited.status, 201);
   assert.ok(
     messages.some((text) =>
-      text.includes(`${publicUrl}/join/${invited.body.token}`),
+      text.includes(`${origin}/join/${invited.body.token}`),
     ),
   );
   const mcp = await publicRequest(
@@ -237,6 +238,145 @@ test("alternate OIDC callbacks stay bound to the selected URL and SMTP links inc
     "approved alternate host passes MCP host check before bearer authentication",
   );
 });
+
+for (const entry of ["native", "alternate", "unrecognized"] as const)
+  test(`interactive SMTP links retain the configured ${entry} entry point`, async (t) => {
+    const messages: MailMessage[] = [];
+    let failReports = true;
+    const h = await harness(t, {
+      publicUrl,
+      mail: {
+        host: "smtp.example.test",
+        port: 587,
+        secure: false,
+        from: "meetloom@example.test",
+        scheduled: false,
+      },
+      mailTransport: {
+        async send(message) {
+          if (failReports && message.text.includes("mail-entry-check"))
+            throw new Error("Synthetic SMTP failure");
+          messages.push(message);
+        },
+      },
+    });
+    await h.setup();
+    await h.account("member@example.test");
+    const session = await h.session();
+    const workspace = (
+      await h.owner.request("/workspaces", "POST", { name: "Team" })
+    ).body.workspace;
+    messages.length = 0;
+    const expected = entry === "alternate" ? publicUrl : origin;
+    const headers = {
+      Host:
+        entry === "alternate"
+          ? publicHost
+          : entry === "native"
+            ? new URL(h.base).host
+            : "attacker.example.test",
+      Origin: entry === "alternate" ? new URL(publicUrl).origin : origin,
+      "X-Forwarded-Host":
+        entry === "alternate" ? "attacker.example.test" : publicHost,
+      "X-Forwarded-Prefix": "/attacker",
+    };
+    const login = async (email: string) => {
+      const response = await publicRequest(
+        h.base,
+        "/api/auth/login",
+        "POST",
+        { email, password },
+        headers,
+      );
+      assert.equal(response.status, 200, await response.clone().text());
+      return response.headers.get("set-cookie")!.split(";")[0];
+    };
+    const ownerCookie = await login("owner@example.test");
+    const memberCookie = await login("member@example.test");
+    const send = async (
+      path: string,
+      body: unknown,
+      cookie = ownerCookie,
+      method = "POST",
+    ) => {
+      const response = await publicRequest(
+        h.base,
+        `/api${path}`,
+        method,
+        body,
+        {
+          ...headers,
+          Cookie: cookie,
+        },
+      );
+      assert.ok(response.ok, await response.clone().text());
+      return response.json();
+    };
+    const invites = [
+      ["/auth/invites", { name: "New account", email: "account@example.test" }],
+      [
+        `/sessions/${session.id}/invitations`,
+        { name: "New participant", email: "participant@example.test" },
+      ],
+      [
+        `/workspaces/${workspace.id}/members`,
+        { email: "teammate@example.test", role: "editor" },
+      ],
+    ] as const;
+    for (const [path, body] of invites) {
+      const invited = await send(path, body);
+      assert.equal(invited.emailed, true);
+      assert.ok(
+        messages.at(-1)!.text.includes(`${expected}/join/${invited.token}`),
+      );
+    }
+    await send(`/sessions/${session.id}/invitations`, {
+      name: "Member",
+      email: "member@example.test",
+    });
+    assert.ok(
+      messages.at(-1)!.text.includes(`${expected}/session/${session.id}`),
+    );
+    await send(`/workspaces/${workspace.id}/members`, {
+      email: "member@example.test",
+      role: "viewer",
+    });
+    assert.ok(
+      messages.at(-1)!.text.includes(`${expected}/?workspace=${workspace.id}`),
+    );
+    await send("/auth/forgot-password", { email: "owner@example.test" });
+    await h.mail.flush();
+    assert.ok(messages.at(-1)!.text.includes(`${expected}/recover/`));
+
+    // The trusted base is captured when queued, including retries by another pod.
+    const report = await send(
+      "/feedback",
+      { kind: "bug", message: "mail-entry-check" },
+      memberCookie,
+    );
+    await h.mail.flush();
+    const queued = await h.db.all<{ body: string }>(
+      "SELECT body FROM mail_outbox",
+    );
+    assert.equal(queued.length, 1);
+    assert.ok(queued[0].body.includes(`${expected}/account/feedback-inbox`));
+    failReports = false;
+    await h.mail.deliverQueued(Date.now() + 6 * 60 * 1000);
+    assert.ok(
+      messages.at(-1)!.text.includes(`${expected}/account/feedback-inbox`),
+    );
+    await send(
+      `/admin/feedback/${report.feedback.id}`,
+      { status: "done" },
+      ownerCookie,
+      "PATCH",
+    );
+    await h.mail.flush();
+    assert.ok(messages.at(-1)!.text.includes(`${expected}/account/feedback`));
+    assert.ok(messages.every((message) => !message.text.includes("attacker")));
+    if (entry !== "alternate")
+      assert.ok(messages.every((message) => !message.text.includes(publicUrl)));
+  });
 
 test("proxy URL configuration accepts one explicit HTTP base and rejects unsafe or ambiguous values", () => {
   assert.equal(

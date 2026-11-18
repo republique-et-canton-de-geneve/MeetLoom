@@ -35,7 +35,7 @@ In **GitHub → Settings → Branches**, protect `main`: require a pull request 
 
 ## 2. Publish a version
 
-The version source is `package.json`, currently `0.1.5`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
+The version source is `package.json`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
 
 Choose one trigger:
 
@@ -291,6 +291,6 @@ Both installers copy `APP_PUBLIC_URL` from the operator environment when creatin
 
 Future release images use the normal repository Dockerfile and include this URL handling in their build. No custom runtime overlay is needed to retain the feature.
 
-The server selects HTML asset URLs, browser routing, CSRF origin and cookie paths from that explicit configuration. Native root cookies retain their names and scope. Browser sign-ins and preferences are per host. Email links use `APP_PUBLIC_URL` when configured. For OIDC, register both `${APP_ORIGIN}/api/auth/oidc/callback` and `${APP_PUBLIC_URL}/api/auth/oidc/callback` with the provider before enabling the second URL.
+The server selects HTML asset URLs, browser routing, CSRF origin and cookie paths from that explicit configuration. Native root cookies retain their names and scope. Browser sign-ins and preferences are per host. Invitations, recovery and report emails use the configured entry point of the request that triggered them; native requests keep `APP_ORIGIN`, and requests on the alternate Host keep the `APP_PUBLIC_URL` prefix. Queued report emails retain that trusted URL through retries. Scheduled reminders and digests use `APP_ORIGIN`, so configuring the second URL before its proxy is active does not redirect native users' emails to it. Forwarded headers and browser-supplied URLs never choose an email destination. For OIDC, register both `${APP_ORIGIN}/api/auth/oidc/callback` and `${APP_PUBLIC_URL}/api/auth/oidc/callback` with the provider before enabling the second URL.
 
 Apply the setting and image together through the existing rolling-update process, preserving two ready replicas and `maxUnavailable: 0`. Validate both URLs before declaring completion. A deployment that cannot retain ready capacity needs operator approval before proceeding.

@@ -4,6 +4,8 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-18
+
 ### Added
 
 - Support a second external URL behind a path-stripping reverse proxy, including links, authentication and application assets.
@@ -21,6 +23,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Fixed
 
+- Email links follow the trusted address used for invitations, recovery and reports; scheduled mail keeps the native address when a second URL is configured.
 - Allow in-flight AI requests to finish during application shutdown instead of cutting their connections after ten seconds; align container and rolling-update grace periods.
 
 - Encrypted data exports and backup downloads retain their dated filename with either supported HTTP filename syntax.

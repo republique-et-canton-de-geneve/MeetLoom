@@ -1,5 +1,11 @@
 # Manual acceptance testing
 
+## Mail entry points — November 18, 2026
+
+The native invitation assertion first reproduced the regression: enabling `APP_PUBLIC_URL` made an account invitation created at the native URL point to the alternate Host. Synthetic SMTP tests now cover account, session and workspace invitations for new and existing accounts, password recovery, report notifications and their durable retry. Each runs with native, alternate and unrecognized Hosts; forged forwarded Host/prefix headers never become email URLs. A scheduled-mail regression keeps reminder and digest links on `APP_ORIGIN` while the alternate URL is configured. These tests use local fixtures and do not send real email or validate an external proxy.
+
+Linux Node 24.21.0 passed all 22 public-URL/service tests, lint (zero errors, existing 76-warning budget), deadcode, type checking, the production build and formatting. The full SQLite/API suite has 475 tests: 474 pass and the PostgreSQL-only multi-instance case is skipped without a database. Chrome on Windows against that production build served by Linux Node 24 passed five account and alternate-URL journeys, including worker loading, editing and visitor sharing. No persistence format changed; the normal CI PostgreSQL and full browser jobs provide the broader integration checks.
+
 ## Graceful shutdown preparation — November 18, 2026
 
 A regression test starts the actual application entry point under Node 24 with a disposable SQLite database and a loopback-only AI provider. It creates a synthetic account through the normal setup endpoint, calls the existing authenticated AI generation route and signals SIGTERM once that provider has received the request. The provider answers after 11.5 seconds. Before the correction the test failed with `UND_ERR_SOCKET` when the previous ten-second deadline closed the response. After the correction the application refuses a new TCP connection during the drain, returns the complete expected HTTP 200 block and exits with code zero. A second contract test checks the supported AI limit against HTTP drain, Kubernetes/Compose grace and both installer rollout budgets. These tests invoke no real AI, SMTP, identity provider or deployment.

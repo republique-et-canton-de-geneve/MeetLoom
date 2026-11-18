@@ -409,7 +409,8 @@ async function assembleWith(db: Database, config: AppConfig) {
   const mail = await installMailApi(app, {
     db,
     config: config.mail,
-    origin: config.publicUrl ?? config.origin,
+    origin: config.origin,
+    publicUrl: config.publicUrl,
     transport: config.mailTransport,
     rateLimits: config.rateLimits,
   });
@@ -794,15 +795,18 @@ async function assembleWith(db: Database, config: AppConfig) {
         detail: { role: input.role ?? null },
       });
     });
-    const emailed = await mail.invitation({
-      email: input.email,
-      locale: user(response).locale,
-      inviter: user(response).name,
-      inviterId: user(response).id,
-      target: "account",
-      kind: "account",
-      path: `/join/${raw}`,
-    });
+    const emailed = await mail.invitation(
+      {
+        email: input.email,
+        locale: user(response).locale,
+        inviter: user(response).name,
+        inviterId: user(response).id,
+        target: "account",
+        kind: "account",
+        path: `/join/${raw}`,
+      },
+      request,
+    );
     response.status(201).json({
       token: raw,
       expiresAt: new Date(expires).toISOString(),

@@ -1,4 +1,4 @@
-import type { Express, RequestHandler, Response } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { User } from "../shared/model.js";
@@ -49,6 +49,7 @@ export async function registerFeedback(
           message: string;
           page: string | null;
         },
+        request?: Request,
       ) => Promise<void>;
       feedbackStatusChanged: (
         sql: Sql,
@@ -58,6 +59,7 @@ export async function registerFeedback(
           message: string;
           status: (typeof FEEDBACK_STATUSES)[number];
         },
+        request?: Request,
       ) => Promise<void>;
       deliverQueued: () => Promise<void>;
     };
@@ -123,14 +125,18 @@ export async function registerFeedback(
           ],
         );
         await notifyFeedback(sql, who(response).id, who(response).name);
-        await mail?.feedbackReceived(sql, {
-          authorId: who(response).id,
-          authorName: who(response).name,
-          authorEmail: who(response).email,
-          kind: item.kind,
-          message: item.message,
-          page: item.page,
-        });
+        await mail?.feedbackReceived(
+          sql,
+          {
+            authorId: who(response).id,
+            authorName: who(response).name,
+            authorEmail: who(response).email,
+            kind: item.kind,
+            message: item.message,
+            page: item.page,
+          },
+          request,
+        );
       });
       void mail?.deliverQueued();
       response.status(201).json({ feedback: item });
@@ -187,12 +193,16 @@ export async function registerFeedback(
           id,
           who(response).name,
         );
-        await mail?.feedbackStatusChanged(sql, {
-          authorId: current.user_id,
-          kind: current.kind,
-          message: current.message,
-          status,
-        });
+        await mail?.feedbackStatusChanged(
+          sql,
+          {
+            authorId: current.user_id,
+            kind: current.kind,
+            message: current.message,
+            status,
+          },
+          request,
+        );
       }
       return true;
     });

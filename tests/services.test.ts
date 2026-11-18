@@ -763,6 +763,7 @@ test("scheduled mail is opt-in, deduplicated, scoped to current access and owner
   const messages: MailMessage[] = [],
     h = await harness(t, {
       mail,
+      publicUrl: "https://tools.example.test/meetloom",
       mailTransport: {
         async send(message) {
           messages.push(message);
@@ -814,6 +815,10 @@ test("scheduled mail is opt-in, deduplicated, scoped to current access and owner
     new Date(now - 60 * 60 * 1000).toISOString(),
   ]);
   await h.mail.scheduled(now);
+  assert.ok(messages.every((message) => message.text.includes(origin)));
+  assert.ok(
+    messages.every((message) => !message.text.includes("tools.example.test")),
+  );
   assert.equal(
     messages.filter((message) => /three days|trois jours/.test(message.subject))
       .length,
