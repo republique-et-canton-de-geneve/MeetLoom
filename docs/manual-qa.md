@@ -1,5 +1,16 @@
 # Manual acceptance testing
 
+## Development SMTP trust recovery — November 18, 2026
+
+Real development environment, release `1.3.0`; no production mutation or private configuration is recorded here.
+
+- Before repair, connection-only Nodemailer verification failed on both application pods with `ESOCKET`, command `CONN`, and `self-signed certificate in certificate chain`. The check used the existing SMTP host/authentication and the same strict TLS options as the application; no mail was sent by this diagnostic.
+- Tested the official OpenShift-injected trusted bundle in a temporary child process first. STARTTLS and authentication succeeded with certificate verification still enabled. Removed the temporary probe file afterward.
+- Added the read-only trusted bundle and `NODE_EXTRA_CA_CERTS` through the operator configuration described in [deployment.md](deployment.md#internal-certificate-authority). The rolling update completed with two ready replicas and zero permitted unavailable replicas. Each new pod independently passed SMTP verification, had a readable bundle and returned HTTP 200 from `/api/ready`. No fresh SMTP/certificate errors appeared in the replacement pods' logs.
+- Sent one clearly labelled development SMTP test to the operator's existing account. The relay accepted one recipient (SMTP 250), rejected none, and the user confirmed actual mailbox receipt. This proves delivery for that test, not every historic or scheduled notification. Development scheduling stays disabled and both mail-queue tables were empty; no replay was performed.
+- No application code, dependency, schema, SMTP secret or certificate-verification setting changed. This was a real environment before/after verification, not a mocked transport test. Production remains pending the user's instruction and its own diagnosis.
+- Repository validation on Windows with Node 24.22.3: frozen `npm ci`, `npm run check` (475 tests: 473 pass, PostgreSQL-only and POSIX SIGTERM cases skipped), TypeScript/build, lint (zero errors, unchanged 76-warning budget), deadcode and formatting pass. No application journey changed, so the browser suite was not rerun for these documentation-only changes. The deployment validation above used the actual development pods and relay.
+
 ## Mail entry points — November 18, 2026
 
 The native invitation assertion first reproduced the regression: enabling `APP_PUBLIC_URL` made an account invitation created at the native URL point to the alternate Host. Synthetic SMTP tests now cover account, session and workspace invitations for new and existing accounts, password recovery, report notifications and their durable retry. Each runs with native, alternate and unrecognized Hosts; forged forwarded Host/prefix headers never become email URLs. A scheduled-mail regression keeps reminder and digest links on `APP_ORIGIN` while the alternate URL is configured. These tests use local fixtures and do not send real email or validate an external proxy.

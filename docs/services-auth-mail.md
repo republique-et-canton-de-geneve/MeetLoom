@@ -103,6 +103,16 @@ oc rollout status deployment/meetloom
 - If a network policy controls egress, allow internal DNS, the HTTPS OIDC provider and the SMTP relay. A relay or provider signed by an internal authority needs it installed as described in [Internal certificate authority](deployment.md#internal-certificate-authority); never disable TLS verification.
 - A development environment loaded with production data holds real addresses: leave SMTP unconfigured there, or set `SMTP_SCHEDULED=false`, so it sends no reminders to real people.
 
+### Certificate-chain failures
+
+`ESOCKET` with `self-signed certificate in certificate chain` can prevent all email families from leaving the application. SMTP being shown as configured does not prove that its relay is reachable or trusted. Test the connection inside each application pod using the existing environment and strict TLS verification before changing passwords or queue settings.
+
+If the relay's authority is in OpenShift's managed trust bundle, create an empty, dedicated ConfigMap labelled `config.openshift.io/inject-trusted-cabundle=true` and wait for its `ca-bundle.crt` key. Follow [Internal certificate authority](deployment.md#internal-certificate-authority) to mount the bundle and set `NODE_EXTRA_CA_CERTS` to that mounted file. Use the platform's trusted bundle or an independently authenticated CA, not a certificate copied blindly from the failing connection. Do not disable SMTP certificate verification.
+
+Node.js reads additional authorities at startup: changing the ConfigMap alone is insufficient. Perform the normal two-replica rolling update, retain the bundle/mount during upgrades, then verify SMTP and readiness on **every** replacement pod. Confirm one real test email to the operator's own account reaches the mailbox; relay acceptance alone is not proof of receipt. Keep test messages clearly labelled and preserve `SMTP_SCHEDULED=false` when development contains production addresses.
+
+Check `mail_outbox` and `mail_deliveries` counters without printing recipients or message bodies. Failed deliveries that exhausted their retry budget do not restart merely because TLS is repaired. Do not bulk-replay expired recovery links or notifications without checking their current validity and recipients.
+
 Keep these values in your usual secret manager. GitHub needs neither cluster access nor SMTP/OIDC credentials. Docker Compose passes the same variables; place an HTTPS proxy in front of the application and adjust `APP_ORIGIN`/`COOKIE_SECURE` before enabling these services in production.
 
 ## Self-service sign-up
