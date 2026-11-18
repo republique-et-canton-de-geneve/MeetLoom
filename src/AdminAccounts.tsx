@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useEffect, useState } from "react";
 import type { User } from "../shared/model";
 import { api, post } from "./api";
@@ -96,7 +97,7 @@ export default function AdminAccounts({ user }: { user: User }) {
                   const result = await post<{ token: string }>(
                     `/admin/accounts/${account.id}/reset`,
                   );
-                  setLink(`${location.origin}/recover/${result.token}`);
+                  setLink(appHref(`/recover/${result.token}`));
                 })
               }
             >

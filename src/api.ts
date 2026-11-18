@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import type { Locale } from "../shared/model";
 import { recordServerTime } from "./clock";
 
@@ -459,7 +460,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   const sentAt = Date.now();
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(appUrl(`/api${path}`), {
       credentials: "same-origin",
       cache: "no-store",
       ...init,

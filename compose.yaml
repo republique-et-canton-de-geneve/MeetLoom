@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
   app:
     build: .
+    stop_grace_period: 690s
     ports:
       - 127.0.0.1:3000:3000
     environment:
@@ -23,6 +24,7 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: "0"
       DATABASE_URL: postgresql://meetloom:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@database:5432/meetloom

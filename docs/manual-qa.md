@@ -1,5 +1,23 @@
 # Manual acceptance testing
 
+## Graceful shutdown preparation — November 18, 2026
+
+A regression test starts the actual application entry point under Node 24 with a disposable SQLite database and a loopback-only AI provider. It creates a synthetic account through the normal setup endpoint, calls the existing authenticated AI generation route and signals SIGTERM once that provider has received the request. The provider answers after 11.5 seconds. Before the correction the test failed with `UND_ERR_SOCKET` when the previous ten-second deadline closed the response. After the correction the application refuses a new TCP connection during the drain, returns the complete expected HTTP 200 block and exits with code zero. A second contract test checks the supported AI limit against HTTP drain, Kubernetes/Compose grace and both installer rollout budgets. These tests invoke no real AI, SMTP, identity provider or deployment.
+
+Fresh isolated Linux Node 24.21.0 verification passed lint (zero errors, unchanged 76-warning budget), deadcode, both TypeScript projects, the production build, repository/infrastructure formatting and Bash syntax. The full SQLite/API suite has 472 tests: 471 pass, including the two shutdown regressions, and the PostgreSQL-only multi-instance case is skipped without a database. No persistence schema or user journey changed, so the existing PostgreSQL and browser suites are left to the normal PR checks rather than reported as freshly run here. PowerShell installer parsing also passed.
+
+The deployment guide records the bounded 660-second drain, 690-second container grace and 1,800-second two-pod rollout wait. These are maximum budgets, not fixed waits. The first transition from an older image still uses that old pod's shutdown behavior and immutable lifecycle settings. Real router propagation, integrations and already-open browser assets need operator validation before declaring an uninterrupted rollout.
+
+## Dual URL preparation — November 18, 2026
+
+Optional `APP_PUBLIC_URL` selects a second trusted Host and external path behind a prefix-stripping proxy. Browser assets, worker loading, routes, copied links, API calls, session/OIDC cookies, CSRF, MCP and mail links use that explicit configuration. Native root authentication and database formats remain compatible with release 1.2.0. No schema changes.
+
+Local verification used Node 24 containers for SQLite and PostgreSQL 16. All 470 PostgreSQL tests passed, including multi-instance initialization. SQLite passed 469 tests with the PostgreSQL-only test skipped. Type checks and production build passed. Lint retained zero errors and the existing 76-warning budget, deadcode passed, and formatting passed. All 31 Chromium journeys passed on the Windows test host, including the second-host proxy, bare prefix, deep-link refresh, module worker, session creation and visitor sharing across both addresses. OIDC and SMTP used mock providers only.
+
+The URL checks were repeated with dependency updates from main `51c190f`. Node 24 check and all 470 PostgreSQL tests passed again, along with lint, deadcode and formatting. Installer syntax was checked with the PowerShell parser and Bash.
+
+The browser suite includes the proxy's startup readiness and explicit `/index.html` base injection. Remaining operator checks are the real proxy Host/path contract, provider callback registration when enabled, mixed-version asset handling and a rollout that keeps ready capacity throughout.
+
 ## PR #72 review regressions — November 4, 2026
 
 Agent verification, not additional user acceptance. Reviewed every Codex thread, including comments posted against older commits; replies identify the fixing commits and regression evidence. The earlier document-input, fallback-window, detached-occurrence and browser-timezone fixes were independently rechecked before resolving those threads. CodeQL had already resolved its worker-origin thread after the protocol guard.

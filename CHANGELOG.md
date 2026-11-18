@@ -6,6 +6,7 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 
 ### Added
 
+- Support a second external URL behind a path-stripping reverse proxy, including links, authentication and application assets.
 - Quick meetings: drop an Outlook or calendar invitation on the welcome page without signing in, or inside the planner, to start a temporary scheduled countdown and request the floating window. No session is saved; optional invitation-to-agenda AI analysis requires sign-in.
 - Sections can be inserted from the agenda like blocks, groups and notes: they gather the blocks that follow, show their times and duration, and can be renamed, collapsed or removed in place. Adding or moving blocks (including with the arrows) keeps sections whole, and a section containing a group is no longer announced twice in the visitor agenda, print and CSV.
 - While the timer runs, the agenda follows it: on start, on opening a running session (which now opens on the day being run) and at each new block, the page scrolls the current block to the top (under the timer) so what comes next shows below it. Visitor links do the same. Someone who scrolled elsewhere or is typing is left where they are.
@@ -19,6 +20,8 @@ User-visible changes, newest first. Internal changes (refactors, tests, CI, depe
 - The agenda minimap shows the activities inside groups and parallel rooms in their own colours. During a run, finished activities fade and the running one shows its progress; a long minimap scrolls to keep the current step in view. Clicking any of them opens its group or room tab, and the total duration bar counts activities inside groups by their own category.
 
 ### Fixed
+
+- Allow in-flight AI requests to finish during application shutdown instead of cutting their connections after ten seconds; align container and rolling-update grace periods.
 
 - Encrypted data exports and backup downloads retain their dated filename with either supported HTTP filename syntax.
 - Session cards on the dashboard show their description's two lines in full; the second line was cut at the bottom.

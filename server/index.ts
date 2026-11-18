@@ -3,6 +3,10 @@ import { readConfig } from "./config.js";
 import { loadEnvFile } from "node:process";
 import { log } from "./log.js";
 import { appVersion } from "./version.js";
+import {
+  REQUEST_RECEIVE_TIMEOUT_MS,
+  SHUTDOWN_TIMEOUT_MS,
+} from "./runtime-limits.js";
 
 // Node's native loader preserves values already provided by OpenShift/Compose.
 try {
@@ -29,14 +33,15 @@ const server = runtime.app.listen(config.port, config.host, () =>
     version: appVersion().version,
   }),
 );
+server.requestTimeout = REQUEST_RECEIVE_TIMEOUT_MS;
 let stopping = false;
 const stop = () => {
   if (stopping) return;
   stopping = true;
   const deadline = setTimeout(() => {
-    process.exitCode = 1;
     server.closeAllConnections();
-  }, 10000);
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
   deadline.unref();
   server.close(() => {
     void runtime.close().finally(() => clearTimeout(deadline));

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Database, Sql } from "./db.js";
 import { fail, hashPassword, hashToken, rateLimit, token } from "./security.js";
+import { appCookie, publicAccess } from "./public-url.js";
 
 export interface OidcConfig {
   issuer: string;
@@ -94,6 +95,7 @@ export async function installOidcApi(
     db,
     config,
     origin,
+    publicUrl,
     secureCookie,
     issueAuth,
     setAuth,
@@ -104,6 +106,7 @@ export async function installOidcApi(
     db: Database;
     config?: OidcConfig;
     origin?: string;
+    publicUrl?: string;
     secureCookie: boolean;
     issueAuth: (sql: Sql, id: string) => Promise<string>;
     setAuth: (response: Response, raw: string) => void;
@@ -124,17 +127,13 @@ export async function installOidcApi(
   );
   if (!config) return;
   if (!origin) throw new Error("APP_ORIGIN is required when OIDC is enabled.");
-  const client = adapter ?? createOidcAdapter(config),
-    redirectUri = `${origin}/api/auth/oidc/callback`,
-    cookieName = secureCookie ? "__Host-meetloom_oidc" : "meetloom_oidc",
-    cookieOptions = {
-      httpOnly: true,
-      secure: secureCookie,
-      sameSite: "lax" as const,
-      path: "/",
-    };
+  const client = adapter ?? createOidcAdapter(config);
+  const accessConfig = { origin, publicUrl };
   const limiter = rateLimits === false ? [] : [rateLimit(20, 15 * 60 * 1000)];
-  app.post("/api/auth/oidc/start", ...limiter, async (_request, response) => {
+  app.post("/api/auth/oidc/start", ...limiter, async (request, response) => {
+    const access = publicAccess(request, accessConfig);
+    const redirectUri = `${access.origin}${access.basePath}/api/auth/oidc/callback`;
+    const cookie = appCookie(request, accessConfig, secureCookie, "oidc");
     if (!(await db.all("SELECT id FROM bootstrap WHERE id=1")).length)
       fail(
         403,
@@ -167,20 +166,28 @@ export async function installOidcApi(
         "INSERT INTO oidc_flows(state_hash,binding_hash,nonce,verifier,expires_at) VALUES($1,$2,$3,$4,$5)",
         [
           hashToken(state),
-          hashToken(binding),
+          hashToken(binding + (access.basePath ? `:${redirectUri}` : "")),
           nonce,
           verifier,
           Date.now() + 10 * 60 * 1000,
         ],
       );
     });
-    response.cookie(cookieName, binding, {
-      ...cookieOptions,
+    response.cookie(cookie.name, binding, {
+      ...cookie.options,
       maxAge: 10 * 60 * 1000,
     });
     response.json({ url });
   });
   app.get("/api/auth/oidc/callback", ...limiter, async (request, response) => {
+    const access = publicAccess(request, accessConfig);
+    const redirectUri = `${access.origin}${access.basePath}/api/auth/oidc/callback`;
+    const { name: cookieName, options: cookieOptions } = appCookie(
+      request,
+      accessConfig,
+      secureCookie,
+      "oidc",
+    );
     response.clearCookie(cookieName, cookieOptions);
     try {
       const state = z
@@ -199,15 +206,18 @@ export async function installOidcApi(
       )
         throw new Error("Invalid callback");
       const flow = await db.transaction(async (sql) => {
+        const bindingHash = hashToken(
+          binding + (access.basePath ? `:${redirectUri}` : ""),
+        );
         const [row] = await sql.all<Flow>(
           'SELECT state_hash AS "stateHash",binding_hash AS "bindingHash",nonce,verifier,expires_at AS "expiresAt" FROM oidc_flows WHERE state_hash=$1 AND binding_hash=$2 AND expires_at>$3',
-          [hashToken(state), hashToken(binding), Date.now()],
+          [hashToken(state), bindingHash, Date.now()],
         );
         if (
           !row ||
           !(await sql.run(
             "DELETE FROM oidc_flows WHERE state_hash=$1 AND binding_hash=$2 AND expires_at>$3",
-            [hashToken(state), hashToken(binding), Date.now()],
+            [hashToken(state), bindingHash, Date.now()],
           ))
         )
           throw new Error("Invalid callback");
@@ -305,9 +315,9 @@ export async function installOidcApi(
         return issueAuth(sql, userId);
       });
       setAuth(response, raw);
-      response.redirect(303, "/");
+      response.redirect(303, `${access.basePath}/`);
     } catch {
-      response.redirect(303, "/?authError=OIDC_FAILED");
+      response.redirect(303, `${access.basePath}/?authError=OIDC_FAILED`);
     }
   });
 }

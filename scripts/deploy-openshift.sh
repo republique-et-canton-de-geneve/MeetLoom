@@ -80,7 +80,7 @@ if ! resource_exists configmap meetloom-settings; then
   python3 - <<'PY' | oc -n "$project" create -f - >/dev/null
 import json, os
 data = {'APP_ORIGIN':os.environ['MEETLOOM_INSTALL_ORIGIN']}
-for key in ['LLM_BASE_URL','LLM_MODEL','LLM_VISION_MODEL']:
+for key in ['APP_PUBLIC_URL','LLM_BASE_URL','LLM_MODEL','LLM_VISION_MODEL']:
     if os.environ.get(key): data[key] = os.environ[key]
 print(json.dumps({'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'meetloom-settings'},'data':data}))
 PY
@@ -100,7 +100,7 @@ printf '%s\n' "$rendered" |
     -e "s|quay\\.io/sclorg/postgresql-16-c9s:latest|$database_image|g" |
   oc -n "$project" apply -f -
 if [[ "$mode" == bundled ]]; then oc -n "$project" rollout status deployment/meetloom-postgresql --timeout=300s; fi
-oc -n "$project" rollout status deployment/meetloom --timeout=300s
+oc -n "$project" rollout status deployment/meetloom --timeout=1800s
 oc -n "$project" exec deployment/meetloom -- node -e "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 printf 'MeetLoom: %s\n' "$MEETLOOM_INSTALL_ORIGIN"
 printf '%s\n' 'Existing secrets and environment configuration were preserved.'

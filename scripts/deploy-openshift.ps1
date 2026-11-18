@@ -78,6 +78,7 @@ if (-not $routeHost) { throw 'The Route has no hostname. Check router admission.
 $origin = "https://$routeHost"
 if (-not (Get-Resource 'configmap' 'meetloom-settings')) {
     $settings = @{ APP_ORIGIN = $origin }
+    if ($env:APP_PUBLIC_URL) { $settings.APP_PUBLIC_URL = $env:APP_PUBLIC_URL }
     if ($env:LLM_BASE_URL) { $settings.LLM_BASE_URL = $env:LLM_BASE_URL }
     if ($env:LLM_MODEL) { $settings.LLM_MODEL = $env:LLM_MODEL }
     if ($env:LLM_VISION_MODEL) { $settings.LLM_VISION_MODEL = $env:LLM_VISION_MODEL }
@@ -96,7 +97,7 @@ if ($DatabaseImage) { $rendered = $rendered.Replace('quay.io/sclorg/postgresql-1
 $rendered | & oc -n $Project apply -f -
 if ($LASTEXITCODE -ne 0) { throw 'Manifest application failed.' }
 if (-not $ExternalDatabase) { Invoke-Oc -n $Project rollout status deployment/meetloom-postgresql --timeout=300s }
-Invoke-Oc -n $Project rollout status deployment/meetloom --timeout=300s
+Invoke-Oc -n $Project rollout status deployment/meetloom --timeout=1800s
 # PowerShell drops an unquoted -- when calling a function, so quote it for oc exec.
 Invoke-Oc -n $Project exec deployment/meetloom '--' node -e "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 

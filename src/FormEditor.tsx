@@ -1,3 +1,4 @@
+import { appUrl, appHref } from "./app-url";
 import { useEffect, useState } from "react";
 import {
   ArrowDown,
@@ -148,7 +149,7 @@ export default function FormEditor({
       );
       setPublication(data.publication);
       if (data.publication.token)
-        setLink(`${window.location.origin}/f/${data.publication.token}`);
+        setLink(appHref(`/f/${data.publication.token}`));
       setNotice(
         action === "publish"
           ? t(
@@ -760,13 +761,17 @@ export default function FormEditor({
                         {question.type === "image" &&
                         isStoredFormImage(response.answers[question.id]) ? (
                           <a
-                            href={`/api${base}/responses/${encodeURIComponent(response.id)}/images/${encodeURIComponent(question.id)}`}
+                            href={appUrl(
+                              `/api${base}/responses/${encodeURIComponent(response.id)}/images/${encodeURIComponent(question.id)}`,
+                            )}
                             target="_blank"
                             rel="noreferrer"
                           >
                             <img
                               loading="lazy"
-                              src={`/api${base}/responses/${encodeURIComponent(response.id)}/images/${encodeURIComponent(question.id)}`}
+                              src={appUrl(
+                                `/api${base}/responses/${encodeURIComponent(response.id)}/images/${encodeURIComponent(question.id)}`,
+                              )}
                               alt={question.title}
                               style={{ maxWidth: "100%", maxHeight: 320 }}
                             />

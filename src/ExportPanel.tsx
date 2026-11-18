@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
@@ -238,7 +239,7 @@ export default function ExportPanel({
           targetId: form.id,
           title: form.title,
           enabled: true,
-          url: `${window.location.origin}/s/${response.share.token}`,
+          url: appHref(`/s/${response.share.token}`),
         },
       ]);
       setFormId("");

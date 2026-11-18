@@ -26,7 +26,7 @@ npm start
 
 Open [MeetLoom locally](http://127.0.0.1:3000), create the first account, then choose **Explore an example**. No demo account or password is preinstalled. Data is stored in `data/meetloom.sqlite`, which Git ignores.
 
-Copy `.env.example` to `.env` to customize configuration. The server loads this file; variables supplied by the environment take precedence. Production requires `APP_ORIGIN` and a `BOOTSTRAP_TOKEN` for the first account. The installation screen asks for this token. Never expose an uninitialized development server to the Internet.
+Copy `.env.example` to `.env` to customize configuration. The server loads this file; variables supplied by the environment take precedence. Production requires `APP_ORIGIN` and a `BOOTSTRAP_TOKEN` for the first account. The installation screen asks for this token. An optional `APP_PUBLIC_URL` publishes the same application through a second host and path prefix behind a proxy. See the [proxy deployment contract](docs/deployment.md#second-url-behind-a-path-stripping-proxy). Never expose an uninitialized development server to the Internet.
 
 For development with code reloading, run these commands in two terminals:
 

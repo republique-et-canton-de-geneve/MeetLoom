@@ -1,3 +1,4 @@
+import { appUrl, appPathname } from "./app-url";
 export type NavigationGuard = () => Promise<boolean>;
 const guards = new Set<NavigationGuard>();
 export function registerNavigationGuard(guard: NavigationGuard) {
@@ -20,7 +21,7 @@ const WORKSPACE_PARAM = "workspace";
 /** The dashboard address showing one scope: "all", "personal" or a workspace
  * id. A bare "/" resumes the account's last choice instead. */
 export function dashboardUrl(scope: string) {
-  return `/?${new URLSearchParams({ [WORKSPACE_PARAM]: scope })}`;
+  return appUrl(`/?${new URLSearchParams({ [WORKSPACE_PARAM]: scope })}`);
 }
 const workspaceKey = (userId: string) => `meetloom.workspace.${userId}`;
 /** Each account's last scope in this tab, for when the browser keeps none. */
@@ -60,7 +61,7 @@ export function resolveWorkspace(scope: string, workspaceIds: string[]) {
 export function signInTarget(url: string, invited: boolean) {
   if (invited) return dashboardUrl("all");
   const { pathname, search } = new URL(url, "http://localhost");
-  return pathname === "/" ? `/${search}` : "/";
+  return appPathname(pathname) === "/" ? appUrl(`/${search}`) : appUrl("/");
 }
 /** Remembers the account's last scope; without storage, this tab and the
  * address still carry it. */

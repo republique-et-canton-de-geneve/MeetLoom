@@ -1,8 +1,12 @@
 # Agent handoff
 
-Last updated: November 4, 2026. Read this file first when continuing in Codex, Claude, or another coding agent. Update it at every stopping point; do not rely on conversation history.
+Last updated: November 18, 2026. Read this file first when continuing in Codex, Claude, or another coding agent. Update it at every stopping point; do not rely on conversation history.
 
 ## Current stopping point
+
+**Shutdown lifecycle, November 18, 2026.** The previous ten-second forced HTTP close interrupted an AI call whose supported timeout can reach five minutes. A real Node 24 process regression uses the existing authenticated AI generation route, a disposable SQLite database and an 11.5-second loopback-only provider: the old code lost the response after SIGTERM; the corrected code refuses a new TCP connection, returns the complete HTTP 200 answer and exits normally. No production test route or external provider is used. Shared limits preserve the existing 300-second request receive window and maximum AI timeout; the bounded drain is 660 seconds, Kubernetes/Compose grace is 690 seconds, and the application progress deadline and installer rollout waits are 1,800 seconds for two pods. An idle process still closes immediately. See [manual-qa.md](manual-qa.md) for verification. A previous-version pod retains its old code and lifecycle settings on the first transition; apply the new manifests with the image and validate that mixed-version transition separately.
+
+**Alternate public URL, November 18, 2026.** Optional `APP_PUBLIC_URL` declares a second trusted Host and path prefix behind a path-stripping proxy. The original root is supported by the same application and database without a schema change. Both installers accept the setting when creating configuration, and `k8s/optional/proxy-route.example.yaml` documents the additional Route. Existing settings and Routes persist through normal upgrades. The normal Dockerfile includes the URL handling in release images. Test commands, evidence and the remaining router, integration and mixed-version asset checks are recorded in [manual-qa.md](manual-qa.md) and [deployment.md](deployment.md).
 
 **PR #72 Codex review follow-up, November 4, 2026.** The user explicitly requested handling the review comments. All earlier Codex findings were rechecked, answered with fixing commits and test evidence, and resolved. The already-fixed CodeQL worker thread was automatically resolved by GitHub. Four later valid Codex findings required further changes:
 

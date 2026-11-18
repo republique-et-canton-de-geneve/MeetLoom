@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { lazy, Suspense, useState, type MouseEvent } from "react";
 import {
   Activity,
@@ -114,7 +115,7 @@ export default function AccountPage({
   const link = (item: Section) => (
     <a
       key={item.id}
-      href={`/account/${item.id}`}
+      href={appUrl(`/account/${item.id}`)}
       className={`nav-item ${item === current ? "active" : ""}`}
       aria-current={item === current ? "page" : undefined}
       onClick={(event) => follow(event, `/account/${item.id}`)}
@@ -128,7 +129,7 @@ export default function AccountPage({
       <aside className="account-sidebar">
         <Brand />
         <a
-          href="/"
+          href={appUrl("/")}
           className="account-back"
           onClick={(event) => follow(event, "/")}
         >

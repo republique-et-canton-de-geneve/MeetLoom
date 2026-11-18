@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useState } from "react";
 import { Copy } from "lucide-react";
 import { post } from "./api";
@@ -33,7 +34,7 @@ export default function InviteColleague() {
               "/auth/invites",
               values,
             );
-            setCreated(`${location.origin}/join/${r.token}`);
+            setCreated(appHref(`/join/${r.token}`));
             setEmailed(r.emailed ? String(values.email) : "");
             setCopied(false);
           } catch (e) {

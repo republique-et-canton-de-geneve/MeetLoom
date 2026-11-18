@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useEffect, useRef, useState } from "react";
 import {
   Plus,
@@ -361,7 +362,7 @@ export function SharePanel({ session, role, close }: Common & { role: Role }) {
   }, [session.id]);
   const result = useRef<HTMLDivElement>(null);
   const show = (token: string, label: string | null) => {
-    setCreated(`${location.origin}/s/${token}`);
+    setCreated(appHref(`/s/${token}`));
     setShownLabel(label);
     setCopied(false);
     requestAnimationFrame(() =>

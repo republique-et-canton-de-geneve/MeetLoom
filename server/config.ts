@@ -1,5 +1,7 @@
 import type { AppConfig } from "./app.js";
 import { z } from "zod";
+import { parsePublicUrl } from "./public-url.js";
+import { MAX_AI_TIMEOUT_MS } from "./runtime-limits.js";
 
 function boolean(env: NodeJS.ProcessEnv, key: string, fallback: boolean) {
   const value = env[key];
@@ -57,6 +59,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     databaseUrl: env.DATABASE_URL || undefined,
     sqlitePath: env.SQLITE_PATH || undefined,
     origin,
+    publicUrl: env.APP_PUBLIC_URL?.trim()
+      ? parsePublicUrl(env.APP_PUBLIC_URL.trim())
+      : undefined,
     secureCookie: boolean(env, "COOKIE_SECURE", production),
     trustProxy: integer(env, "TRUST_PROXY", 0, 0, 10),
     bootstrapToken: env.BOOTSTRAP_TOKEN?.trim() || undefined,
@@ -72,7 +77,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       model: env.LLM_MODEL?.trim() || undefined,
       visionModel: env.LLM_VISION_MODEL?.trim() || undefined,
       apiKey: env.LLM_API_KEY || undefined,
-      timeoutMs: integer(env, "AI_TIMEOUT_MS", 30000, 100, 300000),
+      timeoutMs: integer(env, "AI_TIMEOUT_MS", 30000, 100, MAX_AI_TIMEOUT_MS),
       allowSelfSigned: boolean(env, "LLM_ALLOW_SELF_SIGNED", false),
       maxResponseBytes: integer(
         env,
@@ -83,6 +88,16 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       ),
     },
   };
+  if (
+    app.publicUrl &&
+    origin &&
+    new URL(app.publicUrl).host === new URL(origin).host
+  )
+    throw new Error(
+      "APP_PUBLIC_URL must use a different host from APP_ORIGIN.",
+    );
+  if (production && app.publicUrl && !app.publicUrl.startsWith("https://"))
+    throw new Error("APP_PUBLIC_URL must use HTTPS in production.");
   if (env.OIDC_ISSUER || env.OIDC_CLIENT_ID || env.OIDC_CLIENT_SECRET) {
     if (!origin)
       throw new Error("APP_ORIGIN is required when OIDC is enabled.");
