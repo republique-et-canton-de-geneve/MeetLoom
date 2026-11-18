@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { useEffect, useState, type FormEvent } from "react";
 import { Download, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import type { User } from "../shared/model";
@@ -39,7 +40,7 @@ const PASSPHRASE_MIN = 12;
 
 /** Downloads an encrypted archive; the server answers JSON only on errors. */
 async function downloadArchive(path: string, body: unknown) {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(appUrl(`/api${path}`), {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
@@ -239,7 +240,7 @@ export default function AdminData({ user }: { user: User }) {
       {signedOut && (
         <button
           className="button primary small"
-          onClick={() => location.assign("/")}
+          onClick={() => location.assign(appUrl("/"))}
         >
           {t("Se reconnecter", "Sign in again")}
         </button>

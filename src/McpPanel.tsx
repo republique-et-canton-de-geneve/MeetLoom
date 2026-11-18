@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useEffect, useId, useState } from "react";
 import { Copy, KeyRound, Trash2 } from "lucide-react";
 import type { McpToken } from "../shared/mcp";
@@ -60,7 +61,7 @@ export default function McpPanel({ sessionId }: { sessionId: string }) {
       </p>
       {loading && <Loading />}
       {error && <ErrorBanner message={error} />}
-      <code className="mcp-endpoint">{window.location.origin}/mcp</code>
+      <code className="mcp-endpoint">{appHref("/mcp")}</code>
       <form
         onSubmit={(event) => {
           event.preventDefault();

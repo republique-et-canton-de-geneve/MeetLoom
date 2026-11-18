@@ -506,21 +506,24 @@ export async function installWorkspacesApi(
         [wid],
       ),
       inviter = res.locals.user as User;
-    const emailed = !!(await invite?.({
-      email: input.email,
-      locale: inviter.locale,
-      inviter: inviter.name,
-      inviterId: inviter.id,
-      target: wid,
-      kind: "workspace",
-      title: workspace?.name,
-      // A bare "/" would resume the scope this browser last remembered: name
-      // the workspace just shared, as the dashboard address does.
-      path: result.token
-        ? `/join/${result.token}`
-        : `/?workspace=${encodeURIComponent(wid)}`,
-      existing: !result.token,
-    }));
+    const emailed = !!(await invite?.(
+      {
+        email: input.email,
+        locale: inviter.locale,
+        inviter: inviter.name,
+        inviterId: inviter.id,
+        target: wid,
+        kind: "workspace",
+        title: workspace?.name,
+        // A bare "/" would resume the scope this browser last remembered: name
+        // the workspace just shared, as the dashboard address does.
+        path: result.token
+          ? `/join/${result.token}`
+          : `/?workspace=${encodeURIComponent(wid)}`,
+        existing: !result.token,
+      },
+      req,
+    ));
     res.status(201).json({ ...result, emailed });
   });
   app.patch(

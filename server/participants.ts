@@ -349,18 +349,23 @@ export async function installParticipantsApi(
     });
     const emailed =
       result.participant.role !== "owner" &&
-      !!(await invite?.({
-        email: input.email,
-        locale: user.locale,
-        inviter: user.name,
-        inviterId: user.id,
-        target: session.id,
-        kind: "session",
-        title: session.title,
-        role: input.role,
-        path: result.token ? `/join/${result.token}` : `/session/${session.id}`,
-        existing: !result.token,
-      }));
+      !!(await invite?.(
+        {
+          email: input.email,
+          locale: user.locale,
+          inviter: user.name,
+          inviterId: user.id,
+          target: session.id,
+          kind: "session",
+          title: session.title,
+          role: input.role,
+          path: result.token
+            ? `/join/${result.token}`
+            : `/session/${session.id}`,
+          existing: !result.token,
+        },
+        req,
+      ));
     res.status(201).json({ ...result, emailed });
   });
   app.delete(

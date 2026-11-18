@@ -1,0 +1,19 @@
+# Optional second URL. Customize host/path in your environment configuration.
+# APP_PUBLIC_URL must match this external HTTPS URL in meetloom-settings.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: meetloom-proxy
+  annotations:
+    haproxy.router.openshift.io/rewrite-target: /
+spec:
+  host: tools.example.org
+  path: /meetloom
+  to:
+    kind: Service
+    name: meetloom
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

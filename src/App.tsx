@@ -1,3 +1,4 @@
+import { appUrl, appPathname } from "./app-url";
 import {
   lazy,
   Suspense,
@@ -131,9 +132,9 @@ type AuthStatus = {
   signupDomains?: string[];
 };
 /** The last page outside the account pages, for problem reports. */
-let lastPage = location.pathname.startsWith("/account")
+let lastPage = appPathname(location.pathname).startsWith("/account")
   ? "/"
-  : location.pathname;
+  : appPathname(location.pathname);
 /** Pages for accounts carry the administrators' announcement. */
 const withAnnouncement = (page: ReactNode) => (
   <>
@@ -149,15 +150,15 @@ export default function App() {
   );
 }
 function AppRoutes() {
-  const [path, setPath] = useState(location.pathname);
+  const [path, setPath] = useState(appPathname(location.pathname));
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [error, setError] = useState("");
   const navigation = useRef<AsyncNavigation | null>(null);
   const navigate = (url: string) => {
-    void navigation.current?.navigate(url);
+    void navigation.current?.navigate(appUrl(url));
   };
   const replaceUrl = useCallback((url: string) => {
-    void navigation.current?.replace(url);
+    void navigation.current?.replace(appUrl(url));
   }, []);
   const refresh = () =>
     api<AuthStatus>("/auth/status")
@@ -166,7 +167,7 @@ function AppRoutes() {
   useEffect(() => {
     refresh();
     const controller = browserNavigation((url) => {
-      const next = new URL(url).pathname;
+      const next = appPathname(new URL(url).pathname);
       if (!next.startsWith("/account")) lastPage = next;
       setPath(next);
       window.scrollTo(0, 0);
@@ -1173,7 +1174,7 @@ function Dashboard({
         </nav>
         <div className="sidebar-user">
           <a
-            href="/account"
+            href={appUrl("/account")}
             className="sidebar-user-link"
             title={t("Ouvrir mon compte", "Open my account")}
             onClick={(event) => {

@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 import type { Session, Role, User } from "../shared/model.js";
@@ -109,6 +109,7 @@ import {
   recordSessionFolders,
 } from "./folders.js";
 import { installActivityApi, sessionReadMarkers } from "./activity.js";
+import { appCookie, parsePublicUrl, publicAccess } from "./public-url.js";
 
 export interface AppConfig {
   /** Defaults to the image's APP_VERSION/APP_REVISION or package.json. */
@@ -119,6 +120,7 @@ export interface AppConfig {
   sqlitePath?: string;
   database?: Database;
   origin?: string;
+  publicUrl?: string;
   secureCookie?: boolean;
   trustProxy?: number;
   bootstrapToken?: string;
@@ -244,17 +246,20 @@ async function assembleApp(config: AppConfig) {
 }
 
 async function assembleWith(db: Database, config: AppConfig) {
+  if (config.publicUrl)
+    config = { ...config, publicUrl: parsePublicUrl(config.publicUrl) };
+  if (
+    config.publicUrl &&
+    config.origin &&
+    new URL(config.publicUrl).host === new URL(config.origin).host
+  )
+    throw new Error(
+      "APP_PUBLIC_URL must use a different host from APP_ORIGIN.",
+    );
   await initializeLifecycle(db);
   const app = express();
-  const cookieOptions = {
-    httpOnly: true,
-    secure: config.secureCookie ?? false,
-    sameSite: "strict" as const,
-    path: "/",
-  };
-  const authCookie = cookieOptions.secure
-    ? "__Host-meetloom_session"
-    : "meetloom_session";
+  const sessionCookie = (request: Request) =>
+    appCookie(request, config, !!config.secureCookie, "session");
   const authTtl = config.authTtlMs ?? 7 * 24 * 60 * 60 * 1000;
   app.disable("x-powered-by");
   if (config.trustProxy) app.set("trust proxy", config.trustProxy);
@@ -305,8 +310,7 @@ async function assembleWith(db: Database, config: AppConfig) {
           ),
         );
       const supplied = request.get("Origin");
-      const expected =
-        config.origin ?? `${request.protocol}://${request.get("host")}`;
+      const expected = publicAccess(request, config).origin;
       if (!supplied || supplied !== new URL(expected).origin)
         return next(
           new HttpError(
@@ -328,6 +332,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     next();
   });
   app.use("/api", async (request, response, next) => {
+    const authCookie = sessionCookie(request).name;
     const raw = (request.get("Cookie") ?? "")
       .split(";")
       .map((part) => part.trim())
@@ -405,6 +410,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     db,
     config: config.mail,
     origin: config.origin,
+    publicUrl: config.publicUrl,
     transport: config.mailTransport,
     rateLimits: config.rateLimits,
   });
@@ -436,6 +442,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     db,
     config: config.oidc,
     origin: config.origin,
+    publicUrl: config.publicUrl,
     secureCookie: !!config.secureCookie,
     issueAuth,
     setAuth,
@@ -472,7 +479,8 @@ async function assembleWith(db: Database, config: AppConfig) {
     return raw;
   }
   function setAuth(response: Response, raw: string) {
-    response.cookie(authCookie, raw, { ...cookieOptions, maxAge: authTtl });
+    const cookie = sessionCookie(response.req);
+    response.cookie(cookie.name, raw, { ...cookie.options, maxAge: authTtl });
   }
   async function signupPolicy(): Promise<SignupPolicy> {
     const [row] = await db.all<{ payload: string }>(
@@ -751,7 +759,8 @@ async function assembleWith(db: Database, config: AppConfig) {
       await db.run("DELETE FROM auth_sessions WHERE token_hash = $1", [
         response.locals.authHash,
       ]);
-    response.clearCookie(authCookie, cookieOptions).json({ ok: true });
+    const cookie = sessionCookie(_request);
+    response.clearCookie(cookie.name, cookie.options).json({ ok: true });
   });
   app.post("/api/auth/invites", admin, async (request, response) => {
     const input = z
@@ -786,15 +795,18 @@ async function assembleWith(db: Database, config: AppConfig) {
         detail: { role: input.role ?? null },
       });
     });
-    const emailed = await mail.invitation({
-      email: input.email,
-      locale: user(response).locale,
-      inviter: user(response).name,
-      inviterId: user(response).id,
-      target: "account",
-      kind: "account",
-      path: `/join/${raw}`,
-    });
+    const emailed = await mail.invitation(
+      {
+        email: input.email,
+        locale: user(response).locale,
+        inviter: user(response).name,
+        inviterId: user(response).id,
+        target: "account",
+        kind: "account",
+        path: `/join/${raw}`,
+      },
+      request,
+    );
     response.status(201).json({
       token: raw,
       expiresAt: new Date(expires).toISOString(),
@@ -1546,6 +1558,7 @@ async function assembleWith(db: Database, config: AppConfig) {
     accessible,
     save,
     origin: config.origin,
+    publicUrl: config.publicUrl,
     rateLimits: config.rateLimits,
   });
   await installExportPresets(app, { db, authenticated });
@@ -1562,12 +1575,24 @@ async function assembleWith(db: Database, config: AppConfig) {
   );
   const clientPath = resolve(config.clientPath ?? "dist/client");
   if (existsSync(resolve(clientPath, "index.html"))) {
-    app.use(express.static(clientPath, { index: false, maxAge: "1h" }));
-    app.get("/{*path}", (_request, response) =>
+    const html = readFileSync(resolve(clientPath, "index.html"), "utf8");
+    const renderClient = (request: Request, response: Response) => {
+      const { basePath } = publicAccess(request, config);
       response
         .setHeader("Cache-Control", "no-cache")
-        .sendFile(resolve(clientPath, "index.html")),
-    );
+        .type("html")
+        .send(
+          html
+            .replace(
+              /<head>/i,
+              `<head><meta name="meetloom-base" content="${basePath}">`,
+            )
+            .replace(/((?:src|href)=")\.\/assets\//g, `$1${basePath}/assets/`),
+        );
+    };
+    app.get("/index.html", renderClient);
+    app.use(express.static(clientPath, { index: false, maxAge: "1h" }));
+    app.get("/{*path}", renderClient);
   }
   app.use(
     (

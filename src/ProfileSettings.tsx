@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "../shared/model";
 import {
@@ -349,7 +350,7 @@ export default function ProfileSettings({
                 currentPassword: data.get("password"),
                 transferEmail: data.get("transferEmail") || undefined,
               });
-              location.assign("/");
+              location.assign(appUrl("/"));
             } catch (e) {
               setError((e as Error).message);
             } finally {

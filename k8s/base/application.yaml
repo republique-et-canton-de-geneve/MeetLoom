@@ -10,6 +10,8 @@ spec:
   # timers, presence, mail leases) lives in PostgreSQL.
   replicas: 2
   minReadySeconds: 5
+  # Both old pods can be draining long admitted requests during a rolling update.
+  progressDeadlineSeconds: 1800
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -24,7 +26,8 @@ spec:
         app.kubernetes.io/name: meetloom
     spec:
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 30
+      # Includes preStop (5s), the bounded application drain (660s), and margin.
+      terminationGracePeriodSeconds: 690
       # Prefer different nodes, so one node going down leaves a pod running.
       affinity:
         podAntiAffinity:

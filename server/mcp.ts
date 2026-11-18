@@ -1,4 +1,5 @@
 import type { Express, RequestHandler } from "express";
+import { publicAccess } from "./public-url.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -33,6 +34,7 @@ interface Options {
   db: Database;
   authenticated: RequestHandler;
   origin?: string;
+  publicUrl?: string;
   rateLimits?: boolean;
   accessible: (
     id: string,
@@ -241,10 +243,14 @@ export async function installMcpApi(app: Express, options: Options) {
       : rateLimit(120, 60000);
   app.all("/mcp", limiter, async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
-    const expected = options.origin ? new URL(options.origin) : null;
+    const expected =
+      options.origin || options.publicUrl
+        ? new URL(publicAccess(request, options).origin)
+        : null;
     const host = (request.get("host") ?? "").split(":")[0];
     if (
-      (expected && request.hostname !== expected.hostname) ||
+      (expected &&
+        request.get("host")?.toLowerCase() !== expected.host.toLowerCase()) ||
       (!expected && !["127.0.0.1", "localhost", "[::1]"].includes(host))
     )
       return fail(403, "ORIGIN_REJECTED", "Invalid MCP host.");

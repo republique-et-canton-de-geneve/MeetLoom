@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus, Trash2, Users, Settings, Copy, Check } from "lucide-react";
 import type { SessionResponse, SessionSummary } from "../shared/model";
@@ -616,7 +617,7 @@ export default function WorkspacePanel({
                   role: data.get("role"),
                 });
                 if (result.token) {
-                  setInvitation(`${location.origin}/join/${result.token}`);
+                  setInvitation(appHref(`/join/${result.token}`));
                   setInvitationEmailed(!!result.emailed);
                   setCopied(false);
                 }

@@ -35,7 +35,7 @@ In **GitHub → Settings → Branches**, protect `main`: require a pull request 
 
 ## 2. Publish a version
 
-The version source is `package.json`, currently `0.1.5`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
+The version source is `package.json`. For the next version, update `package.json` and its lockfile in a PR (for example, `npm version patch --no-git-tag-version`), then merge the validated changes. A release run on `main` without that bump stops with "Release vX.Y.Z already exists": nothing is published or overwritten.
 
 Choose one trigger:
 
@@ -165,9 +165,15 @@ Run it from the files of that version (`git pull` on its tag, or the `meetloom-<
 
 The installer refuses to continue if the volume exists but its database secret is missing, rather than generating a new password. Keep environment-specific settings in the ConfigMaps and Secrets above, not by editing the Deployments in the console: those edits are replaced when the manifests are applied again.
 
-**Without interruption.** The application runs **two pods** with a rolling update: OpenShift starts a pod of the new version, waits until `/api/ready` answers, then stops an old one, and repeats. Users keep working during the update; a request in flight on a stopping pod is allowed a few seconds to finish. PostgreSQL stays a **single pod** (with `Recreate`, as a database with one volume must): an application update does not restart it. Only a release that changes the PostgreSQL manifest restarts the database, with a short interruption; its release notes say so.
+**Rolling application updates.** The application runs **two pods**: OpenShift starts a pod of the new version, waits until `/api/ready` answers, then stops an old one, and repeats. The 5-second `preStop` lets the router withdraw a terminating endpoint before the server stops accepting new connections. Already admitted requests can finish within a bounded 660-second drain: the existing 300-second HTTP receive window, the maximum 300-second AI call, and 60 seconds for response persistence and runtime cleanup. This is a maximum, not a fixed wait: an idle application closes immediately. The watchdog closes remaining connections and exits with failure if that budget is exceeded.
+
+Kubernetes grants 690 seconds including `preStop`; Compose uses the same stop grace. The application progress deadline and both installers allow 1,800 seconds for the two-pod rolling update. Apply the version's manifests with its installer when these lifecycle settings change. The new drain and grace do not change the shutdown behavior or immutable template of an already running old pod: validate the first transition with that previous version and its in-flight work before promising uninterrupted operation. Router propagation, long-running integrations and mixed-version browser assets also need operator verification.
+
+PostgreSQL stays a **single pod** (with `Recreate`, as a database with one volume must): an application update does not restart it. Only a release that changes the PostgreSQL manifest restarts the database, with a short interruption; its release notes say so.
 
 **Image only (quicker).** When a release does not change the manifests, you can also change the image alone, in the console (**Deployment `meetloom` → Actions → Edit** the `app` container image) or with:
+
+Use this only when the installed lifecycle settings already match the version's drain budget. Changing the image alone does not install a longer Kubernetes grace period.
 
 ```bash
 oc -n meetloom-dev set image deployment/meetloom app=docker.io/your-account/meetloom:0.1.1
@@ -276,3 +282,15 @@ Open `http://localhost:3000`. PostgreSQL is not exposed on the host, and the app
 Manifests and scripts have been checked locally. Admission, pull secrets, storage, Routes, and your LLM endpoint still need operator verification in the target environments. Access to those environments is not required to prepare these files.
 
 For a hosted demonstration launched from a button, see [Render](render.md). The free plan uses ephemeral storage; prefer your own infrastructure for retaining private agendas.
+
+## Second URL behind a path-stripping proxy
+
+Keep `APP_ORIGIN` as the original root origin. Set optional `APP_PUBLIC_URL` to a second full URL such as `https://tools.example.org/meetloom` in the existing `meetloom-settings` ConfigMap. The second URL must use a distinct external host. Its reverse proxy must preserve the external `Host`, terminate HTTPS, and strip `/meetloom` before forwarding every application, asset, API and MCP request. Forwarded URL/prefix headers never select a public URL. The same Deployment and database serve both addresses.
+
+Both installers copy `APP_PUBLIC_URL` from the operator environment when creating the initial settings ConfigMap. Existing ConfigMaps are retained during upgrades. For an existing installation, set only this key with `oc -n meetloom-dev set data configmap/meetloom-settings APP_PUBLIC_URL=https://tools.example.org/meetloom`, then use the normal rolling update. Keep the concrete setting and the customized [optional Route example](../k8s/optional/proxy-route.example.yaml) in your environment's configuration repository. The default overlays continue to manage the native Route, and leave this additional Route in place.
+
+Future release images use the normal repository Dockerfile and include this URL handling in their build. No custom runtime overlay is needed to retain the feature.
+
+The server selects HTML asset URLs, browser routing, CSRF origin and cookie paths from that explicit configuration. Native root cookies retain their names and scope. Browser sign-ins and preferences are per host. Invitations, recovery and report emails use the configured entry point of the request that triggered them; native requests keep `APP_ORIGIN`, and requests on the alternate Host keep the `APP_PUBLIC_URL` prefix. Queued report emails retain that trusted URL through retries. Scheduled reminders and digests use `APP_ORIGIN`, so configuring the second URL before its proxy is active does not redirect native users' emails to it. Forwarded headers and browser-supplied URLs never choose an email destination. For OIDC, register both `${APP_ORIGIN}/api/auth/oidc/callback` and `${APP_PUBLIC_URL}/api/auth/oidc/callback` with the provider before enabling the second URL.
+
+Apply the setting and image together through the existing rolling-update process, preserving two ready replicas and `maxUnavailable: 0`. Validate both URLs before declaring completion. A deployment that cannot retain ready capacity needs operator approval before proceeding.

@@ -1,3 +1,4 @@
+import { appHref } from "./app-url";
 import { useCallback, useEffect, useState } from "react";
 import { Copy, MailPlus, Trash2 } from "lucide-react";
 import type { ParticipantInvitation } from "../shared/participants";
@@ -77,9 +78,7 @@ export default function ParticipantInvitePanel({
               `/sessions/${sessionId}/invitations`,
               { name, email, role },
             );
-            setLink(
-              result.token ? `${location.origin}/join/${result.token}` : "",
-            );
+            setLink(result.token ? appHref(`/join/${result.token}`) : "");
             setNotice(
               (result.token
                 ? t(

@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -76,7 +77,7 @@ export default function PublicAgenda({ token }: { token: string }) {
       try {
         const sentAt = Date.now();
         const response = await fetch(
-          `/api/public/${encodeURIComponent(token)}`,
+          appUrl(`/api/public/${encodeURIComponent(token)}`),
           {
             credentials: "omit",
             cache: "no-store",
