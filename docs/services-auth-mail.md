@@ -111,6 +111,8 @@ If the relay's authority is in OpenShift's managed trust bundle, create an empty
 
 Node.js reads additional authorities at startup: changing the ConfigMap alone is insufficient. Perform the normal two-replica rolling update, retain the bundle/mount during upgrades, then verify SMTP and readiness on **every** replacement pod. Confirm one real test email to the operator's own account reaches the mailbox; relay acceptance alone is not proof of receipt. Keep test messages clearly labelled and preserve `SMTP_SCHEDULED=false` when development contains production addresses.
 
+Inspect existing CA settings before replacing a trust path or mount: removing authorities that another integration relies on can break OIDC or AI calls. Retain a private record of the original ConfigMap settings and Deployment mounts for configuration rollback; an image rollback alone does not restore a changed ConfigMap. Preserve the environment's existing scheduler policy when repairing SMTP trust.
+
 Check `mail_outbox` and `mail_deliveries` counters without printing recipients or message bodies. Failed deliveries that exhausted their retry budget do not restart merely because TLS is repaired. Do not bulk-replay expired recovery links or notifications without checking their current validity and recipients.
 
 Keep these values in your usual secret manager. GitHub needs neither cluster access nor SMTP/OIDC credentials. Docker Compose passes the same variables; place an HTTPS proxy in front of the application and adjust `APP_ORIGIN`/`COOKIE_SECURE` before enabling these services in production.

@@ -1,6 +1,8 @@
 # Implementation status
 
-**November 18, 2026 — development email restored.** A missing trusted-CA bundle caused strict SMTP certificate validation to fail on both development pods. The OpenShift-managed bundle is now mounted and loaded by Node.js; both pods pass SMTP verification and readiness checks, and the user confirmed receipt of a real test email. No application code or SMTP credentials changed. Production is untouched and requires its own verification before promotion. See [manual-qa.md](manual-qa.md) and [handoff.md](handoff.md).
+**November 19, 2026 — production email restored.** The user authorized the same CA-trust repair after development acceptance. Both production pods passed strict SMTP verification and readiness after a zero-unavailable rolling update, and the user confirmed receipt of the single authorized test email. Production scheduling remains enabled; credentials and image reference are unchanged. One pre-existing exhausted outbox notification remains separate from this successful restoration. See [manual-qa.md](manual-qa.md) and [handoff.md](handoff.md).
+
+**November 18, 2026 — development email restored.** A missing trusted-CA bundle caused strict SMTP certificate validation to fail on both development pods. The OpenShift-managed bundle is now mounted and loaded by Node.js; both pods pass SMTP verification and readiness checks, and the user confirmed receipt of a real test email. No application code or SMTP credentials changed. Production had not been modified at that checkpoint; its subsequent authorized recovery is recorded above. See [manual-qa.md](manual-qa.md) and [handoff](handoff.md).
 
 **November 4, 2026 — PR #72 review follow-up.** The Codex findings have been reviewed with regression evidence and replies. Calendar drops now reach the quick countdown through agenda, group, overview and navigation targets while preserving document imports and block reordering. Recurrence exceptions are compared in the series timezone, with cross-zone and DST coverage; unrelated all-day or invalid DST exceptions no longer block a valid countdown. Local contracts/types/build pass (466 tests: 465 passes, one PostgreSQL-only skip); current browser and hosted verification is linked from [manual-qa.md](manual-qa.md) and the [handoff](handoff.md). User acceptance, release and deployment remain separate gates.
 
@@ -41,7 +43,7 @@ User acceptance round 5 (parallel actual time spread over rooms, self-service si
 ## Environment limits
 
 - The organization's LLM endpoint has not been provided. Its optional adapter and proposal/application flow were tested with a local mock, not the real model.
-- OIDC and SMTP are optional and have automated contract coverage; production identity and mail services still require operator configuration and verification.
+- OIDC and SMTP are optional and have automated contract coverage. OIDC still requires operator configuration and verification. Real SMTP delivery was verified in development and production on November 18–19, including user-confirmed receipt; this does not establish delivery of every historical message.
 - The local Docker engine could not reach the registry during the exact image build. The organization's GitHub runner subsequently built and checked that image successfully; no local DNS settings were changed.
 - Chrome can be controlled, but native PowerPoint is unavailable to the browser tools. The floating window can be opened in Chrome; its behavior above a real slideshow still requires an environment check.
 - Microsoft Office rendering and audible playback were not physically verified. The manual test record states these limits explicitly.

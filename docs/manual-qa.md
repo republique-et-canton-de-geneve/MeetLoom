@@ -1,5 +1,15 @@
 # Manual acceptance testing
 
+## Production SMTP trust recovery — November 19, 2026
+
+User-authorized production operation on release `1.3.0`, following confirmed development delivery. Operator-specific addresses, namespace and cluster URL are intentionally excluded.
+
+- Reproduced the strict SMTP certificate-chain failure independently on both original pods. Confirmed the absence of existing additional CA configuration and a two-replica, zero-unavailable rolling-update strategy. Created the platform-injected trusted bundle and verified STARTTLS/authentication in a temporary child process before changing the Deployment. Removed the temporary probe file.
+- Added only the managed CA ConfigMap, read-only mount and runtime CA path. The rolling update completed with two ready/updated replicas, each independently passing SMTP verification with TLS certificate validation enabled and HTTP 200 readiness. The image reference, SMTP secrets and production scheduling were preserved. No fresh SMTP/certificate errors were observed in the replacement pods' logs.
+- After the user explicitly authorized the recipient, sent one clearly labelled production test with no production data in its body. The relay accepted one recipient with SMTP 250 and rejected none. The user confirmed actual mailbox receipt. This verifies the tested delivery path, not every historic message or mail family.
+- Read only aggregate queue state and non-content metadata: one administrator-report outbox entry had exhausted five attempts and was approximately 19 hours old; the recipient account remained active. It was not reset or re-emitted. The scheduled-delivery table had 720 sent entries. No queue contents, addresses or tokens were printed or committed.
+- No application code, dependencies or database schema changed. Node 24.22.3 validation passes with frozen `npm ci`, `npm run check` (475 tests: 473 pass, PostgreSQL-only and POSIX SIGTERM cases skipped on Windows), TypeScript/build, lint, deadcode and formatting. Existing browser journeys are unchanged and were not rerun locally; the production verification above uses the actual pods and relay. Hosted checks are attached to the continuation branch.
+
 ## Development SMTP trust recovery — November 18, 2026
 
 Real development environment, release `1.3.0`; no production mutation or private configuration is recorded here.
@@ -8,7 +18,7 @@ Real development environment, release `1.3.0`; no production mutation or private
 - Tested the official OpenShift-injected trusted bundle in a temporary child process first. STARTTLS and authentication succeeded with certificate verification still enabled. Removed the temporary probe file afterward.
 - Added the read-only trusted bundle and `NODE_EXTRA_CA_CERTS` through the operator configuration described in [deployment.md](deployment.md#internal-certificate-authority). The rolling update completed with two ready replicas and zero permitted unavailable replicas. Each new pod independently passed SMTP verification, had a readable bundle and returned HTTP 200 from `/api/ready`. No fresh SMTP/certificate errors appeared in the replacement pods' logs.
 - Sent one clearly labelled development SMTP test to the operator's existing account. The relay accepted one recipient (SMTP 250), rejected none, and the user confirmed actual mailbox receipt. This proves delivery for that test, not every historic or scheduled notification. Development scheduling stays disabled and both mail-queue tables were empty; no replay was performed.
-- No application code, dependency, schema, SMTP secret or certificate-verification setting changed. This was a real environment before/after verification, not a mocked transport test. Production remains pending the user's instruction and its own diagnosis.
+- No application code, dependency, schema, SMTP secret or certificate-verification setting changed. This was a real environment before/after verification, not a mocked transport test. Production was still pending at that checkpoint; its subsequent authorized recovery is recorded above.
 - Repository validation on Windows with Node 24.22.3: frozen `npm ci`, `npm run check` (475 tests: 473 pass, PostgreSQL-only and POSIX SIGTERM cases skipped), TypeScript/build, lint (zero errors, unchanged 76-warning budget), deadcode and formatting pass. No application journey changed, so the browser suite was not rerun for these documentation-only changes. The deployment validation above used the actual development pods and relay.
 
 ## Mail entry points — November 18, 2026
